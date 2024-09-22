@@ -12,7 +12,6 @@ The repository contains the implementation of the Gene Expression Programming[1]
 - Within the folder, install all the required packages:
   ```
     julia --project=.
-    ]
     using Pgk
     Pkg.instantiate()
   ```
