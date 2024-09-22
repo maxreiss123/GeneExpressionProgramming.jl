@@ -22,6 +22,8 @@ The repository contains the implementation of the Gene Expression Programming[1]
    julia --project==. test/paper_study.jl
   ```
 
+- Remark for your own csv file: Main_min_with_csv.jl in the test folder provides a step by step guide on how to initialize the GEP for your own problem  
+
 While running the tests, the application produces a 'CSV' file, which can be evaluated using the 'postprocess_equations.jl'. (Here, you need to adapt the paths within the lower section of the script.)
   ```
    julia --project==. plot_eval/postprocess_equations.jl 
