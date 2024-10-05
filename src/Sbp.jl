@@ -3,7 +3,8 @@ module SBPUtils
 const SMALLEST_TREE_SEGMENT = 3
 const FAILURE_RECURSION_SIZE = -21
 const STD_DIM_SIZE = 7
-
+const ZERO_DIM = zeros(Float16, STD_DIM_SIZE)
+const EMPTY_DIM = Float16[]
 
 using OrderedCollections
 using Random
@@ -15,37 +16,33 @@ export propagate_necessary_changes!, correct_genes!
 export equal_unit_forward, mul_unit_forward, div_unit_forward, zero_unit_backward, zero_unit_forward, sqr_unit_backward, sqr_unit_forward, mul_unit_backward, div_unit_backward, equal_unit_backward
 export get_feature_dims_json, get_target_dim_json, retrieve_coeffs_based_on_similarity
 
-function equal_unit_forward(u1::Vector{T}, u2::Vector{S}) where {T<:Number,S<:Number}
+function equal_unit_forward(u1::Vector{Float16}, u2::Vector{Float16}) 
     if isempty(u1) || isempty(u2)
-        return Float16[]
+        return EMPTY_DIM
     end
-    @inbounds return all(u1 .== u2) ? convert(Vector{Float16}, u1) : Float16[]
+    @inbounds return all(u1 .== u2) ? u1 : EMPTY_DIM
 end
 
-function equal_unit_backward(u1::Vector{T}, u2::Vector{S}, expected_dim::Vector{T}) where {T<:Number,S<:Number}
+function equal_unit_backward(u1::Vector{Float16}, u2::Vector{Float16}, expected_dim::Vector{Float16})
     return expected_dim, expected_dim
 end
 
 
-function mul_unit_forward(u1::Vector{T}, u2::Vector{S}) where {T<:Number,S<:Number}
+function mul_unit_forward(u1::Vector{Float16}, u2::Vector{Float16}) 
     if isempty(u1) || isempty(u2)
-        return T[]
+        return EMPTY_DIM
     end
-    result = similar(u1, T)
-    @inbounds for i in eachindex(u1, u2)
-        result[i] = T(u1[i] + u2[i])
-    end
-    return result
+    return u1 .+ u2
 end
 
-function mul_unit_backward(u1::Vector{T}, u2::Vector{S}, expected_dim::Vector{T}) where {T<:Number,S<:Number}
+function mul_unit_backward(u1::Vector{Float16}, u2::Vector{Float16}, expected_dim::Vector{Float16}) 
     if isempty(u2) && isempty(u1)
         if 0.5 < rand()
             lr = expected_dim
-            rr = zeros(T, STD_DIM_SIZE)
+            rr = ZERO_DIM
         else
             rr = expected_dim
-            lr = zeros(T, STD_DIM_SIZE)
+            lr = ZERO_DIM
         end
         return lr, rr
     elseif isempty(u2)
@@ -54,7 +51,7 @@ function mul_unit_backward(u1::Vector{T}, u2::Vector{S}, expected_dim::Vector{T}
         return expected_dim .- u2, u2
     elseif sum(abs.(expected_dim .- (u1 .- u2))) == 0
         tree.symbol = tree.tokenDto.point_operations[2]
-        return Vector{Float16}(), Vector{Float16}()
+        return EMPTY_DIM, EMPTY_DIM
     else
         if isapprox(u1, u2, atol=eps(T))
             lr = expected_dim .- expected_dim .÷ 2
@@ -69,26 +66,22 @@ function mul_unit_backward(u1::Vector{T}, u2::Vector{S}, expected_dim::Vector{T}
 end
 
 
-function div_unit_forward(u1::Vector{T}, u2::Vector{S}) where {T<:Number,S<:Number}
+function div_unit_forward(u1::Vector{Float16}, u2::Vector{Float16}) 
     if isempty(u1) || isempty(u2)
-        return Float16[]
+        return EMPTY_DIM
     end
-    result = similar(u1, Float16)
-    @inbounds for i in eachindex(u1, u2)
-        result[i] = Float16(u1[i] - u2[i])
-    end
-    return result
+    return u1 .- u2
 end
 
 
-function div_unit_backward(u1::Vector{T}, u2::Vector{S}, expected_dim::Vector{T}) where {T<:Number,S<:Number}
+function div_unit_backward(u1::Vector{Float16}, u2::Vector{Float16}, expected_dim::Vector{Float16}) 
     if isempty(u2) && isempty(u1)
         if 0.5 < rand()
             lr = expected_dim
-            rr = zeros(T, STD_DIM_SIZE)
+            rr = ZERO_DIM
         else
             rr = -expected_dim
-            lr = zeros(T, STD_DIM_SIZE)
+            lr = ZERO_DIM
         end
         return lr, rr
     elseif isempty(u2)
@@ -97,7 +90,7 @@ function div_unit_backward(u1::Vector{T}, u2::Vector{S}, expected_dim::Vector{T}
         return expected_dim .+ u2, u2
     elseif sum(abs.(expected_dim .- (u1 .+ u2))) == 0
         tree.symbol = tree.tokenDto.point_operations[1]
-        return Vector{Float16}(), Vector{Float16}()
+        return EMPTY_DIM, EMPTY_DIM
     else
         if isapprox(u1, u2, atol=eps(T))
             lr = expected_dim .- expected_dim .÷ 2
@@ -112,23 +105,23 @@ function div_unit_backward(u1::Vector{T}, u2::Vector{S}, expected_dim::Vector{T}
 end
 
 
-function zero_unit_forward(u1::Vector{T}) where {T<:Number}
+function zero_unit_forward(u1::Vector{Float16})
     if isempty(u1)
-        return Float16[]
+        return EMPTY_DIM
     end
-    @inbounds return all(u1 .== 0) ? zero(T) * u1 : Float16[]
+    @inbounds return all(u1 .== 0) ? ZERO_DIM .* u1 : EMPTY_DIM
 end
 
-function zero_unit_backward(u1::Vector{T}) where {T<:Number}
-    return zeros(T, STD_DIM_SIZE)
+function zero_unit_backward(u1::Vector{Float16}) 
+    return ZERO_DIM
 end
 
-function sqr_unit_forward(u1::Vector{T}) where {T<:Number}
-    return convert.(T, (2.0 .* u1))
+function sqr_unit_forward(u1::Vector{Float16}) 
+    return 2.0 .* u1
 end
 
-function sqr_unit_backward(u1::Vector{T}) where {T<:Number}
-    return convert.(T, (0.5 .* u1))
+function sqr_unit_backward(u1::Vector{Float16}) 
+    return 0.5 .* u1
 end
 
 
@@ -723,3 +716,4 @@ function retrieve_coeffs_based_on_similarity(target_dim::Vector{Float16},
 end
 
 end
+
