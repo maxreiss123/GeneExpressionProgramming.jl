@@ -1,10 +1,4 @@
-include("../src/VGEP.jl")
-include("../src/Util.jl")
-include("../src/Sbp.jl")
-
-using .VGEP
-using .VGEPUtils
-using .SBPUtils
+using JGep
 using DynamicExpressions
 using OrderedCollections
 using BenchmarkTools
@@ -115,7 +109,7 @@ token_dto = TokenDto(token_lib, Int8[1,2], lib, inverse_operations, gene_count; 
 #define a call back for the correction
 function corr_call_back!(genes::Vector{Int8}, start_indices::Vector{Int}, expression::Vector{Int8})
 	return correct_genes!(genes, start_indices, expression, 
-	convert.(Float16,target_dim), token_dto; cycles=5) 
+	convert.(Float16,target_dim), token_dto; cycles=cycles) 
 end
 
 
@@ -150,7 +144,7 @@ x_data_test = Float64.(data_test[1:consider:end, 1:(num_cols-1)])
 y_data_test = Float64.(data_test[1:consider:end, num_cols])
 
 
-best=run_GEP(epochs, pop_size, gene_count, head_len, utilized_syms,operators, callbacks, nodes, x_data',y_data, connection_syms, gep_params;
+best=runGep(epochs, pop_size, gene_count, head_len, utilized_syms,operators, callbacks, nodes, x_data',y_data, connection_syms, gep_params;
     loss_fun_str="mse",x_data_test=x_data_test', y_data_test=y_data_test ,opt_method_const=:cg, hof=1)
 
 #Show the result of the optimization

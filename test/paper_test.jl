@@ -1,14 +1,4 @@
-include("../src/VGEP.jl")
-include("../src/Util.jl")
-include("../src/Sbp.jl")
-include("../src/Entities.jl")
-include("../src/PhyConstants.jl")
-
-using .VGEP 
-using .SBPUtils
-using .SymbolicEntities
-using .PhysicalConstants
-
+using JGep
 using DynamicExpressions
 using OrderedCollections
 using CSV 
@@ -151,7 +141,7 @@ function main()
 
     file_name_save = "test_gep_on_srsd_p10.csv"
     penalty_consideration = 0
-    cycles = 5
+    cycles = 1
     cost_function = "mse"
 
     gep_probs = Dict{String, AbstractFloat}(
@@ -180,11 +170,11 @@ function main()
                 if case_name in keys(case_data)
                     @show ("Current case: ", case_name)
                     #gep_params
-                    pop_size = 1900
-                    generations = 2000
+                    pop_size = 1000
+                    generations = 1500
                     gene_count = 2
-                    head_length = 12 
-                    consider = 2
+                    head_length = 8 
+                    consider = 4
 
                     results = DataFrame(Seed=[],
                         Name = String[], NoiseLeve=String[], Fitness = Float64[], Equation = String[], R2_test = Float64[], 
@@ -250,7 +240,7 @@ function main()
                     )
 
                     start_time = time_ns()
-                    best=run_GEP(pop_size, generations,
+                    best=runGep(pop_size, generations,
                                 gene_count,head_length,utilized_syms, config.operators_djl, 
                                 config.callbacks, 
                                 config.nodes_djl, 

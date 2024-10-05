@@ -1,9 +1,4 @@
-include("../src/VGEP.jl")
-include("../src/Util.jl")
-
-
-using .VGEP
-using .VGEPUtils
+using JGep
 using DynamicExpressions
 using OrderedCollections
 using BenchmarkTools

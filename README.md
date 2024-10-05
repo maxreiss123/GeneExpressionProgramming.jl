@@ -16,6 +16,14 @@ The repository contains the implementation of the Gene Expression Programming[1]
     Pkg.instantiate()
   ```
 
+- Alternativly:
+  ```
+    julia --project=.
+    using Pkg
+    Pkg.add(url="https://github.com/maxreiss123/GEP_SBP_.git")
+  ```
+
+
 - Run a test for various Feynman datasets located within 'test/srsd' (from the root folder):
   ```
    julia --project==. test/paper_study.jl
