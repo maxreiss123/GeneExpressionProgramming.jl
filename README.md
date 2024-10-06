@@ -40,5 +40,6 @@ The repository contains the implementation of the Gene Expression Programming[1]
  - The Coefficient optimization is inspired by [https://github.com/MilesCranmer/SymbolicRegression.jl](https://github.com/MilesCranmer/SymbolicRegression.jl/blob/master/src/ConstantOptimization.jl)
 
 # Todo 
-- [] Documentation 
-- [] Re-write postprocessing
+- [ ] Documentation 
+- [ ] Re-write postprocessing
+- [ ] Improve usability for user interaction
