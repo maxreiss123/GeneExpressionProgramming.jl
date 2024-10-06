@@ -545,7 +545,7 @@ function propagate_necessary_changes!(
         return true
     end
 
-    if check_crit_up!(tree.depend_on_total_number+1, expected_dim, tree) && rand()<0.85 && distance_to_change <= 0
+    if check_crit_up!(tree.depend_on_total_number+1, expected_dim, tree) && distance_to_change <= 0
         return enforce_changes!(tree, expected_dim)
     end
 

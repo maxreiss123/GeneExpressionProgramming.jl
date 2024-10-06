@@ -170,11 +170,11 @@ function main()
                 if case_name in keys(case_data)
                     @show ("Current case: ", case_name)
                     #gep_params
-                    pop_size = 1000
+                    pop_size = 1500
                     generations = 1500
-                    gene_count = 2
-                    head_length = 8 
-                    consider = 4
+                    gene_count = 3
+                    head_length = 6 
+                    consider = 1
 
                     results = DataFrame(Seed=[],
                         Name = String[], NoiseLeve=String[], Fitness = Float64[], Equation = String[], R2_test = Float64[], 
