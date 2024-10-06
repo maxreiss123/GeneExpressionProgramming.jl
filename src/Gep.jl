@@ -116,16 +116,10 @@ function generate_gene(headsyms::Vector{Int8}, tailsyms::Vector{Int8}, headlen::
     return vcat(head, tail)
 end
 
-function generate_preamle!(toolbox::Toolbox, preamble::Vector{Int8})
-    if !isempty(toolbox.preamble_syms)
-        append!(preamble, rand(toolbox.preamble_syms, toolbox.gene_count))
-    end
-end
 
 function generate_chromosome(toolbox::Toolbox)
     connectors = rand(toolbox.gene_connections, toolbox.gene_count - 1)
     preamble_sym = Int8[]
-    generate_preamle!(toolbox, preamble_sym)
     genes = vcat([generate_gene(toolbox.headsyms, toolbox.tailsyms, toolbox.head_len; unarys=toolbox.unary_syms,
         unary_prob=toolbox.unary_prob) for _ in 1:toolbox.gene_count]...)
     return Chromosome(vcat(preamble_sym, connectors, genes), toolbox, true)
