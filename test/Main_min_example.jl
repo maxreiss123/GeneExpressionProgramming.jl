@@ -1,5 +1,6 @@
+include("../src/JGep.jl")
 
-using JGep
+using .JGep
 using DynamicExpressions
 using OrderedCollections
 using BenchmarkTools
@@ -39,8 +40,8 @@ gep_params = Dict{String, AbstractFloat}(
     "dominant_fusion_rate" => 0.2,
     "rezessiv_fusion_prob" => 0.1,
     "rezessiv_fusion_rate" => 0.2,
-    "fusion_prob" => 0.1,
-    "fusion_rate" => 0.2,
+    "fusion_prob" => 0.0,
+    "fusion_rate" => 0.0,
     "inversion_prob" => 0.1
 )
 
@@ -53,4 +54,4 @@ y_data = @. x_data[1,:] * x_data[1,:] + x_data[1,:] * x_data[2,:] - 2 * x_data[2
  best=runGep(1000, 1000,4,10,utilized_syms,operators, callbacks, nodes, x_data,y_data, connection_syms, gep_params;
     loss_fun_str="mse", opt_method_const=:cg, hof=1)
 @show string(best[1].fitness)
-#@show string(best[1].compiled_function)
+@show string(best[1].compiled_function)
