@@ -291,7 +291,6 @@ end
     alpha_operator, _ = create_operator_masks(gene_seq_alpha, gene_seq_alpha, pb)
     mutation_seq_1 = generate_chromosome(chromosome1.toolbox)
 
-
     @inbounds @simd for i in eachindex(gene_seq_alpha)
         gene_seq_alpha[i] = alpha_operator[i] == 1 ? mutation_seq_1.genes[i] : gene_seq_alpha[i]
     end  
@@ -311,9 +310,8 @@ end
 
 @inline function reverse_insertion!(chromosome::Chromosome)
     start_1 = rand(chromosome.toolbox.gen_start_indices)
-    insert_pos = rand(start_1:(start_1+chromosome.toolbox.head_len-1))
-    insert_sym = rand(chromosome.toolbox.tailsyms)
-    chromosome.genes[insert_pos] = insert_sym
+    rolled_array = circshift(chromosome.genes[start_1:chromosome.toolbox.head_len-1], rand(1:chromosome.toolbox.head_len-1))
+    chromosome.genes[start_1:chromosome.toolbox.head_len-1] = rolled_array
 end
 
 @inline function compute_fitness(elem::Chromosome, operators::OperatorEnum, x_data::AbstractArray{T}, y_data::AbstractArray{T}, loss_function::Function,
@@ -334,7 +332,7 @@ end
 @inline function genetic_operations!(space_next::Vector{Chromosome}, i::Int, toolbox::Toolbox)
     #allocate them within the space - create them once instead of n time 
     space_next[i:i+1] = replicate(space_next[i], space_next[i+1], toolbox)
-    rand_space = rand(11)
+    rand_space = rand(13)
 
 
     if rand_space[1] < toolbox.gep_probs["one_point_cross_over_prob"]
@@ -380,6 +378,15 @@ end
     if rand_space[11] < toolbox.gep_probs["inversion_prob"]
         gene_insertion!(space_next[i+1])
     end
+
+    if rand_space[12] < toolbox.gep_probs["inversion_prob"]
+        reverse_insertion!(space_next[i])
+    end
+
+    if rand_space[13] < toolbox.gep_probs["inversion_prob"]
+        reverse_insertion!(space_next[i+1])
+    end
+
 end
 
 function runGep(epochs::Int,
