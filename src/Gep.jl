@@ -196,8 +196,12 @@ end
     return alpha_operator, beta_operator
 end
 
+@inline function replicate(chromosome1::Chromosome, chromosome2::Chromosome, toolbox)
+    return [Chromosome(deepcopy(chromosome1.genes), toolbox), Chromosome(deepcopy(chromosome2.genes), toolbox)]
+end
 
-@inline function gene_dominant_fusion(chromosome1::Chromosome, chromosome2::Chromosome, toolbox::Toolbox, pb::Real=0.2)
+
+@inline function gene_dominant_fusion!(chromosome1::Chromosome, chromosome2::Chromosome, pb::Real=0.2)
     gene_seq_alpha = chromosome1.genes
     gene_seq_beta = chromosome2.genes
     alpha_operator, beta_operator = create_operator_masks(gene_seq_alpha, gene_seq_beta, pb)
@@ -210,10 +214,11 @@ end
         child_2_genes[i] = beta_operator[i] == 1 ? max(gene_seq_alpha[i], gene_seq_beta[i]) : gene_seq_beta[i]
     end
 
-    return [Chromosome(child_1_genes, toolbox), Chromosome(child_2_genes, toolbox)]
+    chromosome1.genes = child_1_genes
+    chromosome2.genes = child_2_genes    
 end
 
-@inline function gen_rezessiv(chromosome1::Chromosome, chromosome2::Chromosome, toolbox::Toolbox, pb::Real=0.2)
+@inline function gen_rezessiv!(chromosome1::Chromosome, chromosome2::Chromosome, pb::Real=0.2)
     gene_seq_alpha = chromosome1.genes
     gene_seq_beta = chromosome2.genes
     alpha_operator, beta_operator = create_operator_masks(gene_seq_alpha, gene_seq_beta, pb)
@@ -226,10 +231,11 @@ end
         child_2_genes[i] = beta_operator[i] == 1 ? min(gene_seq_alpha[i], gene_seq_beta[i]) : gene_seq_beta[i]
     end
 
-    return [Chromosome(child_1_genes, toolbox), Chromosome(child_2_genes, toolbox)]
+    chromosome1.genes = child_1_genes
+    chromosome2.genes = child_2_genes   
 end
 
-@inline function gene_fussion(chromosome1::Chromosome, chromosome2::Chromosome, toolbox::Toolbox, pb::Real=0.2)
+@inline function gene_fussion!(chromosome1::Chromosome, chromosome2::Chromosome, pb::Real=0.2)
     gene_seq_alpha = chromosome1.genes
     gene_seq_beta = chromosome2.genes
     alpha_operator, beta_operator = create_operator_masks(gene_seq_alpha, gene_seq_beta, pb)
@@ -242,10 +248,11 @@ end
         child_2_genes[i] = beta_operator[i] == 1 ? Int8((gene_seq_alpha[i] + gene_seq_beta[i]) ÷ 2) : gene_seq_beta[i]
     end
 
-    return [Chromosome(child_1_genes, toolbox), Chromosome(child_2_genes,toolbox)]
+    chromosome1.genes = child_1_genes
+    chromosome2.genes = child_2_genes  
 end
 
-@inline function gene_one_point_cross_over(chromosome1::Chromosome, chromosome2::Chromosome, toolbox::Toolbox)
+@inline function gene_one_point_cross_over!(chromosome1::Chromosome, chromosome2::Chromosome)
     gene_seq_alpha = chromosome1.genes
     gene_seq_beta = chromosome2.genes
     alpha_operator, beta_operator = create_operator_point_one_masks(gene_seq_alpha, gene_seq_beta, chromosome1.toolbox)
@@ -258,10 +265,11 @@ end
         child_2_genes[i] = beta_operator[i] == 1 ? gene_seq_beta[i] : gene_seq_alpha[i]
     end
 
-    return [Chromosome(child_1_genes, toolbox), Chromosome(child_2_genes, toolbox)]
+    chromosome1.genes = child_1_genes
+    chromosome2.genes = child_2_genes  
 end
 
-@inline function gene_two_point_cross_over(chromosome1::Chromosome, chromosome2::Chromosome, toolbox::Toolbox)
+@inline function gene_two_point_cross_over!(chromosome1::Chromosome, chromosome2::Chromosome)
     gene_seq_alpha = chromosome1.genes
     gene_seq_beta = chromosome2.genes
     alpha_operator, beta_operator = create_operator_point_two_masks(gene_seq_alpha, gene_seq_beta, chromosome1.toolbox)
@@ -274,37 +282,38 @@ end
         child_2_genes[i] = beta_operator[i] == 1 ? gene_seq_beta[i] : gene_seq_alpha[i]
     end
 
-    return [Chromosome(child_1_genes, toolbox), Chromosome(child_2_genes, toolbox)]
+    chromosome1.genes = child_1_genes
+    chromosome2.genes = child_2_genes 
 end
 
-@inline function gene_mutation(chromosome1::Chromosome, toolbox::Toolbox, pb::Real=0.25)
+@inline function gene_mutation!(chromosome1::Chromosome, pb::Real=0.25)
     gene_seq_alpha = chromosome1.genes
     alpha_operator, _ = create_operator_masks(gene_seq_alpha, gene_seq_alpha, pb)
     mutation_seq_1 = generate_chromosome(chromosome1.toolbox)
 
-    child_1_genes = similar(gene_seq_alpha)
 
     @inbounds @simd for i in eachindex(gene_seq_alpha)
-        child_1_genes[i] = alpha_operator[i] == 1 ? mutation_seq_1.genes[i] : gene_seq_alpha[i]
-    end
-
-    return Chromosome(child_1_genes, toolbox)
+        gene_seq_alpha[i] = alpha_operator[i] == 1 ? mutation_seq_1.genes[i] : gene_seq_alpha[i]
+    end  
 end
 
-@inline function gene_inversion(chromosome1::Chromosome, toolbox::Toolbox)
+@inline function gene_inversion!(chromosome1::Chromosome)
     start_1 = rand(chromosome1.toolbox.gen_start_indices)
-    gene_1 = copy(chromosome1.genes)
-    reverse!(@view gene_1[start_1:chromosome1.toolbox.head_len-1])
-    return Chromosome(gene_1, toolbox)
+    reverse!(@view chromosome1.genes[start_1:chromosome1.toolbox.head_len-1])
 end
 
-@inline function gene_insertion(chromosome::Chromosome, toolbox::Toolbox)
+@inline function gene_insertion!(chromosome::Chromosome)
     start_1 = rand(chromosome.toolbox.gen_start_indices)
     insert_pos = rand(start_1:(start_1+chromosome.toolbox.head_len-1))
     insert_sym = rand(chromosome.toolbox.tailsyms)
-    gene_1 = copy(chromosome.genes)
-    gene_1[insert_pos] = insert_sym
-    return Chromosome(gene_1, toolbox)
+    chromosome.genes[insert_pos] = insert_sym
+end
+
+@inline function reverse_insertion!(chromosome::Chromosome)
+    start_1 = rand(chromosome.toolbox.gen_start_indices)
+    insert_pos = rand(start_1:(start_1+chromosome.toolbox.head_len-1))
+    insert_sym = rand(chromosome.toolbox.tailsyms)
+    chromosome.genes[insert_pos] = insert_sym
 end
 
 @inline function compute_fitness(elem::Chromosome, operators::OperatorEnum, x_data::AbstractArray{T}, y_data::AbstractArray{T}, loss_function::Function,
@@ -323,48 +332,53 @@ end
 
 
 @inline function genetic_operations!(space_next::Vector{Chromosome}, i::Int, toolbox::Toolbox)
-    if rand() < toolbox.gep_probs["one_point_cross_over_prob"]
-        space_next[i:i+1] = gene_one_point_cross_over(space_next[i], space_next[i+1],toolbox)
+    #allocate them within the space - create them once instead of n time 
+    space_next[i:i+1] = replicate(space_next[i], space_next[i+1], toolbox)
+    rand_space = rand(11)
+
+
+    if rand_space[1] < toolbox.gep_probs["one_point_cross_over_prob"]
+        gene_one_point_cross_over!(space_next[i], space_next[i+1])
     end
 
-    if rand() < toolbox.gep_probs["two_point_cross_over_prob"]
-        space_next[i:i+1] = gene_two_point_cross_over(space_next[i], space_next[i+1],toolbox)
+    if rand_space[2] < toolbox.gep_probs["two_point_cross_over_prob"]
+        gene_two_point_cross_over!(space_next[i], space_next[i+1])
     end
 
-    if rand() < toolbox.gep_probs["mutation_prob"]
-        space_next[i] = gene_mutation(space_next[i], toolbox,toolbox.gep_probs["mutation_rate"])
+    if rand_space[3] < toolbox.gep_probs["mutation_prob"]
+        gene_mutation!(space_next[i], toolbox.gep_probs["mutation_rate"])
     end
 
-    if rand() < toolbox.gep_probs["mutation_prob"]
-        space_next[i+1] = gene_mutation(space_next[i+1], toolbox, toolbox.gep_probs["mutation_rate"])
+    if rand_space[4] < toolbox.gep_probs["mutation_prob"]
+        gene_mutation!(space_next[i+1], toolbox.gep_probs["mutation_rate"])
     end
 
-    if rand() < toolbox.gep_probs["dominant_fusion_prob"]
-        space_next[i:i+1] = gene_dominant_fusion(space_next[i], space_next[i+1], toolbox,toolbox.gep_probs["fusion_rate"])
+    if rand_space[5] < toolbox.gep_probs["dominant_fusion_prob"]
+        gene_dominant_fusion!(space_next[i], space_next[i+1], toolbox.gep_probs["fusion_rate"])
     end
 
-    if rand() < toolbox.gep_probs["rezessiv_fusion_prob"]
-        space_next[i:i+1] = gen_rezessiv(space_next[i], space_next[i+1], toolbox, toolbox.gep_probs["rezessiv_fusion_rate"])
+    if rand_space[6] < toolbox.gep_probs["rezessiv_fusion_prob"]
+        gen_rezessiv!(space_next[i], space_next[i+1], toolbox.gep_probs["rezessiv_fusion_rate"])
     end
 
-    if rand() < toolbox.gep_probs["fusion_prob"]
-        space_next[i:i+1] = gene_fussion(space_next[i], space_next[i+1], toolbox,toolbox.gep_probs["fusion_rate"])
+    if rand_space[7] < toolbox.gep_probs["fusion_prob"]
+        gene_fussion!(space_next[i], space_next[i+1], toolbox.gep_probs["fusion_rate"])
     end
 
-    if rand() < toolbox.gep_probs["inversion_prob"]
-        space_next[i] = gene_inversion(space_next[i], toolbox)
+    if rand_space[8] < toolbox.gep_probs["inversion_prob"]
+        gene_inversion!(space_next[i])
     end
 
-    if rand() < toolbox.gep_probs["inversion_prob"]
-        space_next[i+1] = gene_inversion(space_next[i+1], toolbox)
+    if rand_space[9] < toolbox.gep_probs["inversion_prob"]
+        gene_inversion!(space_next[i+1])
     end
 
-    if rand() < toolbox.gep_probs["inversion_prob"]
-        space_next[i] = gene_insertion(space_next[i], toolbox)
+    if rand_space[10] < toolbox.gep_probs["inversion_prob"]
+        gene_insertion!(space_next[i])
     end
 
-    if rand() < toolbox.gep_probs["inversion_prob"]
-        space_next[i+1] = gene_insertion(space_next[i+1], toolbox)
+    if rand_space[11] < toolbox.gep_probs["inversion_prob"]
+        gene_insertion!(space_next[i+1])
     end
 end
 
