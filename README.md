@@ -30,7 +30,8 @@ The repository contains the implementation of the Gene Expression Programming[1]
   ```
 
 - Remark for your CSV file: Main_min_with_csv.jl in the test folder provides a step-by-step guide on how to initialize the GEP for your own problem
-- Remark for your CSV file and utilizing dimensional homogeneity: Main_min_with_csv_and_units.jl in the test folder provides a step-by-step guide 
+- Remark for your CSV file and utilizing dimensional homogeneity: Main_min_with_csv_and_units.jl in the test folder provides a step-by-step guide
+- Remark within the tutorial folder there is a notebook which can be launched with google colab
 
 
 # References
