@@ -471,7 +471,7 @@ function runGep(epochs::Int,
 
         if epoch < epochs
             fits_representation = [chromo.fitness for chromo in population]
-            indices = basic_tournament_selection(fits_representation, tourni_size, mating_size)
+            indices = basic_tournament_selection(fits_representation[1:mating_size], tourni_size, mating_size)
             parents = population[indices]
             @inbounds Threads.@threads for i in 1:2:mating_size-1
                 next_gen[i] = parents[i]
