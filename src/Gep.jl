@@ -102,7 +102,8 @@ function runGep(epochs::Int,
     correction_amount::Real=0.6,
     tourni_size::Int=3, penalty_consideration::Real=0.0,
     opt_method_const::Symbol=:cg,
-    preamble_syms=Int8[]) where {T<:AbstractFloat}
+    preamble_syms=Int8[], 
+    optimisation_epochs::Int=500) where {T<:AbstractFloat}
     loss_fun::Function = get_loss_function(loss_fun_str)
 
     if isnothing(x_data_test) || isnothing(y_data_test)
@@ -133,7 +134,7 @@ function runGep(epochs::Int,
         sort!(population, by=x -> x.fitness)
         
         try
-            if (prev_best == -1 || prev_best > population[1].fitness) && epoch % 500 == 0
+            if (prev_best == -1 || prev_best > population[1].fitness) && epoch % optimisation_epochs == 0
                 eqn, result = optimize_constants(population[1].compiled_function,
                     x_data, y_data, get_loss_function(loss_fun_str), operators; opt_method=opt_method_const, max_iterations=250, n_restarts=3)
                 population[1].fitness = result
