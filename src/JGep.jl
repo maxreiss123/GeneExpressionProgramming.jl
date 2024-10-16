@@ -19,7 +19,6 @@ export get_loss_function
 
 
 using .GepUtils
-export Toolbox
 export find_indices_with_sum, compile_djl_datatype, optimize_constants, minmax_scale, float16_scale, isclose
 export save_state, load_state
 
@@ -42,6 +41,7 @@ export get_feature_dims_json, get_target_dim_json, retrieve_coeffs_based_on_simi
 
 
 using .SymbolicEntities
+export Toolbox, Chromosome
 export AbstractSymbol, FunctionalSymbol, BasicSymbol, SymbolConfig
 
 

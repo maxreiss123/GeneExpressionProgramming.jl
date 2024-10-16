@@ -9,44 +9,12 @@ using LineSearches
 using Zygote
 using Serialization
 
-export Toolbox
+
 export find_indices_with_sum, compile_djl_datatype, optimize_constants, minmax_scale, float16_scale, isclose
 export save_state, load_state
 
 
 
-struct Toolbox
-    gene_count::Int
-    head_len::Int
-    symbols::OrderedDict{Int8,Int8}
-    gene_connections::Vector{Int8}
-    headsyms::Vector{Int8}
-    unary_syms::Vector{Int8}
-    tailsyms::Vector{Int8}
-    arrity_by_id::OrderedDict{Int8,Int8}
-    callbacks::Dict
-    nodes::OrderedDict
-    gen_start_indices::Vector{Int}
-    gep_probs::Dict{String,AbstractFloat}
-    unary_prob::Real
-    fitness_reset::Tuple
-    preamble_syms::Vector{Int8}
-    len_preamble::Int8
-
-
-    function Toolbox(gene_count::Int, head_len::Int, symbols::OrderedDict{Int8,Int8}, gene_connections::Vector{Int8},
-        callbacks::Dict, nodes::OrderedDict, gep_probs::Dict{String,AbstractFloat};
-        unary_prob::Real=0.4, fitness_reset::Tuple=(Inf, NaN), preamble_syms=Int8[])
-        gene_len = head_len * 2 + 1
-        headsyms = [key for (key, arity) in symbols if arity == 2]
-        unary_syms = [key for (key, arity) in symbols if arity == 1]
-        tailsyms = [key for (key, arity) in symbols if arity < 1 && !(key in preamble_syms)]
-        len_preamble = length(preamble_syms) == 0 ? 0 : gene_count
-        gen_start_indices = [gene_count + len_preamble + (gene_len * (i - 1)) for i in 1:gene_count] #depending on the usage should shift everthing 
-        new(gene_count, head_len, symbols, gene_connections, headsyms, unary_syms, tailsyms, symbols,
-            callbacks, nodes, gen_start_indices, gep_probs, unary_prob, fitness_reset, preamble_syms, len_preamble)
-    end
-end
 
 function isclose(a::T, b::T; rtol::T=1e-5, atol::T=1e-8) where {T<:Number}
     return abs(a - b) <= (atol + rtol * abs(b))
