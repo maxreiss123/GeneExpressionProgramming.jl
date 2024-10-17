@@ -13,7 +13,7 @@ epochs = 1000
 pop_size = 1000
 gene_count = 6
 head_len = 5
-
+cycles = 5
 #Define utilized syms as Ordered Dict: Symbol:Arity
 #Symbol representation: Here, each symbol belongs either to a terminal or non-terminal with a corresponding arity
 utilized_syms = OrderedDict{Int8,Int8}(1 => 2, 2 => 2, 3 => 2, 4 => 2, 5 => 2, 6=>2, 7=>1, 8=>0, 9=>0, 10=>0, 11=>0)
@@ -144,7 +144,7 @@ x_data_test = Float64.(data_test[1:consider:end, 1:(num_cols-1)])
 y_data_test = Float64.(data_test[1:consider:end, num_cols])
 
 
-best=runGep(epochs, pop_size, gene_count, head_len, utilized_syms,operators, callbacks, nodes, x_data',y_data, connection_syms, gep_params;
+best=runGep(epochs, pop_size, gene_count, head_len, utilized_syms,operators, callbacks, nodes, x_data',y_data, connection_syms, gep_params;correction_callback=corr_call_back!,
     loss_fun_str="mse",x_data_test=x_data_test', y_data_test=y_data_test ,opt_method_const=:cg, hof=1)
 
 #Show the result of the optimization
