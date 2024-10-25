@@ -17,6 +17,7 @@ using ProgressMeter
 using OrderedCollections
 using DynamicExpressions
 using Logging
+using Printf
 
 export runGep
 
@@ -121,10 +122,11 @@ function runGep(epochs::Int,
 
     population = generate_population(population_size, toolbox)
     next_gen = Vector{eltype(population)}(undef, mating_size)
-
+    progBar = Progress(epochs; showspeed=true, desc="Training: ")
 
     prev_best = -1
-    @showprogress for epoch in 1:epochs
+    
+    for epoch in 1:epochs
         perform_correction_callback!(population, epoch, correction_epochs, correction_amount, correction_callback)
 
         Threads.@threads for i in eachindex(population)
@@ -152,16 +154,22 @@ function runGep(epochs::Int,
         best_r = compute_fitness(population[1], operators, x_data, y_data,
             get_loss_function("r2_score"), zero(T); validate=true)
         val_loss = compute_fitness(population[1], operators, x_data_test, y_data_test, loss_fun, typemax(T); validate=true)
-        
         record!(recorder, epoch, fits_representation[1], val_loss, fits_representation)
 
-        #if isclose(best_r, one(T))
-        #    break
-        #end
+
+        ProgressMeter.update!(progBar, epoch, showvalues = [
+            (:train_loss, @sprintf("%.6f", fits_representation[1])),
+            (:validation_loss, @sprintf("%.6f", val_loss))
+        ])
+
+
+        if isclose(best_r, one(T))
+            break
+        end
 
 
         if epoch < epochs
-            indices = basic_tournament_selection(fits_representation, tourni_size, mating_size)
+            indices = basic_tournament_selection(fits_representation[1:mating_size], tourni_size, mating_size)
             parents = population[indices]
             perform_step!(population, parents, next_gen, toolbox, mating_size)
         end

@@ -45,6 +45,7 @@ struct HistoryRecorder{T<:AbstractFloat}
     end
 end
 
+# Usage in record_history!
 @inline function record_history!(
     channel::Channel{Tuple{Int,T,T,Vector{T}}},
     history::OptimizationHistory{T}
