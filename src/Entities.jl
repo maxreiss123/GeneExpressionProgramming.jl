@@ -12,7 +12,6 @@ export generate_gene, generate_preamle!, compile_expression!, generate_chromosom
 export genetic_operations!
 
 
-
 abstract type AbstractSymbol end
 
 struct BasicSymbol <: AbstractSymbol
@@ -51,6 +50,7 @@ struct SymbolConfig
     point_operations_idx::Vector{Int8}
     inverse_operations::Union{Dict{Int8, Function},Nothing}
 end
+
 
 
 struct Toolbox

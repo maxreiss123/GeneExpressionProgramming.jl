@@ -144,7 +144,7 @@ x_data_test = Float64.(data_test[1:consider:end, 1:(num_cols-1)])
 y_data_test = Float64.(data_test[1:consider:end, num_cols])
 
 
-best=runGep(epochs, pop_size, gene_count, head_len, utilized_syms,operators, callbacks, nodes, x_data',y_data, connection_syms, gep_params;
+best, history=runGep(epochs, pop_size, gene_count, head_len, utilized_syms,operators, callbacks, nodes, x_data',y_data, connection_syms, gep_params;
     loss_fun_str="mse",x_data_test=x_data_test', y_data_test=y_data_test ,opt_method_const=:cg, hof=1)
 
 #Show the result of the optimization

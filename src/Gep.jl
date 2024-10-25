@@ -59,8 +59,8 @@ end
 end
 
 @inline function perform_correction_callback!(population::Vector{Chromosome}, epoch::Int, correction_epochs::Int, correction_amount::Real,
-    correction_callback::Union{Function, Nothing})
-    
+    correction_callback::Union{Function,Nothing})
+
     if !isnothing(correction_callback) && epoch % correction_epochs == 0
         pop_amount = Int(ceil(length(population) * correction_amount))
         Threads.@threads for i in 1:pop_amount
@@ -102,9 +102,11 @@ function runGep(epochs::Int,
     correction_amount::Real=0.6,
     tourni_size::Int=3, penalty_consideration::Real=0.0,
     opt_method_const::Symbol=:cg,
-    preamble_syms=Int8[], 
+    preamble_syms=Int8[],
     optimisation_epochs::Int=500) where {T<:AbstractFloat}
+
     loss_fun::Function = get_loss_function(loss_fun_str)
+    recorder = HistoryRecorder(epochs, Float64)
 
     if isnothing(x_data_test) || isnothing(y_data_test)
         x_data_test = x_data
@@ -120,6 +122,7 @@ function runGep(epochs::Int,
     population = generate_population(population_size, toolbox)
     next_gen = Vector{eltype(population)}(undef, mating_size)
 
+
     prev_best = -1
     @showprogress for epoch in 1:epochs
         perform_correction_callback!(population, epoch, correction_epochs, correction_amount, correction_callback)
@@ -132,7 +135,7 @@ function runGep(epochs::Int,
         end
 
         sort!(population, by=x -> x.fitness)
-        
+
         try
             if (prev_best == -1 || prev_best > population[1].fitness) && epoch % optimisation_epochs == 0
                 eqn, result = optimize_constants(population[1].compiled_function,
@@ -145,8 +148,12 @@ function runGep(epochs::Int,
             @show "Opt. issue"
         end
 
+        fits_representation = [chromo.fitness for chromo in population]
         best_r = compute_fitness(population[1], operators, x_data, y_data,
             get_loss_function("r2_score"), zero(T); validate=true)
+        val_loss = compute_fitness(population[1], operators, x_data_test, y_data_test, loss_fun, typemax(T); validate=true)
+        
+        record!(recorder, epoch, fits_representation[1], val_loss, fits_representation)
 
         #if isclose(best_r, one(T))
         #    break
@@ -154,7 +161,6 @@ function runGep(epochs::Int,
 
 
         if epoch < epochs
-            fits_representation = [chromo.fitness for chromo in population]
             indices = basic_tournament_selection(fits_representation, tourni_size, mating_size)
             parents = population[indices]
             perform_step!(population, parents, next_gen, toolbox, mating_size)
@@ -163,14 +169,14 @@ function runGep(epochs::Int,
     end
 
     best = sort(population, by=x -> x.fitness)[1:hof]
-
-
     for elem in best
         elem.fitness_r2_train = compute_fitness(elem, operators, x_data, y_data, get_loss_function("r2_score"), zero(T); validate=true)
         if !isnothing(x_data_test)
             elem.fitness_r2_test = compute_fitness(elem, operators, x_data_test, y_data_test, get_loss_function("r2_score"), zero(T); validate=true)
         end
     end
-    return best
+    
+    close_recorder!(recorder)
+    return best, recorder.history
 end
 end
