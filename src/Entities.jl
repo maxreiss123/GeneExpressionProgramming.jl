@@ -87,8 +87,6 @@ struct Toolbox
 end
 
 
-
-
 mutable struct Chromosome
     genes::Vector{Int8}
     fitness::Union{AbstractFloat,Tuple}

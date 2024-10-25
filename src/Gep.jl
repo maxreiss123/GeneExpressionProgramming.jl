@@ -114,6 +114,13 @@ function runGep(epochs::Int,
         y_data_test = y_data
     end
 
+    function optimizer_function(sub_tree::Node)
+        y_pred, flag = eval_tree_array(sub_tree, x_data, operators)
+        return get_loss_function("mse")(y_pred, y_data)
+    end
+
+    
+
     Random.seed!(seed)
     mating_size = Int(ceil(population_size * mating_))
     mating_size = mating_size % 2 == 0 ? mating_size : mating_size - 1
@@ -140,8 +147,8 @@ function runGep(epochs::Int,
 
         try
             if (prev_best == -1 || prev_best > population[1].fitness) && epoch % optimisation_epochs == 0
-                eqn, result = optimize_constants(population[1].compiled_function,
-                    x_data, y_data, get_loss_function(loss_fun_str), operators; opt_method=opt_method_const, max_iterations=250, n_restarts=3)
+                eqn, result = optimize_constants!(population[1].compiled_function, optimizer_function;
+                    opt_method=opt_method_const, max_iterations=250, n_restarts=3)
                 population[1].fitness = result
                 population[1].compiled_function = eqn
                 prev_best = result
@@ -149,6 +156,7 @@ function runGep(epochs::Int,
         catch
             @show "Opt. issue"
         end
+
 
         fits_representation = [chromo.fitness for chromo in population]
         best_r = compute_fitness(population[1], operators, x_data, y_data,
@@ -167,7 +175,6 @@ function runGep(epochs::Int,
             break
         end
 
-
         if epoch < epochs
             indices = basic_tournament_selection(fits_representation[1:mating_size], tourni_size, mating_size)
             parents = population[indices]
@@ -176,7 +183,7 @@ function runGep(epochs::Int,
 
     end
 
-    best = sort(population, by=x -> x.fitness)[1:hof]
+    best = population[1:hof]
     for elem in best
         elem.fitness_r2_train = compute_fitness(elem, operators, x_data, y_data, get_loss_function("r2_score"), zero(T); validate=true)
         if !isnothing(x_data_test)

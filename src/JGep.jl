@@ -19,7 +19,7 @@ export get_loss_function
 
 
 using .GepUtils
-export find_indices_with_sum, compile_djl_datatype, optimize_constants, minmax_scale, float16_scale, isclose
+export find_indices_with_sum, compile_djl_datatype, optimize_constants!, minmax_scale, float16_scale, isclose
 export save_state, load_state
 
 

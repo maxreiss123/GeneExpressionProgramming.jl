@@ -11,7 +11,7 @@ using Statistics
 using Base.Threads: @spawn
 
 
-export find_indices_with_sum, compile_djl_datatype, optimize_constants, minmax_scale, float16_scale, isclose
+export find_indices_with_sum, compile_djl_datatype, optimize_constants!, minmax_scale, float16_scale, isclose
 export save_state, load_state
 export create_history_recorder, record_history!, record!, close_recorder!
 export HistoryRecorder, OptimizationHistory
@@ -139,29 +139,21 @@ function retrieve_constants_from_node(node::Node)
 end
 
 
-function optimize_constants(
+@inline function optimize_constants!(
     node::Node,
-    x_data::AbstractArray{T},
-    y_data::AbstractArray{T},
-    loss::Function,
-    operators::AbstractOperatorEnum;
+    loss::Function;
     opt_method::Symbol=:cg,
     max_iterations::Int=250,
     n_restarts::Int=3
-) where {T<:AbstractFloat}
+)
 
     nconst = count_constants(node)
 
     if nconst == 0
         return node, 0.0
     end
-
-    function f(tree::Node)
-        y_pred, flag = eval_tree_array(tree, x_data, operators)
-        return loss(y_pred, y_data)
-    end
-
-    baseline = f(node)
+    
+    baseline = loss(node)
     best_node = deepcopy(node)
     best_loss = baseline
 
@@ -186,7 +178,7 @@ function optimize_constants(
             end
         end
 
-        result = Optim.optimize(f, current_node, algorithm, optimizer_options)
+        result = Optim.optimize(loss, current_node, algorithm, optimizer_options)
 
         if result.minimum < best_loss
             best_node = result.minimizer
