@@ -40,9 +40,12 @@ export equal_unit_forward, mul_unit_forward, div_unit_forward, zero_unit_backwar
 export get_feature_dims_json, get_target_dim_json, retrieve_coeffs_based_on_similarity
 
 
-using .SymbolicEntities
-export Toolbox, Chromosome
+using .GepEntities
+export Chromosome, Toolbox
 export AbstractSymbol, FunctionalSymbol, BasicSymbol, SymbolConfig
+export fitness, set_fitness!
+export generate_gene, generate_preamle!, compile_expression!, generate_chromosome, generate_population 
+export genetic_operations!
 
 
 end

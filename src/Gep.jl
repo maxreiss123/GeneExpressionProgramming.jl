@@ -8,7 +8,7 @@ include("Entities.jl")
 using .LossFunction
 using .GepUtils
 using .EvoSelection
-using .SymbolicEntities
+using .GepEntities
 
 using Random
 using Statistics

@@ -1,4 +1,4 @@
-module SymbolicEntities
+module GepEntities
 
 include("Util.jl")
 
@@ -9,7 +9,8 @@ export Chromosome, Toolbox
 export AbstractSymbol, FunctionalSymbol, BasicSymbol, SymbolConfig
 export fitness, set_fitness!
 export generate_gene, generate_preamle!, compile_expression!, generate_chromosome, generate_population 
-export genetic_operations!
+export genetic_operations!, replicate, gene_inversion!, gene_mutation!, gene_one_point_cross_over!, gene_two_point_cross_over!, gene_fussion!
+ 
 
 
 abstract type AbstractSymbol end
@@ -362,7 +363,7 @@ end
 
 @inline function gene_inversion!(chromosome1::Chromosome)
     start_1 = rand(chromosome1.toolbox.gen_start_indices)
-    reverse!(@view chromosome1.genes[start_1:chromosome1.toolbox.head_len-1])
+    reverse!(@view chromosome1.genes[start_1:chromosome1.toolbox.head_len])
 end
 
 @inline function gene_insertion!(chromosome::Chromosome)
