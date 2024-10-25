@@ -1,6 +1,5 @@
 module GepUtils
 
-
 using OrderedCollections
 using DynamicExpressions
 using LinearAlgebra
@@ -8,45 +7,75 @@ using Optim
 using LineSearches
 using Zygote
 using Serialization
+using Statistics
+using Base.Threads: @spawn
 
-export Toolbox
-export find_indices_with_sum, compile_djl_datatype, optimize_constants, minmax_scale, float16_scale, isclose
+
+export find_indices_with_sum, compile_djl_datatype, optimize_constants!, minmax_scale, float16_scale, isclose
 export save_state, load_state
+export create_history_recorder, record_history!, record!, close_recorder!
+export HistoryRecorder, OptimizationHistory
 
-
-
-struct Toolbox
-    gene_count::Int
-    head_len::Int
-    symbols::OrderedDict{Int8,Int8}
-    gene_connections::Vector{Int8}
-    headsyms::Vector{Int8}
-    unary_syms::Vector{Int8}
-    tailsyms::Vector{Int8}
-    arrity_by_id::OrderedDict{Int8,Int8}
-    callbacks::Dict
-    nodes::OrderedDict
-    gen_start_indices::Vector{Int}
-    gep_probs::Dict{String,AbstractFloat}
-    unary_prob::Real
-    fitness_reset::Tuple
-    preamble_syms::Vector{Int8}
-    len_preamble::Int8
-
-
-    function Toolbox(gene_count::Int, head_len::Int, symbols::OrderedDict{Int8,Int8}, gene_connections::Vector{Int8},
-        callbacks::Dict, nodes::OrderedDict, gep_probs::Dict{String,AbstractFloat};
-        unary_prob::Real=0.4, fitness_reset::Tuple=(Inf, NaN), preamble_syms=Int8[])
-        gene_len = head_len * 2 + 1
-        headsyms = [key for (key, arity) in symbols if arity == 2]
-        unary_syms = [key for (key, arity) in symbols if arity == 1]
-        tailsyms = [key for (key, arity) in symbols if arity < 1 && !(key in preamble_syms)]
-        len_preamble = length(preamble_syms) == 0 ? 0 : gene_count
-        gen_start_indices = [gene_count + len_preamble + (gene_len * (i - 1)) for i in 1:gene_count] #depending on the usage should shift everthing 
-        new(gene_count, head_len, symbols, gene_connections, headsyms, unary_syms, tailsyms, symbols,
-            callbacks, nodes, gen_start_indices, gep_probs, unary_prob, fitness_reset, preamble_syms, len_preamble)
+struct OptimizationHistory{T<:AbstractFloat}
+    train_loss::Vector{T}
+    val_loss::Vector{T}
+    train_mean::Vector{T}
+    train_std::Vector{T}
+    
+    function OptimizationHistory(epochs::Int, ::Type{T}) where T<:AbstractFloat
+        return new{T}(
+            Vector{T}(undef, epochs),
+            Vector{T}(undef, epochs),
+            Vector{T}(undef, epochs),
+            Vector{T}(undef, epochs)
+        )
     end
 end
+
+struct HistoryRecorder{T<:AbstractFloat}
+    channel::Channel{Tuple{Int,T,T,Vector{T}}}
+    task::Task
+    history::OptimizationHistory{T}
+    
+    function HistoryRecorder(epochs::Int, ::Type{T}; buffer_size::Int=32) where T<:AbstractFloat
+        history = OptimizationHistory(epochs, T)
+        channel = Channel{Tuple{Int,T,T,Vector{T}}}(buffer_size)
+        task = @spawn record_history!(channel, history)
+        return new{T}(channel, task, history)
+    end
+end
+
+# Usage in record_history!
+@inline function record_history!(
+    channel::Channel{Tuple{Int,T,T,Vector{T}}},
+    history::OptimizationHistory{T}
+) where T<:AbstractFloat
+    for (epoch, train_loss, val_loss, fit_vector) in channel
+        @inbounds begin
+            history.train_loss[epoch] = train_loss
+            history.val_loss[epoch] = val_loss
+            history.train_mean[epoch] = mean(fit_vector)
+            history.train_std[epoch] = std(fit_vector)
+        end
+    end
+end
+
+@inline function record!(
+    recorder::HistoryRecorder{T},
+    epoch::Int,
+    train_loss::T,
+    val_loss::T,
+    fit_vector::Vector{T}
+) where T<:AbstractFloat
+    put!(recorder.channel, (epoch, train_loss, val_loss, fit_vector))
+end
+
+
+@inline function close_recorder!(recorder::HistoryRecorder)
+    close(recorder.channel)
+    wait(recorder.task)
+end
+
 
 function isclose(a::T, b::T; rtol::T=1e-5, atol::T=1e-8) where {T<:Number}
     return abs(a - b) <= (atol + rtol * abs(b))
@@ -110,29 +139,21 @@ function retrieve_constants_from_node(node::Node)
 end
 
 
-function optimize_constants(
+@inline function optimize_constants!(
     node::Node,
-    x_data::AbstractArray{T},
-    y_data::AbstractArray{T},
-    loss::Function,
-    operators::AbstractOperatorEnum;
+    loss::Function;
     opt_method::Symbol=:cg,
     max_iterations::Int=250,
     n_restarts::Int=3
-) where {T<:AbstractFloat}
+)
 
     nconst = count_constants(node)
 
     if nconst == 0
         return node, 0.0
     end
-
-    function f(tree::Node)
-        y_pred, flag = eval_tree_array(tree, x_data, operators)
-        return loss(y_pred, y_data)
-    end
-
-    baseline = f(node)
+    
+    baseline = loss(node)
     best_node = deepcopy(node)
     best_loss = baseline
 
@@ -157,7 +178,7 @@ function optimize_constants(
             end
         end
 
-        result = Optim.optimize(f, current_node, algorithm, optimizer_options)
+        result = Optim.optimize(loss, current_node, algorithm, optimizer_options)
 
         if result.minimum < best_loss
             best_node = result.minimizer

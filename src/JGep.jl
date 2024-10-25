@@ -19,8 +19,7 @@ export get_loss_function
 
 
 using .GepUtils
-export Toolbox
-export find_indices_with_sum, compile_djl_datatype, optimize_constants, minmax_scale, float16_scale, isclose
+export find_indices_with_sum, compile_djl_datatype, optimize_constants!, minmax_scale, float16_scale, isclose
 export save_state, load_state
 
 
@@ -41,8 +40,12 @@ export equal_unit_forward, mul_unit_forward, div_unit_forward, zero_unit_backwar
 export get_feature_dims_json, get_target_dim_json, retrieve_coeffs_based_on_similarity
 
 
-using .SymbolicEntities
+using .GepEntities
+export Chromosome, Toolbox
 export AbstractSymbol, FunctionalSymbol, BasicSymbol, SymbolConfig
+export fitness, set_fitness!
+export generate_gene, generate_preamle!, compile_expression!, generate_chromosome, generate_population 
+export genetic_operations!
 
 
 end

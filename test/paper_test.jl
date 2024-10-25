@@ -21,8 +21,7 @@ end
 function create_symbol_config(
     features_names::Vector{String},
     constants::Vector{T};
-    feature_dims::Dict{String, Vector{Float16}} = Dict{String,Vector{Float16}}(),
-    phy_constants::Union{Dict{String, Vector{Float16}}, Nothing} = nothing
+    feature_dims::Dict{String, Vector{Float16}} = Dict{String,Vector{Float16}}()
 ) where T <: AbstractFloat
     operators_djl =  OperatorEnum(; binary_operators=[*,/,+,-], unary_operators=[sqr,sqrt,sin,cos,exp,log])
     nodes_djl = OrderedDict{Int8, Any}()
@@ -240,7 +239,7 @@ function main()
                     )
 
                     start_time = time_ns()
-                    best=runGep(pop_size, generations,
+                    best,_=runGep(pop_size, generations,
                                 gene_count,head_length,utilized_syms, config.operators_djl, 
                                 config.callbacks, 
                                 config.nodes_djl, 
