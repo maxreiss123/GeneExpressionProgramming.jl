@@ -83,8 +83,8 @@ pop_size = 1000
 gene_count = 3
 head_len = 4
 
-best,history=run_GEP(epochs, pop_size, gene_count, head_len, utilized_syms,operators, callbacks, nodes, x_data',y_data, connection_syms, gep_params;
-    loss_fun_str="mse",x_data_test=x_data_test', y_data_test=y_data_test ,opt_method_const=:cg, hof=1)
+best=runGep(epochs, pop_size, gene_count, head_len, utilized_syms,operators, callbacks, nodes, x_data',y_data, connection_syms, gep_params;
+
 
 #Show the result of the optimization
 @show ("Fitness: (loss-fun): ", best[1].fitness)
