@@ -1,4 +1,4 @@
-module JGep
+module JGepRegression
 
 include("Entities.jl")
 include("Gep.jl")
