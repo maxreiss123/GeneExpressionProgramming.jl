@@ -1,4 +1,4 @@
-using JGep
+using JGepRegression
 using DynamicExpressions
 using OrderedCollections
 using CSV 

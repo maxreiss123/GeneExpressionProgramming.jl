@@ -20,7 +20,7 @@ The repository contains the implementation of the Gene Expression Programming[1]
   ```
     julia --project=.
     using Pkg
-    Pkg.add(url="https://github.com/maxreiss123/GEP_SBP_.git")
+    Pkg.add("JGep")
   ```
 
 
@@ -45,3 +45,4 @@ The repository contains the implementation of the Gene Expression Programming[1]
 - [ ] Documentation 
 - [ ] Re-write postprocessing
 - [ ] Improve usability for user interaction
+- [ ] Next operations: Tail flip, Connection symbol flip, wrapper class for easy usage, config class for predefinition, staggered exploration
