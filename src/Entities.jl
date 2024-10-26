@@ -375,14 +375,20 @@ end
 
 @inline function reverse_insertion!(chromosome::Chromosome)
     start_1 = rand(chromosome.toolbox.gen_start_indices)
-    rolled_array = circshift(chromosome.genes[start_1:chromosome.toolbox.head_len-1], rand(1:chromosome.toolbox.head_len-1))
-    chromosome.genes[start_1:chromosome.toolbox.head_len-1] = rolled_array
+    rolled_array = circshift(chromosome.genes[start_1:start_1+chromosome.toolbox.head_len-1], rand(1:chromosome.toolbox.head_len-1))
+    chromosome.genes[start_1:start_1+chromosome.toolbox.head_len-1] = rolled_array
+end
+
+@inline function reverse_insertion_tail!(chromosome::Chromosome)
+    start_1 = rand(chromosome.toolbox.gen_start_indices)+chromosome.toolbox.head_len+1
+    rolled_array = circshift(chromosome.genes[start_1:start_1+chromosome.toolbox.head_len-1], rand(1:chromosome.toolbox.head_len-1))
+    chromosome.genes[start_1:start_1+chromosome.toolbox.head_len-1] = rolled_array
 end
 
 @inline function genetic_operations!(space_next::Vector{Chromosome}, i::Int, toolbox::Toolbox)
     #allocate them within the space - create them once instead of n time 
     space_next[i:i+1] = replicate(space_next[i], space_next[i+1], toolbox)
-    rand_space = rand(13)
+    rand_space = rand(15)
 
 
     if rand_space[1] < toolbox.gep_probs["one_point_cross_over_prob"]
@@ -435,6 +441,14 @@ end
 
     if rand_space[13] < toolbox.gep_probs["inversion_prob"]
         reverse_insertion!(space_next[i+1])
+    end
+
+    if rand_space[14] < toolbox.gep_probs["inversion_prob"]
+        reverse_insertion_tail!(space_next[i+1])
+    end
+
+    if rand_space[15] < toolbox.gep_probs["inversion_prob"]
+        reverse_insertion_tail!(space_next[i+1])
     end
 
 end
