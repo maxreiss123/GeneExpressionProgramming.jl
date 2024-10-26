@@ -7,7 +7,7 @@ The repository contains the implementation of the Gene Expression Programming[1]
 
 # How to use it?
 - Clone the repository and navigate to the folder:
-  ```git clone https://gitlab.unimelb.edu.au/reissmannm/vgep.git```
+  ```git clone https://github.com/maxreiss123/GEP_SBP_.git```
 
 - Within the folder, install all the required packages:
   ```julia
