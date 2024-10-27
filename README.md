@@ -1,6 +1,5 @@
 # VGeneExpressionProgramming for symbolic regression
-The repository contains the implementation of the Gene Expression Programming[1] in conjunction with the semantic backpropagation approach developed in[2]. Here, the target is to reach dimensional homogeneity for physical dimensions through the cause of the exploration.
-
+The repository contains the implementation of the Gene Expression Programming [1], whereby the 'V' refers to the internal representation of the equation as a vector of integers. This representation allows a lower memory footprint, leading to faster processing of the application of the genetic operators. Moreover, the implementation also contains a mechanism for semantic backpropagation, ensuring dimensional homogeneity for physical units [2]. 
 
 # How to use it?
 - Install the package:
@@ -8,6 +7,7 @@ The repository contains the implementation of the Gene Expression Programming[1]
     using Pkg
     Pkg.add(url="https://github.com/maxreiss123/GEP_SBP_.git")
   ```
+
 
 - Remark for your CSV file: Main_min_with_csv.jl in the test folder provides a step-by-step guide on how to initialize the GEP for your own problem
 - Remark for your CSV file and utilizing dimensional homogeneity: Main_min_with_csv_and_units.jl in the test folder provides a step-by-step guide
