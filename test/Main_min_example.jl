@@ -1,6 +1,6 @@
-include("../src/JGepRegression.jl")
+include("../src/VGeneExpressionProgramming.jl")
 
-using .JGepRegression
+using .VGeneExpressionProgramming
 using DynamicExpressions
 using OrderedCollections
 using BenchmarkTools

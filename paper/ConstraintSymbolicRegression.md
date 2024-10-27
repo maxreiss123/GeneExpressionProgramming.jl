@@ -1,0 +1,9 @@
+# Abstract
+Evolutionary symbolic regression approaches are powerful tools that can approximate an explicit mapping between input features and observation for various problems. However, ensuring that explored expressions maintain consistency with domain-specific constraints remains a crucial challenge. While neural networks are able to employ additional information like conservation laws to achieve more appropriate and robust approximations, the potential remains unrealized within genetic algorithms. This disparity is rooted in the inherent discrete randomness of recombining and mutating to generate new mapping expressions, making it challenging to maintain and preserve inferred constraints or restrictions in the course of the exploration. To address this limitation, we propose an approach centered on semantic backpropagation incorporated into the Gene Expression Programming (GEP), which integrates domain-specific properties in a vector representation as corrective feedback during the evolutionary process. By creating backward rules akin to algorithmic differentiation and leveraging pre-computed subsolutions, the mechanism allows the enforcement of any constraint within an expression tree by determining the misalignment and propagating desired changes back. To illustrate the effectiveness of constraining GEP through semantic backpropagation, we take the constraint of physical dimension as an example. This framework is applied to discovering physical equations from the Feynman lectures. Results have shown not only an increased likelihood of recovering the original equation but also notable robustness in the presence of noisy data.
+
+
+# Test Reproduction
+The file ConstrainViaSBP.jl contains the test setup. Please follow the steps outlined there.
+
+# Source
+- [1] Reissmann, M., Fang, Y., Ooi, A., & Sandberg, R. (2024). Constraining genetic symbolic regression via semantic backpropagation. arXiv. https://arxiv.org/abs/2409.07369

@@ -1,4 +1,4 @@
-module JGepRegression
+module VGeneExpressionProgramming
 
 include("Entities.jl")
 include("Gep.jl")
