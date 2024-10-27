@@ -5,11 +5,9 @@ The repository contains the implementation of the Gene Expression Programming[1]
 # How to use it?
 - Install the package:
   ```julia
-    julia --project=.
     using Pkg
     Pkg.add(url="https://github.com/maxreiss123/GEP_SBP_.git")
   ```
-
 
 - Remark for your CSV file: Main_min_with_csv.jl in the test folder provides a step-by-step guide on how to initialize the GEP for your own problem
 - Remark for your CSV file and utilizing dimensional homogeneity: Main_min_with_csv_and_units.jl in the test folder provides a step-by-step guide
