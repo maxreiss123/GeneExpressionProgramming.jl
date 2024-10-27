@@ -3,15 +3,15 @@ The repository contains the implementation of the Gene Expression Programming[1]
 
 
 # How to use it?
-  ```
+
+  ```julia
     julia --project=.
     using Pkg
     Pkg.add(url="https://github.com/maxreiss123/GEP_SBP_.git")
-  ```
 
 
 - Run a test for various Feynman datasets located within 'test/srsd' (from the root folder):
-  ```
+  ```julia
    julia --project==. paper/ConstraintViaSBP.jl
   ```
 
@@ -29,7 +29,8 @@ The repository contains the implementation of the Gene Expression Programming[1]
  - We employ the insane fast [DynamicExpressions.jl](https://github.com/SymbolicML/DynamicExpressions.jl) for evaluating our expressions
 
 # Todo 
-- [ ] Documentation 
+- [ ] Documentation
+- [ ] Naming conventions!
 - [ ] Re-write postprocessing
 - [ ] Improve usability for user interaction
 - [ ] Next operations: Tail flip, Connection symbol flip, wrapper class for easy usage, config class for predefinition, staggered exploration
