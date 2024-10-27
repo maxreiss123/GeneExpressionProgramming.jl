@@ -42,7 +42,8 @@ The repository contains the implementation of the Gene Expression Programming[1]
  - We employ the insane fast [DynamicExpressions.jl](https://github.com/SymbolicML/DynamicExpressions.jl) for evaluating our expressions
 
 # Todo 
-- [ ] Documentation 
+- [ ] Documentation
+- [ ] Naming conventions!
 - [ ] Re-write postprocessing
 - [ ] Improve usability for user interaction
 - [ ] Next operations: Tail flip, Connection symbol flip, wrapper class for easy usage, config class for predefinition, staggered exploration
