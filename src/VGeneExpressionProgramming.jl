@@ -7,12 +7,10 @@ include("PhyConstants.jl")
 include("Sbp.jl")
 include("Selection.jl")
 include("Util.jl")
+include("RegressionWrapper.jl")
 
-
-using .GepRegressor
-export Chromosome
+using .GepRegression
 export runGep
-
 
 using .LossFunction
 export get_loss_function
@@ -47,5 +45,8 @@ export fitness, set_fitness!
 export generate_gene, generate_preamle!, compile_expression!, generate_chromosome, generate_population 
 export genetic_operations!
 
+
+using .RegressionWrapper
+export GepRegressor
 
 end

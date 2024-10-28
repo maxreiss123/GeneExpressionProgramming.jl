@@ -1,4 +1,4 @@
-module GepRegressor
+module GepRegression
 
 include("Losses.jl")
 include("Util.jl")
@@ -96,7 +96,7 @@ function runGep(epochs::Int,
     x_data_test::Union{AbstractArray{T},Nothing}=nothing,
     y_data_test::Union{AbstractArray{T},Nothing}=nothing,
     seed::Int=0,
-    loss_fun_str::String="mae",
+    loss_fun_::Union{String,Function}= "mae",
     mating_::Real=0.5,
     correction_callback::Union{Function,Nothing}=nothing,
     correction_epochs::Int=1,
@@ -106,7 +106,8 @@ function runGep(epochs::Int,
     preamble_syms=Int8[],
     optimisation_epochs::Int=500) where {T<:AbstractFloat}
 
-    loss_fun::Function = get_loss_function(loss_fun_str)
+    loss_fun::Function = typeof(loss_fun_) == String ? get_loss_function(loss_fun_str) : loss_fun_
+    
     recorder = HistoryRecorder(epochs, Float64)
 
     if isnothing(x_data_test) || isnothing(y_data_test)
