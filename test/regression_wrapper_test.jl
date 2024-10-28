@@ -82,9 +82,9 @@ using .RegressionWrapper
             gene_count=5,
             head_len=10,
             considered_dimensions=Dict(
-                :x => Float16[1, 0, 0, 0, 0, 0, 0],
-                :y => Float16[0, 1, 0, 0, 0, 0, 0],
-                :z => Float16[0, 0, 1, 0, 0, 0, 0]
+                :x1 => Float16[1, 0, 0, 0, 0, 0, 0],
+                :x2 => Float16[0, 1, 0, 0, 0, 0, 0],
+                :x3 => Float16[0, 0, 1, 0, 0, 0, 0]
             )
         )
         
@@ -97,8 +97,8 @@ using .RegressionWrapper
 
     @testset "Dimension Handling" begin
         dimensions = Dict(
-            :x => Float16[1, 0, 0, 0, 0, 0, 0],
-            :y => Float16[0, 1, 0, 0, 0, 0, 0]
+            :x1 => Float16[1, 0, 0, 0, 0, 0, 0],
+            :x2 => Float16[0, 1, 0, 0, 0, 0, 0]
         )
         
         regressor = GepRegressor(

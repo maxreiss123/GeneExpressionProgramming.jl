@@ -10,14 +10,14 @@ using OrderedCollections
 
 function create_token_lib_test()
     physical_dimension_dict = OrderedDict{Int8, Vector{Float16}}(
-        1 => [0.0, 0.0, 0.0, 0.0],  # Mul
-        2 => [0.0, 0.0, 0.0, 0.0],  # Div
-        3 => [0.0, 0.0, 0.0, 0.0],  # Add
-        4 => [0.0, 0.0, 0.0, 0.0],  # Sub
-        5 => [0.0, 0.0, 0.0, 0.0],  # sqr
-        6 => [0.0, 0.0, 0.0, 0.0],  # sin
-        7 => [1.0, 0.0, 0.0, 0.0],  # x1  
-        8 => [0.0, 1.0, 0.0, 0.0]   # x2 
+        1 => [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # Mul
+        2 => [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # Div
+        3 => [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # Add
+        4 => [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # Sub
+        5 => [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # sqr
+        6 => [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # sin
+        7 => [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # x1  
+        8 => [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0]   # x2 
     )
 
     physical_operation_dict = OrderedDict{Int8, Function}(
@@ -98,7 +98,7 @@ end
         expression = Int8[1,7,7]  # mul(x1, x1)
         tree = create_compute_tree(expression, token_dto)
         dimension = calculate_vector_dimension!(tree)
-        @test dimension == [2.0, 0.0, 0.0, 0.0]
+        @test dimension == [2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     end
 
     @testset "Enforce Backpropagation complex" begin
@@ -118,9 +118,9 @@ end
         expression = Int8[1,2,3,7,7,8,8]
         tree = create_compute_tree(expression, token_dto)
         dimension = calculate_vector_dimension!(tree)
-        propagate_necessary_changes!(tree, convert.(Float16,[1.0,-1.0,0.0,0.0]))
+        propagate_necessary_changes!(tree, convert.(Float16,[1.0,-1.0,0.0,0.0,0.0, 0.0, 0.0]))
         dimension = calculate_vector_dimension!(tree)
-        @test dimension == [1.0, -1.0, 0.0, 0.0]
+        @test dimension == [1.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     end
 
     @testset "Enforce Backpropagation simple" begin
@@ -139,9 +139,9 @@ end
         token_dto = TokenDto(token_lib, point_operations, lib, inverse_operation, 1)
         expression = Int8[1,7,7] # expression => [2.0, 0.0, 0.0, 0.0]  -> [1.0,1.0, 0.0, 0.0]
         tree = create_compute_tree(expression, token_dto)
-        propagate_necessary_changes!(tree, convert.(Float16,[1.0,1.0,0.0,0.0]))
+        propagate_necessary_changes!(tree, convert.(Float16,[1.0,1.0,0.0,0.0,0.0, 0.0, 0.0]))
         dimension = calculate_vector_dimension!(tree)
-        @test dimension == [1.0, 1.0, 0.0, 0.0]
+        @test dimension == [1.0, 1.0, 0.0, 0.0,0.0, 0.0, 0.0]
     end
 
     @testset "Correct gene" begin
@@ -163,7 +163,7 @@ end
         @show "Genes before test" gene
         
         indices = [1] 
-        correction, distance = correct_genes!(gene, indices, gene, Float16[1.0,1.0,0.0,0.0] , token_dto; cycles=10)
+        correction, distance = correct_genes!(gene, indices, gene, Float16[1.0,1.0,0.0,0.0, 0.0, 0.0, 0.0] , token_dto; cycles=10)
         @show "Genes after test" gene
         @show "Correction" correction
         @test correction < eps(Float16)
@@ -187,26 +187,26 @@ end
         )
         token_dto = TokenDto(token_lib, point_operations, lib, inverse_operation, 1)
     
-        #[1.0, 0.0, 0.0, 0.0]  x1  
-        #[0.0, 1.0, 0.0, 0.0]  x2 
+        #[1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  x1  
+        #[0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0]  x2 
 
         # Test 1: Simple tree (mul(x1, x1)) =>  [1.0, 0.0, 0.0, 0.0]+ [1.0, 0.0, 0.0, 0.0]
         tree1 = TempComputeTree(Int8(1), Int8[7, 7], Float16[], token_dto)
         dim1 = calculate_vector_dimension!(tree1)
-        @test dim1 == [2.0, 0.0, 0.0, 0.0]
+        @test dim1 == [2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     
-        # Test 2: Nested tree (mul(x1, div(x2, x1)))   [1.0, 0.0, 0.0, 0.0]+([0.0, 1.0, 0.0, 0.0] - [1.0, 0.0, 0.0, 0.0])
+        # Test 2: Nested tree (mul(x1, div(x2, x1)))   [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]+([0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0] - [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
         tree2 = TempComputeTree(Int8(1), [
             Int8(7),
             TempComputeTree(Int8(2), Int8[8, 7], Float16[], token_dto)
         ], Float16[], token_dto)
         dim2 = calculate_vector_dimension!(tree2)
-        @test dim2 == [0.0, 1.0, 0.0, 0.0]
+        @test dim2 == [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     
         # Test 3: Tree with unary operation (sqr(x1))
         tree3 = TempComputeTree(Int8(5), Int8[7], Float16[], token_dto)
         dim3 = calculate_vector_dimension!(tree3)
-        @test dim3 == [2.0, 0.0, 0.0, 0.0]
+        @test dim3 == [2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     
 
         # Test 4: Complex nested tree (add(mul(x1, x2), mul(x1, x2))  
@@ -219,7 +219,7 @@ end
         ], Float16[], token_dto)
         dim4 = calculate_vector_dimension!(tree4)
         @show dim4
-        @test dim4 == [1.0, 1.0, 0.0, 0.0]
+        @test dim4 == [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
 
         # Test 5: Tree with operation resulting in empty dimension (should choose random point operation)
@@ -229,9 +229,9 @@ end
     
     
         # Test 6: Recalculation of existing dimension
-        tree6 = TempComputeTree(Int8(1), Int8[7, 8], Float16[1.0, 1.0, 0.0, 0.0], token_dto)
+        tree6 = TempComputeTree(Int8(1), Int8[7, 8], Float16[1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0], token_dto)
         flush!(tree6)
         dim6 = calculate_vector_dimension!(tree6)
-        @test dim6 == [1.0, 1.0, 0.0, 0.0]  # Should return existing dimension without recalculation    
+        @test dim6 == [1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # Should return existing dimension without recalculation    
     end
 end
