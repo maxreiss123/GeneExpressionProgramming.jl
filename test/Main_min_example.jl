@@ -52,6 +52,6 @@ y_data = @. x_data[1,:] * x_data[1,:] + x_data[1,:] * x_data[2,:] - 2 * x_data[2
 #call the function -> return value yields the best:
 
  best,history =runGep(1000, 1000,4,10,utilized_syms,operators, callbacks, nodes, x_data,y_data, connection_syms, gep_params;
-    loss_fun_str="mse", opt_method_const=:cg, hof=1)
+    loss_fun_="mse", opt_method_const=:cg, hof=1)
 @show string(best[1].fitness)
 @show string(best[1].compiled_function)

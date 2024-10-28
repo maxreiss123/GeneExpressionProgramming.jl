@@ -106,7 +106,7 @@ function runGep(epochs::Int,
     preamble_syms=Int8[],
     optimisation_epochs::Int=500) where {T<:AbstractFloat}
 
-    loss_fun::Function = typeof(loss_fun_) == String ? get_loss_function(loss_fun_str) : loss_fun_
+    loss_fun::Function = typeof(loss_fun_) == String ? get_loss_function(loss_fun_) : loss_fun_
     
     recorder = HistoryRecorder(epochs, Float64)
 
