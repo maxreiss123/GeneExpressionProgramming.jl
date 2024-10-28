@@ -173,7 +173,7 @@ function create_physical_operations(entered_non_terminals::Vector{Symbol})
             @info "Symbol: " elem " is ignored"
             continue
         end
-        forward_funs[idx] = FUNCTION_LIB_COMMON[elem]
+        forward_funs[idx] = FUNCTION_LIB_FORWARD_COMMON[elem]
         backward_funs[idx] = FUNCTION_LIB_BACKWARD_COMMON[elem]
         if elem == :mul || elem == :/
             push!(point_ops, idx)
@@ -347,7 +347,7 @@ mutable struct GepRegressor
         gene_count::Int=3,
         head_len::Int=8,
         preamble_syms::Vector{Symbol}=Symbol[],
-        max_permutations_lib::Int=10000
+        max_permutations_lib::Int=10
     )
 
         entered_features_ = isempty(entered_features) ?
@@ -389,15 +389,11 @@ mutable struct GepRegressor
             idx_funs = [idx for (idx,_) in func_syms]
             idx_const = [idx for (idx,_) in const_syms]
 
-            @show idx_features
-            @show idx_funs
-            @show idx_const
-
             lib = create_lib(token_lib,
                 idx_features,
                 idx_funs,
                 idx_const;
-                rounds=head_len - 1, max_permutations=max_permutations_lib)
+                rounds=2, max_permutations=max_permutations_lib)
                 token_dto = TokenDto(token_lib, point_ops, lib, backward_funs, gene_count; head_len=head_len- 1)
         else
             token_dto = nothing
