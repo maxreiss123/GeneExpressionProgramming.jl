@@ -418,4 +418,18 @@ mutable struct GepRegressor
     end
 end
 
+function fit!(regressor::GepRegressor, dataset::AbstractArray; train_split::Real=0.8)
+
+end
+
+function predict(regressor::GepRegressor, x_data::AbstractArray; ensembe::Bool=False)
+
+end
+
+function eval(regressor::GepRegressor, x_datat::AbstractArray; plot::Bool=False)
+
+end
+
+
+
 end
