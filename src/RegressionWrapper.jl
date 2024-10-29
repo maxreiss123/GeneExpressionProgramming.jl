@@ -457,7 +457,7 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size, x_train::Ab
     y_train::AbstractArray; x_test::AbstractArray, y_test::AbstractArray,
     optimization_epochs::Int=500,
     hof::Int=3, loss_fun::Union{String,Function}="mse",
-    correction_epochs::Int=1, correction_amount::Real=3.0,
+    correction_epochs::Int=1, correction_amount::Real=0.3,
     tourni_size::Int=3, opt_method_const::Symbol=:cg,
     target_dimension::Union{Vector{Float16},Nothing}=nothing,
     cycles::Int=10
