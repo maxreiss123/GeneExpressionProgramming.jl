@@ -244,7 +244,7 @@ function main()
                                 config.callbacks, 
                                 config.nodes_djl, 
                                 x_data',y_data, connection_syms, gep_probs; correction_callback=corr_call_back!, 
-                                loss_fun_str=cost_function, 
+                                loss_fun_=cost_function, 
                                 penalty_consideration=penalty_consideration, x_data_test=x_data_test', 
                                 y_data_test=y_data_test, hof=1)
                     

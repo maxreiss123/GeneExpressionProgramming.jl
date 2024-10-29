@@ -1,5 +1,11 @@
 module GepUtils
 
+export find_indices_with_sum, compile_djl_datatype, optimize_constants!, minmax_scale, float16_scale, isclose
+export save_state, load_state
+export create_history_recorder, record_history!, record!, close_recorder!
+export HistoryRecorder, OptimizationHistory, get_history_arrays
+export train_test_split
+
 using OrderedCollections
 using DynamicExpressions
 using LinearAlgebra
@@ -8,21 +14,17 @@ using LineSearches
 using Zygote
 using Serialization
 using Statistics
+using Random
 using Base.Threads: @spawn
 
-
-export find_indices_with_sum, compile_djl_datatype, optimize_constants!, minmax_scale, float16_scale, isclose
-export save_state, load_state
-export create_history_recorder, record_history!, record!, close_recorder!
-export HistoryRecorder, OptimizationHistory
 
 struct OptimizationHistory{T<:AbstractFloat}
     train_loss::Vector{T}
     val_loss::Vector{T}
     train_mean::Vector{T}
     train_std::Vector{T}
-    
-    function OptimizationHistory(epochs::Int, ::Type{T}) where T<:AbstractFloat
+
+    function OptimizationHistory(epochs::Int, ::Type{T}) where {T<:AbstractFloat}
         return new{T}(
             Vector{T}(undef, epochs),
             Vector{T}(undef, epochs),
@@ -32,12 +34,59 @@ struct OptimizationHistory{T<:AbstractFloat}
     end
 end
 
+function Base.iterate(hist::OptimizationHistory, state::Int=1)
+    if state > length(hist.train_loss)
+        return nothing
+    end
+    return (
+        (
+            train_loss=hist.train_loss[state],
+            val_loss=hist.val_loss[state],
+            train_mean=hist.train_mean[state],
+            train_std=hist.train_std[state]
+        ),
+        state + 1
+    )
+end
+
+Base.length(hist::OptimizationHistory) = length(hist.train_loss)
+
+Base.size(hist::OptimizationHistory) = (length(hist.train_loss),)
+
+function Base.getindex(hist::OptimizationHistory, i::Int)
+    return (
+        train_loss=hist.train_loss[i],
+        val_loss=hist.val_loss[i],
+        train_mean=hist.train_mean[i],
+        train_std=hist.train_std[i]
+    )
+end
+
+
+Base.firstindex(hist::OptimizationHistory) = 1
+Base.lastindex(hist::OptimizationHistory) = length(hist)
+
+
+function Base.show(io::IO, hist::OptimizationHistory)
+    println(io, "OptimizationHistory{$(eltype(hist.train_loss))} with $(length(hist)) epochs")
+end
+
+
+function get_history_arrays(hist::OptimizationHistory)
+    return (
+        train_loss=hist.train_loss,
+        val_loss=hist.val_loss,
+        train_mean=hist.train_mean,
+        train_std=hist.train_std
+    )
+end
+
 struct HistoryRecorder{T<:AbstractFloat}
     channel::Channel{Tuple{Int,T,T,Vector{T}}}
     task::Task
     history::OptimizationHistory{T}
-    
-    function HistoryRecorder(epochs::Int, ::Type{T}; buffer_size::Int=32) where T<:AbstractFloat
+
+    function HistoryRecorder(epochs::Int, ::Type{T}; buffer_size::Int=32) where {T<:AbstractFloat}
         history = OptimizationHistory(epochs, T)
         channel = Channel{Tuple{Int,T,T,Vector{T}}}(buffer_size)
         task = @spawn record_history!(channel, history)
@@ -49,7 +98,7 @@ end
 @inline function record_history!(
     channel::Channel{Tuple{Int,T,T,Vector{T}}},
     history::OptimizationHistory{T}
-) where T<:AbstractFloat
+) where {T<:AbstractFloat}
     for (epoch, train_loss, val_loss, fit_vector) in channel
         @inbounds begin
             history.train_loss[epoch] = train_loss
@@ -66,7 +115,7 @@ end
     train_loss::T,
     val_loss::T,
     fit_vector::Vector{T}
-) where T<:AbstractFloat
+) where {T<:AbstractFloat}
     put!(recorder.channel, (epoch, train_loss, val_loss, fit_vector))
 end
 
@@ -152,7 +201,7 @@ end
     if nconst == 0
         return node, 0.0
     end
-    
+
     baseline = loss(node)
     best_node = deepcopy(node)
     best_loss = baseline
@@ -225,5 +274,36 @@ function load_state(filename::String)
         return deserialize(io)
     end
 end
+
+
+function train_test_split(
+    X::AbstractMatrix{T}, 
+    y::AbstractVector{T}; 
+    train_ratio::T=0.9, 
+    consider::Int=1
+) where {T<:AbstractFloat}
+
+    data = hcat(X, y)
+    
+
+    data = data[shuffle(1:size(data, 1)), :]
+    
+
+    split_point = floor(Int, size(data, 1) * train_ratio)
+    
+
+    data_train = data[1:split_point, :]
+    data_test = data[(split_point + 1):end, :]
+    
+
+    x_train = T.(data_train[1:consider:end, 1:(end-1)])
+    y_train = T.(data_train[1:consider:end, end])
+    
+    x_test = T.(data_test[1:consider:end, 1:(end-1)])
+    y_test = T.(data_test[1:consider:end, end])
+    
+    return x_train, y_train, x_test,  y_test
+end
+
 
 end

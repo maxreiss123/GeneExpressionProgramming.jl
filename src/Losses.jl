@@ -1,8 +1,8 @@
 module LossFunction
-using Statistics
+
 
 export get_loss_function
-
+using Statistics
 
 function floor_to_n10p(x::T) where T<:AbstractFloat
     abs_x = abs(x)

@@ -13,8 +13,10 @@ using StaticArrays
 export TokenLib, TokenDto, LibEntry, TempComputeTree
 export create_lib, create_compute_tree, propagate_necessary_changes!, calculate_vector_dimension!, flush!, calculate_vector_dimension!, flatten_dependents
 export propagate_necessary_changes!, correct_genes!
-export equal_unit_forward, mul_unit_forward, div_unit_forward, zero_unit_backward, zero_unit_forward, sqr_unit_backward, sqr_unit_forward, mul_unit_backward, div_unit_backward, equal_unit_backward
+export equal_unit_forward, mul_unit_forward, div_unit_forward, zero_unit_forward, sqr_unit_backward, sqr_unit_forward, arbitrary_unit_forward
+export zero_unit_backward, mul_unit_backward, div_unit_backward, equal_unit_backward  
 export get_feature_dims_json, get_target_dim_json, retrieve_coeffs_based_on_similarity
+export ZERO_DIM
 
 function equal_unit_forward(u1::Vector{Float16}, u2::Vector{Float16}) 
     if isempty(u1) || isempty(u2)
@@ -27,6 +29,10 @@ function equal_unit_backward(u1::Vector{Float16}, u2::Vector{Float16}, expected_
     return expected_dim, expected_dim
 end
 
+
+function arbitrary_unit_forward(u1::Vector{Float16})
+    return u1
+end
 
 function mul_unit_forward(u1::Vector{Float16}, u2::Vector{Float16}) 
     if isempty(u1) || isempty(u2)
@@ -545,7 +551,7 @@ function propagate_necessary_changes!(
         return true
     end
 
-    if check_crit_up!(tree.depend_on_total_number+1, expected_dim, tree) && distance_to_change <= 0
+    if check_crit_up!(tree.depend_on_total_number+1, expected_dim, tree) && distance_to_change <= 0 && rand() > 0.1
         return enforce_changes!(tree, expected_dim)
     end
 
@@ -647,7 +653,7 @@ function edit_gene_from_compute_tree!(gene::Vector{Int8}, compute_tree::Union{Te
 end
 
 
-function correct_genes!(genes::Vector{Int8}, start_indices::Vector{Int}, expression::Vector{Int8},
+@inline function correct_genes!(genes::Vector{Int8}, start_indices::Vector{Int}, expression::Vector{Int8},
     target_dimension::Vector{Float16}, token_dto::TokenDto; cycles::Int=5)
     gene_count = token_dto.gene_count
     tree = create_compute_tree(expression, token_dto, true)

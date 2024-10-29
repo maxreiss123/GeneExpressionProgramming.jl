@@ -1,5 +1,6 @@
 module VGeneExpressionProgramming
 
+
 include("Entities.jl")
 include("Gep.jl")
 include("Losses.jl")
@@ -7,12 +8,12 @@ include("PhyConstants.jl")
 include("Sbp.jl")
 include("Selection.jl")
 include("Util.jl")
+include("RegressionWrapper.jl")
 
+export GepEntities, LossFunction, PhysicalConstants, GepUtils, GepRegression, RegressionWrapper
 
-using .GepRegressor
-export Chromosome
+using .GepRegression
 export runGep
-
 
 using .LossFunction
 export get_loss_function
@@ -20,8 +21,9 @@ export get_loss_function
 
 using .GepUtils
 export find_indices_with_sum, compile_djl_datatype, optimize_constants!, minmax_scale, float16_scale, isclose
-export save_state, load_state
-
+export save_state, load_state, create_history_recorder, record_history!, record!, close_recorder!
+export HistoryRecorder, OptimizationHistory, get_history_arrays
+export train_test_split
 
 using .EvoSelection
 export selection_NSGA, basic_tournament_selection, dominates_, fast_non_dominated_sort, calculate_fronts, determine_ranks, assign_crowding_distance
@@ -47,5 +49,8 @@ export fitness, set_fitness!
 export generate_gene, generate_preamle!, compile_expression!, generate_chromosome, generate_population 
 export genetic_operations!
 
+
+using .RegressionWrapper
+export GepRegressor, fit!
 
 end
