@@ -29,6 +29,32 @@ const Chromosome = GepEntities.Chromosome
 const Toolbox = GepEntities.Toolbox
 
 
+"""
+    compute_fitness(elem::Chromosome, operators::OperatorEnum, x_data::AbstractArray{T},
+        y_data::AbstractArray{T}, loss_function::Function, crash_value::T; 
+        validate::Bool=false, penalty_consideration::Real=0.0) where {T<:AbstractFloat}
+
+Computes the fitness score for a chromosome using the specified loss function.
+
+# Arguments
+- `elem::Chromosome`: The chromosome whose fitness needs to be computed
+- `operators::OperatorEnum`: The set of mathematical operators available for expression evaluation
+- `x_data::AbstractArray{T}`: Input features for fitness computation
+- `y_data::AbstractArray{T}`: Target values for fitness computation
+- `loss_function::Function`: The loss function used to compute fitness
+- `crash_value::T`: Default value returned if computation fails
+- `validate::Bool=false`: If true, forces recomputation of fitness even if already calculated
+- `penalty_consideration::Real=0.0`: Additional penalty term added to the fitness score
+
+# Returns
+Returns the computed fitness value (loss + penalty) or crash_value if computation fails
+
+# Details
+- Checks if fitness needs to be computed (if NaN or validate=true)
+- Evaluates the chromosome's compiled function on input data
+- Applies loss function and adds any penalty consideration
+- Returns crash_value if any errors occur during computation
+"""
 @inline function compute_fitness(elem::Chromosome, operators::OperatorEnum, x_data::AbstractArray{T},
     y_data::AbstractArray{T}, loss_function::Function,
     crash_value::T; validate::Bool=false, penalty_consideration::Real=0.0) where {T<:AbstractFloat}
@@ -44,6 +70,26 @@ const Toolbox = GepEntities.Toolbox
     end
 end
 
+"""
+    perform_step!(population::Vector{Chromosome}, parents::Vector{Chromosome}, 
+        next_gen::Vector{Chromosome}, toolbox::Toolbox, mating_size::Int)
+
+Performs one evolutionary step in the GEP algorithm, creating and evaluating new chromosomes.
+
+# Arguments
+- `population::Vector{Chromosome}`: Current population of chromosomes
+- `parents::Vector{Chromosome}`: Selected parent chromosomes for breeding
+- `next_gen::Vector{Chromosome}`: Buffer for storing newly created chromosomes
+- `toolbox::Toolbox`: Contains genetic operators and algorithm parameters
+- `mating_size::Int`: Number of chromosomes to create in this step
+
+# Details
+- Processes parents in pairs to create new chromosomes
+- Applies genetic operations to create offspring
+- Compiles expressions for new chromosomes
+- Updates population with new chromosomes
+- Operations are performed in parallel using multiple threads
+"""
 @inline function perform_step!(population::Vector{Chromosome}, parents::Vector{Chromosome}, next_gen::Vector{Chromosome},
     toolbox::Toolbox, mating_size::Int)
 
@@ -67,6 +113,27 @@ end
     end
 end
 
+
+"""
+    perform_correction_callback!(population::Vector{Chromosome}, epoch::Int, 
+        correction_epochs::Int, correction_amount::Real,
+        correction_callback::Union{Function,Nothing})
+
+Applies correction operations to ensure dimensional homogeneity in chromosomes.
+
+# Arguments
+- `population::Vector{Chromosome}`: Current population of chromosomes
+- `epoch::Int`: Current epoch number
+- `correction_epochs::Int`: Frequency of correction operations
+- `correction_amount::Real`: Proportion of population to apply corrections to
+- `correction_callback::Union{Function,Nothing}`: Function that performs the actual correction
+
+# Details
+- Executes corrections periodically (every correction_epochs)
+- Processes a subset of the population determined by correction_amount
+- Applies corrections to dimensionally heterogeneous chromosomes
+- Updates chromosome compilation and dimensional homogeneity flags
+"""
 @inline function perform_correction_callback!(population::Vector{Chromosome}, epoch::Int, correction_epochs::Int, correction_amount::Real,
     correction_callback::Union{Function,Nothing})
 
@@ -79,8 +146,6 @@ end
                 if correction
                     compile_expression!(population[i]; force_compile=true)
                     population[i].dimension_homogene = true
-                else
-                    #population[i].penalty += distance
                 end
             end
         end
@@ -88,6 +153,61 @@ end
 end
 
 
+
+"""
+    runGep(epochs::Int, population_size::Int, operators::OperatorEnum,
+        x_data::AbstractArray{T}, y_data::AbstractArray{T}, toolbox::Toolbox;
+        hof::Int=3, x_data_test::Union{AbstractArray{T},Nothing}=nothing,
+        y_data_test::Union{AbstractArray{T},Nothing}=nothing,
+        loss_fun_::Union{String,Function}="mae",
+        correction_callback::Union{Function,Nothing}=nothing,
+        correction_epochs::Int=1, correction_amount::Real=0.6,
+        tourni_size::Int=3, opt_method_const::Symbol=:cg,
+        optimisation_epochs::Int=500) where {T<:AbstractFloat}
+
+Main function that executes the GEP algorithm for regression problems.
+
+# Arguments
+- `epochs::Int`: Number of evolutionary epochs to run
+- `population_size::Int`: Size of the chromosome population
+- `operators::OperatorEnum`: Available mathematical operators
+- `x_data::AbstractArray{T}`: Training input features
+- `y_data::AbstractArray{T}`: Training target values
+- `toolbox::Toolbox`: Contains genetic operators and algorithm parameters
+- `hof::Int=3`: Number of best solutions to return (Hall of Fame size)
+- `x_data_test::Union{AbstractArray{T},Nothing}`: Optional test input features
+- `y_data_test::Union{AbstractArray{T},Nothing}`: Optional test target values
+- `loss_fun_::Union{String,Function}="mae"`: Loss function for fitness computation
+- `correction_callback::Union{Function,Nothing}`: Function for dimensional homogeneity correction
+- `correction_epochs::Int=1`: Frequency of correction operations
+- `correction_amount::Real=0.6`: Proportion of population for correction
+- `tourni_size::Int=3`: Tournament selection size
+- `opt_method_const::Symbol=:cg`: Optimization method for constant optimization
+- `optimisation_epochs::Int=500`: Frequency of constant optimization
+
+# Returns
+Tuple{Vector{Chromosome}, Any}: Returns best solutions and training history
+Best solutions include both training and test R² scores when test data is provided
+
+# Details
+1. Initializes population and evolution parameters
+2. For each epoch:
+   - Applies dimensional homogeneity corrections
+   - Computes fitness for all chromosomes
+   - Sorts population by fitness
+   - Optimizes constants for best solution periodically
+   - Records training progress
+   - Performs tournament selection
+   - Creates new generation through genetic operations
+3. Computes final R² scores for best solutions
+4. Returns best solutions and training history
+
+Progress is monitored through a progress bar showing:
+- Current epoch
+- Training loss
+- Validation loss
+Early stopping occurs if perfect R² score is achieved
+"""
 function runGep(epochs::Int,
     population_size::Int,
     operators::OperatorEnum,
