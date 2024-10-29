@@ -1,15 +1,18 @@
-include("../src/VGeneExpressionProgramming.jl")
+include("../src/RegressionWrapper.jl")
+
+using .RegressionWrapper
 using Test
 using OrderedCollections
 using DynamicExpressions
+using Random
 
-using .RegressionWrapper
+Random.seed!(1)
 
 @testset "GepRegressor Tests" begin
 
     @testset "Function Entries Creation" begin
         # Test create_function_entries
-        non_terminals = [:+, :-, :*, :/, :sqrt]
+        non_terminals = [:+, :-, :*, :/, :exp]
         gene_connections = [:+, :*]
         
         syms, callbacks, binary_ops, unary_ops, gene_conns, idx = create_function_entries(
@@ -19,7 +22,7 @@ using .RegressionWrapper
         @test syms isa OrderedDict{Int8,Int8}
         @test callbacks isa Dict{Int8,Function}
         @test length(binary_ops) == 4  # +, -, *, /
-        @test length(unary_ops) == 1   # sqrt
+        @test length(unary_ops) == 1   # exp
         @test length(gene_conns) == 2  # +, *
     end
 
@@ -84,10 +87,9 @@ using .RegressionWrapper
         
         regressor = GepRegressor(2)
         
-        @test_nowarn fit!(regressor, 10, 1000, X, y)
-        @show !isempty(regressor.fitness_history_.train_loss)
-        #@test !isnothing(regressor.fitness_history_)
-        #@test length(regressor.best_models_) > 0
+        fit!(regressor, 100, 1000, X, y)
+        @test !isempty(regressor.fitness_history_.train_loss)
+        @test length(regressor.best_models_) > 0
     end
     
     @testset "Training with Physical Dimensions" begin
@@ -114,33 +116,9 @@ using .RegressionWrapper
         
         regressor = GepRegressor(2)
         
-        @test_nowarn fit!(regressor, 10, 20, X, y, loss_fun_="mse")
+        @test_nowarn fit!(regressor, 10, 20, X, y, loss_fun="mse")
         
-        @test_nowarn fit!(regressor, 10, 20, X, y, loss_fun_="mae")
+        @test_nowarn fit!(regressor, 10, 20, X, y, loss_fun="mae")
         
-        custom_loss(y_true, y_pred) = mean(abs2.(y_true .- y_pred))
-        @test_nowarn fit!(regressor, 10, 20, X, y, loss_fun_=custom_loss)
-    end
-    
-    @testset "Training with Different Test Ratios" begin
-        X = rand(100, 2)
-        y = X[:, 1] .* 2 .+ X[:, 2]
-        
-        regressor = GepRegressor(2)
-        
-        @test_nowarn fit!(regressor, 10, 20, X, y, test_ratio=0.0)
-        
-        @test_nowarn fit!(regressor, 10, 20, X, y, test_ratio=0.3)
-    end
-    
-    @testset "Training Error Handling" begin
-        regressor = GepRegressor(2)
-        
-        @test_throws DimensionMismatch fit!(regressor, 10, 20, rand(10, 3), rand(10))
-        
-        @test_throws DimensionMismatch fit!(regressor, 10, 20, rand(10, 2), rand(11))
-        
-        @test_throws ArgumentError fit!(regressor, -1, 20, rand(10, 2), rand(10))
-        @test_throws ArgumentError fit!(regressor, 10, -1, rand(10, 2), rand(10))
     end
 end

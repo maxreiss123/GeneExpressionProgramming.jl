@@ -73,14 +73,14 @@ end
     if !isnothing(correction_callback) && epoch % correction_epochs == 0
         pop_amount = Int(ceil(length(population) * correction_amount))
         Threads.@threads for i in 1:pop_amount
-            if isnan(population[i].fitness)
+            if !(population[i].dimension_homogene)
                 distance, correction = correction_callback(population[i].genes, population[i].toolbox.gen_start_indices,
                     population[i].expression_raw)
                 if correction
                     compile_expression!(population[i]; force_compile=true)
                     population[i].dimension_homogene = true
                 else
-                    population[i].penalty += distance
+                    #population[i].penalty += distance
                 end
             end
         end
@@ -118,7 +118,7 @@ function runGep(epochs::Int,
     mating_ = toolbox.gep_probs["mating_size"]
     mating_size = Int(ceil(population_size * mating_))
     mating_size = mating_size % 2 == 0 ? mating_size : mating_size - 1
-
+    fits_representation = Vector{T}(undef, population_size)
 
     population = generate_population(population_size, toolbox)
 
@@ -142,7 +142,7 @@ function runGep(epochs::Int,
         try
             if (prev_best == -1 || prev_best > population[1].fitness) && epoch % optimisation_epochs == 0
                 eqn, result = optimize_constants!(population[1].compiled_function, optimizer_function;
-                    opt_method=opt_method_const, max_iterations=250, n_restarts=3)
+                    opt_method=opt_method_const, max_iterations=150, n_restarts=5)
                 population[1].fitness = result
                 population[1].compiled_function = eqn
                 prev_best = result
@@ -151,8 +151,9 @@ function runGep(epochs::Int,
             @show "Opt. issue"
         end
 
-
-        fits_representation = [chromo.fitness for chromo in population]
+        Threads.@threads for index in eachindex(population)
+            fits_representation[index] =  population[index].fitness
+        end
 
         best_r = compute_fitness(population[1], operators, x_data, y_data,
             get_loss_function("r2_score"), zero(T); validate=true)

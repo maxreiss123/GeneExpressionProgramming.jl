@@ -1,7 +1,5 @@
 module VGeneExpressionProgramming
 
-export GepEntities, LossFunction, PhysicalConstants, GepUtils, GepRegression, RegressionWrapper
-
 
 include("Entities.jl")
 include("Gep.jl")
@@ -11,6 +9,8 @@ include("Sbp.jl")
 include("Selection.jl")
 include("Util.jl")
 include("RegressionWrapper.jl")
+
+export GepEntities, LossFunction, PhysicalConstants, GepUtils, GepRegression, RegressionWrapper
 
 using .GepRegression
 export runGep

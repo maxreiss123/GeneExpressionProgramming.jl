@@ -276,34 +276,33 @@ function load_state(filename::String)
 end
 
 
-function train_test_split(X::AbstractArray{T}, y::AbstractArray{T};
-    test_ratio::AbstractFloat=0.2,
-    shuffle::Bool=true) where {T<:AbstractFloat}
+function train_test_split(
+    X::AbstractMatrix{T}, 
+    y::AbstractVector{T}; 
+    train_ratio::T=0.9, 
+    consider::Int=1
+) where {T<:AbstractFloat}
 
-    n_samples = size(X, 1)
-    @assert n_samples == length(y) "X and y must have the same number of samples"
-    @assert 0 < test_ratio < 1 "test_ratio must be between 0 and 1"
+    data = hcat(X, y)
+    
 
-    n_test = round(Int, test_ratio * n_samples)
-    n_train = n_samples - n_test
+    data = data[shuffle(1:size(data, 1)), :]
+    
 
-    indices = Vector{Int}(undef, n_samples)
+    split_point = floor(Int, size(data, 1) * train_ratio)
+    
 
-    if shuffle
-        randperm!(indices)
-    else
-        indices .= 1:n_samples
-    end
+    data_train = data[1:split_point, :]
+    data_test = data[(split_point + 1):end, :]
+    
 
-    train_indices = view(indices, 1:n_train)
-    test_indices = view(indices, (n_train+1):n_samples)
-
-    X_train = view(X, train_indices, :)
-    X_test = view(X, test_indices, :)
-    y_train = view(y, train_indices)
-    y_test = view(y, test_indices)
-
-    return X_train, X_test, y_train, y_test
+    x_train = T.(data_train[1:consider:end, 1:(end-1)])
+    y_train = T.(data_train[1:consider:end, end])
+    
+    x_test = T.(data_test[1:consider:end, 1:(end-1)])
+    y_test = T.(data_test[1:consider:end, end])
+    
+    return x_train, y_train, x_test,  y_test
 end
 
 

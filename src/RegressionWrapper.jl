@@ -27,6 +27,7 @@ using DynamicExpressions
 using OrderedCollections
 
 const Toolbox = GepRegression.GepEntities.Toolbox
+const TokenDto = SBPUtils.TokenDto
 
 function sqr(x::Vector{T}) where {T<:AbstractFloat}
     return x .* x
@@ -148,10 +149,10 @@ const FUNCTION_LIB_BACKWARD_COMMON = Dict{Symbol,Function}(
 
 
 const GENE_COMMON_PROBS = Dict{String,AbstractFloat}(
-    "one_point_cross_over_prob" => 0.5,
-    "two_point_cross_over_prob" => 0.5,
+    "one_point_cross_over_prob" => 0.4,
+    "two_point_cross_over_prob" => 0.3,
     "mutation_prob" => 0.9,
-    "mutation_rate" => 0.1,
+    "mutation_rate" => 0.05,
     "dominant_fusion_prob" => 0.1,
     "dominant_fusion_rate" => 0.1,
     "rezessiv_fusion_prob" => 0.1,
@@ -320,9 +321,30 @@ function merge_collections(
     return merged
 end
 
+"""
+    GepRegressor(feature_amount::Int; kwargs...)
 
+Create a Gene Expression Programming regressor for symbolic regression.
+
+# Arguments
+- `feature_amount::Int`: Number of input features
+
+# Keyword Arguments
+- `entered_features::Vector{Symbol}=[]`: Custom feature names. Defaults to `[x1, x2, ...]`
+- `entered_non_terminals::Vector{Symbol}=[:+, :-, :*, :/]`: Available operations
+- `entered_terminal_nums::Vector{Symbol}=[Symbol(0.0), Symbol(0.5)]`: Constant terms
+- `gene_connections::Vector{Symbol}=[:+, :-, :*, :/]`: Operations for connecting genes
+- `considered_dimensions::Dict{Symbol,Vector{Float16}}=Dict()`: Physical dimensions for features/constants
+- `rnd_count::Int=1`: Number of random constants
+- `node_type::Type=Float64`: Data type for calculations
+- `gene_count::Int=3`: Number of genes
+- `head_len::Int=6`: Length of head section in genes
+- `preamble_syms::Vector{Symbol}=Symbol[]`: Preamble symbols
+- `max_permutations_lib::Int=10000`: Maximum permutations for dimension library
+- `rounds::Int=4`: Rounds for dimension library creation
+"""
 mutable struct GepRegressor
-    toolbox_:: Toolbox
+    toolbox_::Toolbox
     operators_::OperatorEnum
     dimension_information_::OrderedDict{Int8,Vector{Float16}}
     best_models_::Union{Nothing,Vector{GepRegression.GepEntities.Chromosome}}
@@ -332,16 +354,16 @@ mutable struct GepRegressor
 
     function GepRegressor(feature_amount::Int;
         entered_features::Vector{Symbol}=Vector{Symbol}(),
-        entered_non_terminals::Vector{Symbol}=[:+, :-, :*, :/, :sqrt],
+        entered_non_terminals::Vector{Symbol}=[:+, :-, :*, :/],
         entered_terminal_nums::Vector{Symbol}=[Symbol(0.0), Symbol(0.5)],
         gene_connections::Vector{Symbol}=[:+, :-, :*, :/],
         considered_dimensions::Dict{Symbol,Vector{Float16}}=Dict{Symbol,Vector{Float16}}(),
-        rnd_count::Int=2,
+        rnd_count::Int=1,
         node_type::Type=Float64,
-        gene_count::Int=3,
+        gene_count::Int=2,
         head_len::Int=8,
         preamble_syms::Vector{Symbol}=Symbol[],
-        max_permutations_lib::Int=10
+        max_permutations_lib::Int=10000, rounds::Int=4
     )
 
         entered_features_ = isempty(entered_features) ?
@@ -387,7 +409,7 @@ mutable struct GepRegressor
                 idx_features,
                 idx_funs,
                 idx_const;
-                rounds=2, max_permutations=max_permutations_lib)
+                rounds=rounds, max_permutations=max_permutations_lib)
             token_dto = TokenDto(token_lib, point_ops, lib, backward_funs, gene_count; head_len=head_len - 1)
         else
             token_dto = nothing
@@ -405,30 +427,64 @@ mutable struct GepRegressor
     end
 end
 
-function fit!(regressor::GepRegressor, epochs::Int, population_size, x_::AbstractArray,
-    y_::AbstractArray; test_ratio::AbstractFloat=0.2,
-    correction_callback::Union{Function,Nothing}=nothing,
+
+"""
+    fit!(regressor::GepRegressor, epochs::Int, population_size::Int, x_train::AbstractArray, 
+         y_train::AbstractArray; kwargs...)
+
+Train the GEP regressor model.
+
+# Arguments
+- `regressor::GepRegressor`: The regressor instance
+- `epochs::Int`: Number of evolutionary generations
+- `population_size::Int`: Size of the population
+- `x_train::AbstractArray`: Training features
+- `y_train::AbstractArray`: Training targets
+
+# Keyword Arguments
+- `x_test::AbstractArray`: Test features
+- `y_test::AbstractArray`: Test targets
+- `optimization_epochs::Int=500`: Number of epochs for constant optimization
+- `hof::Int=3`: Number of best models to keep
+- `loss_fun::Union{String,Function}="mse"`: Loss function ("mse", "mae", or custom function)
+- `correction_epochs::Int=1`: Epochs between dimension corrections
+- `correction_amount::Real=1.0`: Fraction of population to correct
+- `tourni_size::Int=3`: Tournament selection size
+- `opt_method_const::Symbol=:cg`: Optimization method for constants
+- `target_dimension::Union{Vector{Float16},Nothing}=nothing`: Target physical dimension
+"""
+function fit!(regressor::GepRegressor, epochs::Int, population_size, x_train::AbstractArray,
+    y_train::AbstractArray; x_test::AbstractArray, y_test::AbstractArray,
     optimization_epochs::Int=500,
     hof::Int=3, loss_fun::Union{String,Function}="mse",
-    correction_epochs::Int=1, correction_amount::Real=0.6,
-    tourni_size::Int=3, opt_method_const::Symbol=:cg
+    correction_epochs::Int=1, correction_amount::Real=3.0,
+    tourni_size::Int=3, opt_method_const::Symbol=:cg,
+    target_dimension::Union{Vector{Float16},Nothing}=nothing,
+    cycles::Int=10
 )
-    #if test_ratio > 0
-    #    x_train, x_test, y_train, y_test = train_test_split(x_, y_; test_ratio=test_ratio)
-    #else
-        x_train, x_test, y_train, y_test = x_, x_, y_, y_
-    #end
-    
-    @show typeof(regressor.toolbox_)
+
+    correction_callback = if !isnothing(target_dimension)
+        (genes, start_indices, expression) -> correct_genes!(
+            genes,
+            start_indices,
+            expression,
+            target_dimension,
+            regressor.token_dto_;
+            cycles=cycles
+        )
+    else
+        nothing
+    end
+
 
     best, history = runGep(epochs,
         population_size,
         regressor.operators_,
-        x_train',
+        x_train,
         y_train,
-        regressor.toolbox_;  
+        regressor.toolbox_;
         hof=hof,
-        x_data_test=x_test',
+        x_data_test=x_test,
         y_data_test=y_test,
         loss_fun_=loss_fun,
         correction_callback=correction_callback,
@@ -442,12 +498,23 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size, x_::Abstrac
     regressor.fitness_history_ = history
 end
 
-function predict(regressor::GepRegressor, x_data::AbstractArray; ensembe::Bool=False)
 
-end
+"""
+    (regressor::GepRegressor)(x_data::AbstractArray; ensemble::Bool=false)
 
-function eval(regressor::GepRegressor, x_datat::AbstractArray; plot::Bool=False)
+Make predictions using the trained regressor.
 
+# Arguments
+- `x_data::AbstractArray`: Input features
+
+# Keyword Arguments
+- `ensemble::Bool=false`: Whether to use ensemble predictions
+
+# Returns
+- Predicted values for the input features
+"""
+function (regressor::GepRegressor)(x_data::AbstractArray; ensemble::Bool=false)
+    return regressor.best_models_[1].compiled_function(x_data, regressor.operators_)
 end
 
 

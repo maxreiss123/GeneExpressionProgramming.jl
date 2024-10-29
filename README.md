@@ -12,23 +12,24 @@ The repository contains the implementation of the Gene Expression Programming [1
   # Min_example 
   using VGeneExpressionProgramming
 
-  #Define the number of iterations and the max. population size
+  Random.seed!(1)
+
+  #Define the iterations for the algorithm and the population size
   epochs = 1000
   population_size = 1000
 
-  #Define the max number of features
+  #Number of features which needs to be inserted
   number_features = 2
 
-  #Define your data - here just a sample problem 
-  x_data = randn(Float64, number_features, 100)
-  y_data = @. x_data[1,:] * x_data[1,:] + x_data[1,:] * x_data[2,:] - 2 * x_data[2,:] * x_data[2,:]
+  x_data = randn(Float64, 100, number_features)
+  y_data = @. x_data[:,1] * x_data[:,1] + x_data[:,1] * x_data[:,2] - 2 * x_data[:,1] * x_data[:,2]
 
-
-  #Define the regressor with the number of inputs
+  #define the 
   regressor = GepRegressor(number_features)
-  fit!(regressor, epochs, population_size, x_data', y_data; loss_fun="mse")
+  fit!(regressor, epochs, population_size, x_data, y_data; loss_fun="mse")
 
-  #Have a look at the results
+  pred = regressor(x_data')
+
   @show regressor.best_models_[1].compiled_function
   @show regressor.best_models_[1].fitness
   ```
