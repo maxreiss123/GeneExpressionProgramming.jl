@@ -24,8 +24,60 @@ The repository contains the implementation of the Gene Expression Programming [1
   x_data = randn(Float64, 100, number_features)
   y_data = @. x_data[:,1] * x_data[:,1] + x_data[:,1] * x_data[:,2] - 2 * x_data[:,1] * x_data[:,2]
 
-  #define the 
+  #define the regressor
   regressor = GepRegressor(number_features)
+
+  #perform the regression by entering epochs, population_size, the feature cols, the target col and the loss function
+  fit!(regressor, epochs, population_size, x_data, y_data; loss_fun="mse")
+
+  pred = regressor(x_data') # Can be utilized to perform the prediction for further data
+
+  @show regressor.best_models_[1].compiled_function
+  @show regressor.best_models_[1].fitness
+  ```
+
+# How to consider the physical dimensions mentioned within [2]? 
+- Imagine you want to find $J$ explaining superconductivity as $J=-\rho \frac{q}{m} A$ (Fyneman III 21.20)
+- $J$ marking the electric current, $q$ the electric charge, $\rho$ the charge density, $m$ the mass and $A$ the magnetic vector potential
+
+ ```julia
+  # Min_example 
+  using VGeneExpressionProgramming
+
+  Random.seed!(1)
+
+  #Define the iterations for the algorithm and the population size
+  epochs = 1000
+  population_size = 1000
+
+
+  #By loading the data we end up with 5 cols => 4 for the features and the last one for the target
+  data = Matrix(CSV.read("paper/srsd/feynman-III.21.20\$0.01.txt", DataFrame))
+  data = data[all.(x -> !any(isnan, x), eachrow(data)), :]
+  num_cols = size(data, 2) #num_cols =5 
+
+
+  # Perform a simple train test split
+  x_train, y_train, x_test, y_test = train_test_split(data[:, 1:num_cols-1], data[:, num_cols]; consider=4)
+
+  #define a target dimension - here ampere - (units inspired by openFoam) - https://doc.cfd.direct/openfoam/user-guide-v6/basic-file-format
+  target_dim = Float16[0, 0, 0, 0, 0, 1, 0] # Aiming for electric current (Ampere)
+
+
+  #define dims for the features
+  #header of the reveals rho_c_0,q,A_vec,m -> internally mapt on x_1 ... x_n
+  feature_dims = Dict{Symbol,Vector{Float16}}(
+    :x1 => Float16[0, -3, 1, 0, 0, 1, 0],   #rho    m^(-3) * s * A 
+    :x2 => Float16[0, 0, 1, 0, 0, 1, 0],    #q      s*A
+    :x3 => Float16[1, 1, -2, 0, 0, -1, 0],  #A      kg*m*s^(-2)*A^(-1)
+    :x4 => Float16[1, 0, 0, 0, 0, 0, 0],    #m      kg
+  )
+
+
+  #define the regressor
+  regressor = GepRegressor(number_features)
+
+   #perform the regression by entering epochs, population_size, the feature cols, the target col and the loss function
   fit!(regressor, epochs, population_size, x_data, y_data; loss_fun="mse")
 
   pred = regressor(x_data')
@@ -33,7 +85,6 @@ The repository contains the implementation of the Gene Expression Programming [1
   @show regressor.best_models_[1].compiled_function
   @show regressor.best_models_[1].fitness
   ```
-
 
 - Remark for your CSV file: Main_min_with_csv.jl in the test folder provides a step-by-step guide on how to initialize the GEP for your own problem
 - Remark for your CSV file and utilizing dimensional homogeneity: Main_min_with_csv_and_units.jl in the test folder provides a step-by-step guide
