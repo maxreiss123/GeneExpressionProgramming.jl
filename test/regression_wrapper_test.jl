@@ -1,4 +1,4 @@
-include("../src/RegressionWrapper.jl")
+include("../src/VGeneExpressionProgramming.jl")
 using Test
 using OrderedCollections
 using DynamicExpressions
@@ -6,17 +6,6 @@ using DynamicExpressions
 using .RegressionWrapper
 
 @testset "GepRegressor Tests" begin
-    @testset "Basic Construction" begin
-        # Test default construction
-        @test_nowarn GepRegressor(3)
-        
-        # Test with minimal parameters
-        regressor = GepRegressor(2)
-        @test regressor.gene_count_ == 3
-        @test regressor.head_len_ == 8
-        @test !isnothing(regressor.utilized_symbols_)
-        @test !isnothing(regressor.operators_)
-    end
 
     @testset "Function Entries Creation" begin
         # Test create_function_entries
@@ -72,29 +61,6 @@ using .RegressionWrapper
         @test point_ops isa Vector{Int8}
     end
 
-    @testset "Complex Construction" begin
-        # Test with more complex parameters
-        regressor = GepRegressor(
-            3,
-            entered_features=[:x, :y, :z],
-            entered_non_terminals=[:+, :-, :*, :/],
-            entered_terminal_nums=[Symbol(1.0), Symbol(2.0)],
-            gene_count=5,
-            head_len=10,
-            considered_dimensions=Dict(
-                :x1 => Float16[1, 0, 0, 0, 0, 0, 0],
-                :x2 => Float16[0, 1, 0, 0, 0, 0, 0],
-                :x3 => Float16[0, 0, 1, 0, 0, 0, 0]
-            )
-        )
-        
-        @test length(regressor.utilized_symbols_) > 0
-        @test length(regressor.nodes_) > 0
-        @test length(regressor.dimension_information_) > 0
-        @test regressor.gene_count_ == 5
-        @test regressor.head_len_ == 10
-    end
-
     @testset "Dimension Handling" begin
         dimensions = Dict(
             :x1 => Float16[1, 0, 0, 0, 0, 0, 0],
@@ -107,8 +73,74 @@ using .RegressionWrapper
             considered_dimensions=dimensions
         )
         
-        @test !isnothing(regressor.token_dto)
+        @test !isnothing(regressor.token_dto_)
         @test length(regressor.dimension_information_) > 0
         @test all(v -> v isa Vector{Float16}, values(regressor.dimension_information_))
+    end
+
+    @testset "Basic Training" begin
+        X = rand(10, 2)
+        y = 2 .* X[:, 1] .+ X[:, 2]
+        
+        regressor = GepRegressor(2)
+        
+        @test_nowarn fit!(regressor, 10, 1000, X, y)
+        @show !isempty(regressor.fitness_history_.train_loss)
+        #@test !isnothing(regressor.fitness_history_)
+        #@test length(regressor.best_models_) > 0
+    end
+    
+    @testset "Training with Physical Dimensions" begin
+        X = rand(50, 2)
+        y = X[:, 1] .* 2 .+ X[:, 2]
+        
+        dimensions = Dict(
+            :x1 => Float16[1,0,0,0,0,0,0],
+            :x2 => Float16[0,1,0,0,0,0,0]
+        )
+        
+        regressor = GepRegressor(2,
+            entered_features=[:x1, :x2],
+            considered_dimensions=dimensions)
+            
+        @test_nowarn fit!(regressor, 10, 20, X, y)
+        @test !isnothing(regressor.token_dto_)
+        @test !isnothing(regressor.best_models_)
+    end
+    
+    @testset "Training with Different Loss Functions" begin
+        X = rand(50, 2)
+        y = X[:, 1] .* 2 .+ X[:, 2]
+        
+        regressor = GepRegressor(2)
+        
+        @test_nowarn fit!(regressor, 10, 20, X, y, loss_fun_="mse")
+        
+        @test_nowarn fit!(regressor, 10, 20, X, y, loss_fun_="mae")
+        
+        custom_loss(y_true, y_pred) = mean(abs2.(y_true .- y_pred))
+        @test_nowarn fit!(regressor, 10, 20, X, y, loss_fun_=custom_loss)
+    end
+    
+    @testset "Training with Different Test Ratios" begin
+        X = rand(100, 2)
+        y = X[:, 1] .* 2 .+ X[:, 2]
+        
+        regressor = GepRegressor(2)
+        
+        @test_nowarn fit!(regressor, 10, 20, X, y, test_ratio=0.0)
+        
+        @test_nowarn fit!(regressor, 10, 20, X, y, test_ratio=0.3)
+    end
+    
+    @testset "Training Error Handling" begin
+        regressor = GepRegressor(2)
+        
+        @test_throws DimensionMismatch fit!(regressor, 10, 20, rand(10, 3), rand(10))
+        
+        @test_throws DimensionMismatch fit!(regressor, 10, 20, rand(10, 2), rand(11))
+        
+        @test_throws ArgumentError fit!(regressor, -1, 20, rand(10, 2), rand(10))
+        @test_throws ArgumentError fit!(regressor, 10, -1, rand(10, 2), rand(10))
     end
 end

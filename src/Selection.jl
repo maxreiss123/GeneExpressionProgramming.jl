@@ -1,12 +1,13 @@
 module EvoSelection
+using LinearAlgebra
 
 export selection_NSGA, basic_tournament_selection, dominates_, fast_non_dominated_sort, calculate_fronts, determine_ranks, assign_crowding_distance
 
-using LinearAlgebra
+
 
 #Note: selection is constructed to allways return a list of indices => {just care about the data not the objects}
 
-function basic_tournament_selection(population::Vector{T}, tournament_size::Int, number_of_winners::Int) where {T<:Number}
+@inline function basic_tournament_selection(population::AbstractArray{T}, tournament_size::Int, number_of_winners::Int) where {T<:Number}
     selected_indices = Vector{Int}(undef, number_of_winners)
     valid_indices = findall(isfinite, population)
     Threads.@threads for index in 1:number_of_winners-1
@@ -59,7 +60,7 @@ function dominates_(a::Tuple, b::Tuple)
 end
 
 
-function determine_ranks(pop::Vector{T}) where T<:Tuple
+@inline function determine_ranks(pop::Vector{T}) where T<:Tuple
     n = length(pop)
 
     dom_list = [ Int[] for i in 1:n ]
@@ -102,14 +103,14 @@ function determine_ranks(pop::Vector{T}) where T<:Tuple
     return rank
 end
 
-function fast_non_dominated_sort(population::Vector{T}) where {T<:Tuple}
+@inline function fast_non_dominated_sort(population::Vector{T}) where {T<:Tuple}
     ranks = determine_ranks(population)
     pop_indices = [(index,rank) for (index, rank) in enumerate(ranks)]
     sort!(pop_indices, by = x -> x[2])
     return [elem[1] for elem in pop_indices]
 end
 
-function calculate_fronts(population::Vector{T}) where {T<:Tuple}
+@inline function calculate_fronts(population::Vector{T}) where {T<:Tuple}
     ranks = determine_ranks(population)
     min_rank = minimum(unique(ranks)) 
     max_rank = maximum(unique(ranks))
@@ -124,7 +125,7 @@ function calculate_fronts(population::Vector{T}) where {T<:Tuple}
     return fronts
 end
 
-function assign_crowding_distance(front::Vector{Int}, population::Vector{T}) where {T<:Tuple}
+@inline function assign_crowding_distance(front::Vector{Int}, population::Vector{T}) where {T<:Tuple}
     n = length(front)
     objectives_count = length(first(population))
 
@@ -151,7 +152,7 @@ function assign_crowding_distance(front::Vector{Int}, population::Vector{T}) whe
     return distances
 end
 
-function selection_NSGA(population::Vector{T}, num_to_select::Int) where {T<:Tuple}
+@inline function selection_NSGA(population::Vector{T}, num_to_select::Int) where {T<:Tuple}
     fronts = calculate_fronts(population)
     n_fronts = length(fronts)
 

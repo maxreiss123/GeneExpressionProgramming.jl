@@ -1,16 +1,17 @@
 module GepEntities
 
-include("Util.jl")
 
-using .GepUtils
-using OrderedCollections
-
-export Chromosome, Toolbox
+export Chromosome, Toolbox, AbstractGepToolbox
 export AbstractSymbol, FunctionalSymbol, BasicSymbol, SymbolConfig
 export fitness, set_fitness!
 export generate_gene, generate_preamle!, compile_expression!, generate_chromosome, generate_population 
 export genetic_operations!, replicate, gene_inversion!, gene_mutation!, gene_one_point_cross_over!, gene_two_point_cross_over!, gene_fussion!
- 
+
+
+include("Util.jl")
+
+using .GepUtils
+using OrderedCollections
 
 
 abstract type AbstractSymbol end
@@ -98,7 +99,7 @@ mutable struct Chromosome
     fitness_r2_test::AbstractFloat
     expression_raw::Vector{Int8}
     dimension_homogene::Bool
-    penalty::Real
+    penalty::AbstractFloat
     chromo_id::Int
 
     function Chromosome(genes::Vector{Int8}, toolbox::Toolbox, compile::Bool=false)

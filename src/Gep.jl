@@ -1,11 +1,15 @@
 module GepRegression
 
+
+
 include("Losses.jl")
 include("Util.jl")
 include("Selection.jl")
 include("Entities.jl")
 
 using .LossFunction
+export runGep
+
 using .GepUtils
 using .EvoSelection
 using .GepEntities
@@ -19,7 +23,11 @@ using DynamicExpressions
 using Logging
 using Printf
 
-export runGep
+
+
+const Chromosome = GepEntities.Chromosome
+const Toolbox = GepEntities.Toolbox
+
 
 @inline function compute_fitness(elem::Chromosome, operators::OperatorEnum, x_data::AbstractArray{T},
     y_data::AbstractArray{T}, loss_function::Function,
@@ -82,58 +90,43 @@ end
 
 function runGep(epochs::Int,
     population_size::Int,
-    gene_count::Int,
-    head_len::Int,
-    symbols::OrderedDict,
     operators::OperatorEnum,
-    callbacks::Dict,
-    nodes::OrderedDict,
     x_data::AbstractArray{T},
     y_data::AbstractArray{T},
-    gene_connections::Vector{Int8},
-    gep_probs::Dict{String,AbstractFloat};
+    toolbox::Toolbox;
     hof::Int=3,
     x_data_test::Union{AbstractArray{T},Nothing}=nothing,
     y_data_test::Union{AbstractArray{T},Nothing}=nothing,
-    seed::Int=0,
-    loss_fun_::Union{String,Function}= "mae",
-    mating_::Real=0.5,
+    loss_fun_::Union{String,Function}="mae",
     correction_callback::Union{Function,Nothing}=nothing,
     correction_epochs::Int=1,
     correction_amount::Real=0.6,
-    tourni_size::Int=3, penalty_consideration::Real=0.0,
+    tourni_size::Int=3,
     opt_method_const::Symbol=:cg,
-    preamble_syms=Int8[],
     optimisation_epochs::Int=500) where {T<:AbstractFloat}
 
-    loss_fun::Function = typeof(loss_fun_) == String ? get_loss_function(loss_fun_) : loss_fun_
-    
-    recorder = HistoryRecorder(epochs, Float64)
+    loss_fun = typeof(loss_fun_) == String ? get_loss_function(loss_fun_) : loss_fun_
 
-    if isnothing(x_data_test) || isnothing(y_data_test)
-        x_data_test = x_data
-        y_data_test = y_data
-    end
+    recorder = HistoryRecorder(epochs, Float64)
 
     function optimizer_function(sub_tree::Node)
         y_pred, flag = eval_tree_array(sub_tree, x_data, operators)
         return get_loss_function("mse")(y_pred, y_data)
     end
 
-    
-
-    Random.seed!(seed)
+    penalty_consideration = convert(Real,toolbox.gep_probs["penalty_consideration"])
+    mating_ = toolbox.gep_probs["mating_size"]
     mating_size = Int(ceil(population_size * mating_))
     mating_size = mating_size % 2 == 0 ? mating_size : mating_size - 1
-    toolbox = Toolbox(gene_count, head_len, symbols, gene_connections,
-        callbacks, nodes, gep_probs; preamble_syms=preamble_syms)
+
 
     population = generate_population(population_size, toolbox)
+
     next_gen = Vector{eltype(population)}(undef, mating_size)
     progBar = Progress(epochs; showspeed=true, desc="Training: ")
 
     prev_best = -1
-    
+
     for epoch in 1:epochs
         perform_correction_callback!(population, epoch, correction_epochs, correction_amount, correction_callback)
 
@@ -160,13 +153,14 @@ function runGep(epochs::Int,
 
 
         fits_representation = [chromo.fitness for chromo in population]
+
         best_r = compute_fitness(population[1], operators, x_data, y_data,
             get_loss_function("r2_score"), zero(T); validate=true)
         val_loss = compute_fitness(population[1], operators, x_data_test, y_data_test, loss_fun, typemax(T); validate=true)
         record!(recorder, epoch, fits_representation[1], val_loss, fits_representation)
 
 
-        ProgressMeter.update!(progBar, epoch, showvalues = [
+        ProgressMeter.update!(progBar, epoch, showvalues=[
             (:epoch_, @sprintf("%.0f", epoch)),
             (:train_loss, @sprintf("%.6f", fits_representation[1])),
             (:validation_loss, @sprintf("%.6f", val_loss))
@@ -192,7 +186,7 @@ function runGep(epochs::Int,
             elem.fitness_r2_test = compute_fitness(elem, operators, x_data_test, y_data_test, get_loss_function("r2_score"), zero(T); validate=true)
         end
     end
-    
+
     close_recorder!(recorder)
     return best, recorder.history
 end

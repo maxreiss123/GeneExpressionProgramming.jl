@@ -1,6 +1,11 @@
 module RegressionWrapper
 
 
+export GepRegressor
+export create_function_entries, create_feature_entries, create_constants_entries, create_physical_operations
+export GENE_COMMON_PROBS, FUNCTION_LIB_BACKWARD_COMMON, FUNCTION_LIB_FORWARD_COMMON, FUNCTION_LIB_COMMON
+export fit!
+
 include("Entities.jl")
 include("Gep.jl")
 include("Losses.jl")
@@ -12,16 +17,16 @@ include("Util.jl")
 
 using .GepEntities
 using .LossFunction
-using .GepUtils
+using .GepEntities
 using .EvoSelection
+
 using .GepRegression
 using .SBPUtils
+using .GepUtils
 using DynamicExpressions
 using OrderedCollections
 
-
-export GepRegressor
-export create_function_entries, create_feature_entries, create_constants_entries, create_physical_operations
+const Toolbox = GepRegression.GepEntities.Toolbox
 
 function sqr(x::Vector{T}) where {T<:AbstractFloat}
     return x .* x
@@ -153,8 +158,9 @@ const GENE_COMMON_PROBS = Dict{String,AbstractFloat}(
     "rezessiv_fusion_rate" => 0.1,
     "fusion_prob" => 0.0,
     "fusion_rate" => 0.0,
-    "inversion_prob" => 0.1
-)
+    "inversion_prob" => 0.1,
+    "mating_size" => 0.5,
+    "penalty_consideration" => 0.0)
 
 const SymbolDict = OrderedDict{Int8,Int8}
 const CallbackDict = Dict{Int8,Function}
@@ -291,7 +297,7 @@ function create_preamble_entries(
 
     for elem in preamble_syms_raw
         utilized_symbols[cur_idx] = 0
-        nodes[cur_idx] = Node{node_type}(feature=cur_idx)
+        nodes[cur_idx] = Node{AbstractArray}(feature=cur_idx)
         dimension_information[cur_idx] = get(dimensions_to_consider, elem, ZERO_DIM)
         push!(preamble_syms, cur_idx)
         cur_idx += 1
@@ -315,25 +321,14 @@ function merge_collections(
 end
 
 
-@inline function corr_call_back!(genes::Vector{Int8}, start_indices::Vector{Int}, expression::Vector{Int8}, token_dto::TokenDto; cycles::Int=5)
-    return correct_genes!(genes, start_indices, expression,
-        convert.(Float16, target_dim), token_dto; cycles=cycles)
-end
-
 mutable struct GepRegressor
-    utilized_symbols_::OrderedDict{Int8,Int8}
+    toolbox_:: Toolbox
     operators_::OperatorEnum
-    callbacks_::Dict{Int8,Function}
-    nodes_::OrderedDict{Int8,Any}
-    gene_connections_::Vector{Int8}
-    gene_count_::Int
-    head_len_::Int
-    preamble_syms_::Vector{Int8}
     dimension_information_::OrderedDict{Int8,Vector{Float16}}
-    best_models_::Union{Nothing,Vector{Chromosome}}
-    fitness_history_::Vector{AbstractFloat}
-    token_dto::Union{TokenDto,Nothing}
-    target_dim::Vector{Float16}
+    best_models_::Union{Nothing,Vector{GepRegression.GepEntities.Chromosome}}
+    fitness_history_::Any
+    token_dto_::Union{TokenDto,Nothing}
+
 
     function GepRegressor(feature_amount::Int;
         entered_features::Vector{Symbol}=Vector{Symbol}(),
@@ -341,7 +336,6 @@ mutable struct GepRegressor
         entered_terminal_nums::Vector{Symbol}=[Symbol(0.0), Symbol(0.5)],
         gene_connections::Vector{Symbol}=[:+, :-, :*, :/],
         considered_dimensions::Dict{Symbol,Vector{Float16}}=Dict{Symbol,Vector{Float16}}(),
-        target_dimension::Vector{Float16} = Vector{Float16}(),
         rnd_count::Int=2,
         node_type::Type=Float64,
         gene_count::Int=3,
@@ -385,41 +379,67 @@ mutable struct GepRegressor
                 forward_funs,
                 utilized_symbols
             )
-            idx_features = [idx for (idx,_) in feat_syms]
-            idx_funs = [idx for (idx,_) in func_syms]
-            idx_const = [idx for (idx,_) in const_syms]
+            idx_features = [idx for (idx, _) in feat_syms]
+            idx_funs = [idx for (idx, _) in func_syms]
+            idx_const = [idx for (idx, _) in const_syms]
 
             lib = create_lib(token_lib,
                 idx_features,
                 idx_funs,
                 idx_const;
                 rounds=2, max_permutations=max_permutations_lib)
-                token_dto = TokenDto(token_lib, point_ops, lib, backward_funs, gene_count; head_len=head_len- 1)
+            token_dto = TokenDto(token_lib, point_ops, lib, backward_funs, gene_count; head_len=head_len - 1)
         else
             token_dto = nothing
         end
 
+        toolbox = GepRegression.GepEntities.Toolbox(gene_count, head_len, utilized_symbols, gene_connections_,
+            callbacks, nodes, GENE_COMMON_PROBS; preamble_syms=preamble_syms_)
 
-        new(
-            utilized_symbols,
-            operators,
-            callbacks,
-            nodes,
-            gene_connections_,
-            gene_count,
-            head_len,
-            preamble_syms_,
-            dimension_information,
-            nothing,
-            Vector{AbstractFloat}(),
-            token_dto,
-            target_dimension
-        )
+        obj = new()
+        obj.toolbox_ = toolbox
+        obj.operators_ = operators
+        obj.dimension_information_ = dimension_information
+        obj.token_dto_ = token_dto
+        return obj
     end
 end
 
-function fit!(regressor::GepRegressor, dataset::AbstractArray; train_split::Real=0.8)
+function fit!(regressor::GepRegressor, epochs::Int, population_size, x_::AbstractArray,
+    y_::AbstractArray; test_ratio::AbstractFloat=0.2,
+    correction_callback::Union{Function,Nothing}=nothing,
+    optimization_epochs::Int=500,
+    hof::Int=3, loss_fun::Union{String,Function}="mse",
+    correction_epochs::Int=1, correction_amount::Real=0.6,
+    tourni_size::Int=3, opt_method_const::Symbol=:cg
+)
+    #if test_ratio > 0
+    #    x_train, x_test, y_train, y_test = train_test_split(x_, y_; test_ratio=test_ratio)
+    #else
+        x_train, x_test, y_train, y_test = x_, x_, y_, y_
+    #end
+    
+    @show typeof(regressor.toolbox_)
 
+    best, history = runGep(epochs,
+        population_size,
+        regressor.operators_,
+        x_train',
+        y_train,
+        regressor.toolbox_;  
+        hof=hof,
+        x_data_test=x_test',
+        y_data_test=y_test,
+        loss_fun_=loss_fun,
+        correction_callback=correction_callback,
+        correction_epochs=correction_epochs,
+        correction_amount=correction_amount,
+        tourni_size=tourni_size,
+        opt_method_const=opt_method_const,
+        optimisation_epochs=optimization_epochs)
+
+    regressor.best_models_ = best
+    regressor.fitness_history_ = history
 end
 
 function predict(regressor::GepRegressor, x_data::AbstractArray; ensembe::Bool=False)

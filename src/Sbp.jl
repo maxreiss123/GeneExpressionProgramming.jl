@@ -252,8 +252,6 @@ end
             end
         catch e
             @warn "Issue in Lib. could not apply binary symbol [append-method]: $e"
-            @warn entry 
-            @warn get_physical_operation(entry.tokenLib, item)
             entry.homogene = false
         end
     end

@@ -1,5 +1,11 @@
 module GepUtils
 
+export find_indices_with_sum, compile_djl_datatype, optimize_constants!, minmax_scale, float16_scale, isclose
+export save_state, load_state
+export create_history_recorder, record_history!, record!, close_recorder!
+export HistoryRecorder, OptimizationHistory, get_history_arrays
+export train_test_split
+
 using OrderedCollections
 using DynamicExpressions
 using LinearAlgebra
@@ -8,21 +14,17 @@ using LineSearches
 using Zygote
 using Serialization
 using Statistics
+using Random
 using Base.Threads: @spawn
 
-
-export find_indices_with_sum, compile_djl_datatype, optimize_constants!, minmax_scale, float16_scale, isclose
-export save_state, load_state
-export create_history_recorder, record_history!, record!, close_recorder!
-export HistoryRecorder, OptimizationHistory
 
 struct OptimizationHistory{T<:AbstractFloat}
     train_loss::Vector{T}
     val_loss::Vector{T}
     train_mean::Vector{T}
     train_std::Vector{T}
-    
-    function OptimizationHistory(epochs::Int, ::Type{T}) where T<:AbstractFloat
+
+    function OptimizationHistory(epochs::Int, ::Type{T}) where {T<:AbstractFloat}
         return new{T}(
             Vector{T}(undef, epochs),
             Vector{T}(undef, epochs),
@@ -32,12 +34,59 @@ struct OptimizationHistory{T<:AbstractFloat}
     end
 end
 
+function Base.iterate(hist::OptimizationHistory, state::Int=1)
+    if state > length(hist.train_loss)
+        return nothing
+    end
+    return (
+        (
+            train_loss=hist.train_loss[state],
+            val_loss=hist.val_loss[state],
+            train_mean=hist.train_mean[state],
+            train_std=hist.train_std[state]
+        ),
+        state + 1
+    )
+end
+
+Base.length(hist::OptimizationHistory) = length(hist.train_loss)
+
+Base.size(hist::OptimizationHistory) = (length(hist.train_loss),)
+
+function Base.getindex(hist::OptimizationHistory, i::Int)
+    return (
+        train_loss=hist.train_loss[i],
+        val_loss=hist.val_loss[i],
+        train_mean=hist.train_mean[i],
+        train_std=hist.train_std[i]
+    )
+end
+
+
+Base.firstindex(hist::OptimizationHistory) = 1
+Base.lastindex(hist::OptimizationHistory) = length(hist)
+
+
+function Base.show(io::IO, hist::OptimizationHistory)
+    println(io, "OptimizationHistory{$(eltype(hist.train_loss))} with $(length(hist)) epochs")
+end
+
+
+function get_history_arrays(hist::OptimizationHistory)
+    return (
+        train_loss=hist.train_loss,
+        val_loss=hist.val_loss,
+        train_mean=hist.train_mean,
+        train_std=hist.train_std
+    )
+end
+
 struct HistoryRecorder{T<:AbstractFloat}
     channel::Channel{Tuple{Int,T,T,Vector{T}}}
     task::Task
     history::OptimizationHistory{T}
-    
-    function HistoryRecorder(epochs::Int, ::Type{T}; buffer_size::Int=32) where T<:AbstractFloat
+
+    function HistoryRecorder(epochs::Int, ::Type{T}; buffer_size::Int=32) where {T<:AbstractFloat}
         history = OptimizationHistory(epochs, T)
         channel = Channel{Tuple{Int,T,T,Vector{T}}}(buffer_size)
         task = @spawn record_history!(channel, history)
@@ -49,7 +98,7 @@ end
 @inline function record_history!(
     channel::Channel{Tuple{Int,T,T,Vector{T}}},
     history::OptimizationHistory{T}
-) where T<:AbstractFloat
+) where {T<:AbstractFloat}
     for (epoch, train_loss, val_loss, fit_vector) in channel
         @inbounds begin
             history.train_loss[epoch] = train_loss
@@ -66,7 +115,7 @@ end
     train_loss::T,
     val_loss::T,
     fit_vector::Vector{T}
-) where T<:AbstractFloat
+) where {T<:AbstractFloat}
     put!(recorder.channel, (epoch, train_loss, val_loss, fit_vector))
 end
 
@@ -152,7 +201,7 @@ end
     if nconst == 0
         return node, 0.0
     end
-    
+
     baseline = loss(node)
     best_node = deepcopy(node)
     best_loss = baseline
@@ -225,5 +274,37 @@ function load_state(filename::String)
         return deserialize(io)
     end
 end
+
+
+function train_test_split(X::AbstractArray{T}, y::AbstractArray{T};
+    test_ratio::AbstractFloat=0.2,
+    shuffle::Bool=true) where {T<:AbstractFloat}
+
+    n_samples = size(X, 1)
+    @assert n_samples == length(y) "X and y must have the same number of samples"
+    @assert 0 < test_ratio < 1 "test_ratio must be between 0 and 1"
+
+    n_test = round(Int, test_ratio * n_samples)
+    n_train = n_samples - n_test
+
+    indices = Vector{Int}(undef, n_samples)
+
+    if shuffle
+        randperm!(indices)
+    else
+        indices .= 1:n_samples
+    end
+
+    train_indices = view(indices, 1:n_train)
+    test_indices = view(indices, (n_train+1):n_samples)
+
+    X_train = view(X, train_indices, :)
+    X_test = view(X, test_indices, :)
+    y_train = view(y, train_indices)
+    y_test = view(y, test_indices)
+
+    return X_train, X_test, y_train, y_test
+end
+
 
 end
