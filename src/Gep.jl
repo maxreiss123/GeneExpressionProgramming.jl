@@ -209,8 +209,7 @@ Applies correction operations to ensure dimensional homogeneity in chromosomes.
                     compile_expression!(population[i]; force_compile=true)
                     population[i].dimension_homogene = true 
                 else
-                    population[i].penalty = distance
-                    population[i].fitness += distance*10^3
+                    population[i].fitness += distance
                 end
             end
         end

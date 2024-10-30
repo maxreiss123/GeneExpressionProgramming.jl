@@ -1228,9 +1228,7 @@ See also: [`TempComputeTree`](@ref), [`SBPUtils.propagate_necessary_changes!`](@
                 break
             end
             calculate_vector_dimension!(tree)
-        catch e
-            error_message = sprint(showerror, e, catch_backtrace())
-            @error "Error in correct_genes!:  $error_message"
+        catch 
             tree = nothing 
             return Inf16, false
         end
