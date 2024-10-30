@@ -1,3 +1,72 @@
+"""
+    SBPUtils
+
+A module for Semantic backpropagation (SBP) utilities, focusing on dimensional homogeneity.
+
+# Constants
+- `SMALLEST_TREE_SEGMENT = 3`: Minimum size for tree segments
+- `FAILURE_RECURSION_SIZE = -21`: Maximum recursion depth for failure handling
+- `STD_DIM_SIZE = 7`: Standard dimension vector size
+- `ZERO_DIM`: Zero vector of size STD_DIM_SIZE
+- `EMPTY_DIM`: Empty dimension vector
+
+# Core Components
+## Data Structures
+- `TokenLib`: Library of tokens with physical dimensions and operations
+- `TokenDto`: Data transfer object for token operations
+- `LibEntry`: Entry in the symbolic computation library
+- `TempComputeTree`: Temporary computation tree for symbolic manipulation
+
+## Unit Operations
+### Forward Operations
+- `equal_unit_forward`: Dimension equality checking
+- `mul_unit_forward`: Dimension multiplication
+- `div_unit_forward`: Dimension division
+- `zero_unit_forward`: Zero dimension checking
+- `arbitrary_unit_forward`: Direct dimension passing
+- `sqr_unit_forward`: Dimension squaring
+
+### Backward Operations
+- `mul_unit_backward`: Backward multiplication propagation
+- `div_unit_backward`: Backward division propagation
+- `zero_unit_backward`: Backward zero propagation
+- `sqr_unit_backward`: Backward square propagation
+- `equal_unit_backward`: Backward equality propagation
+
+## Tree Operations
+- `create_compute_tree`: Creates computation trees from expressions
+- `propagate_necessary_changes!`: Propagates dimensional changes
+- `calculate_vector_dimension!`: Calculates dimensional vectors
+- `correct_genes!`: Ensures dimensional consistency in genes
+
+## JSON Utilities
+- `get_feature_dims_json`: Extracts feature dimensions
+- `get_target_dim_json`: Extracts target dimensions
+- `retrieve_coeffs_based_on_similarity`: Finds similar physical constants
+
+# Features
+- Thread-safe operations for parallel processing
+- Dimensional homogeneity enforcement
+- Physical unit propagation (forward and backward)
+- Symbolic computation tree manipulation
+- JSON configuration support
+- Physical constant matching
+
+# Dependencies
+- `OrderedCollections`: For ordered data structures
+- `Random`: For stochastic operations
+- `StaticArrays`: For efficient array operations
+
+# Implementation Notes
+- Uses type parameters for numerical stability
+- Implements efficient tree traversal algorithms
+- Provides comprehensive error handling
+- Supports parallel computation
+- Maintains dimensional consistency
+- Uses Float16 for dimension calculations
+
+"""
+
 module SBPUtils
 
 const SMALLEST_TREE_SEGMENT = 3
@@ -55,15 +124,12 @@ function mul_unit_backward(u1::Vector{Float16}, u2::Vector{Float16}, expected_di
         return u1, expected_dim .- u1
     elseif isempty(u1)
         return expected_dim .- u2, u2
-    elseif sum(abs.(expected_dim .- (u1 .- u2))) == 0
-        tree.symbol = tree.tokenDto.point_operations[2]
-        return EMPTY_DIM, EMPTY_DIM
     else
-        if isapprox(u1, u2, atol=eps(T))
+        if isapprox(u1, u2, atol=eps(Float16))
             lr = expected_dim .- expected_dim .÷ 2
             rl = expected_dim .- lr
             return lr, rl
-        elseif isapprox(u1, expected_dim, atol=eps(T))
+        elseif isapprox(u1, expected_dim, atol=eps(Float16))
             return u1, expected_dim .- u1
         else
             return expected_dim .- u2, u2
@@ -94,15 +160,12 @@ function div_unit_backward(u1::Vector{Float16}, u2::Vector{Float16}, expected_di
         return u1, .-(expected_dim .+ u1)
     elseif isempty(u1)
         return expected_dim .+ u2, u2
-    elseif sum(abs.(expected_dim .- (u1 .+ u2))) == 0
-        tree.symbol = tree.tokenDto.point_operations[1]
-        return EMPTY_DIM, EMPTY_DIM
     else
-        if isapprox(u1, u2, atol=eps(T))
+        if isapprox(u1, u2, atol=eps(Float16))
             lr = expected_dim .- expected_dim .÷ 2
             rl = .-(expected_dim .+ lr)
             return lr, rl
-        elseif isapprox(u1, expected_dim, atol=eps(T))
+        elseif isapprox(u1, expected_dim, atol=eps(Float16))
             return u1, .-(expected_dim .+ u1)
         else
             return expected_dim .+ u2, u2
@@ -547,11 +610,11 @@ function propagate_necessary_changes!(
         return false
     end
 
-    if !isempty(tree.vector_dimension) && isapprox(tree.vector_dimension, expected_dim, atol=eps(Float16))
+    if !isempty(tree.vector_dimension) && isapprox(tree.vector_dimension, expected_dim, atol=eps(Float16)) && rand() > 0.1
         return true
     end
 
-    if check_crit_up!(tree.depend_on_total_number+1, expected_dim, tree) && distance_to_change <= 0 && rand() > 0.1
+    if check_crit_up!(tree.depend_on_total_number+1, expected_dim, tree) && distance_to_change <= 0 
         return enforce_changes!(tree, expected_dim)
     end
 
@@ -663,7 +726,9 @@ end
                 break
             end
             calculate_vector_dimension!(tree)
-        catch
+        catch e
+            error_message = sprint(showerror, e, catch_backtrace())
+            @error "Error in correct_genes!:  $error_message"
             tree = nothing 
             return Inf16, false
         end

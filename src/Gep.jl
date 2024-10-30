@@ -1,5 +1,60 @@
-module GepRegression
+"""
+    GepRegression
 
+A module implementing Gene Expression Programming (GEP) for symbolic regression tasks with 
+support for dimensional analysis and multi-threading.
+
+# Features
+- Symbolic regression using Gene Expression Programming
+- Dimensional homogeneity enforcement
+- Parallel computation using multi-threading
+- Constant optimization
+- Progress monitoring and history recording
+- Validation on test data
+- Early stopping capabilities
+- Tournament selection for evolution
+
+# Dependencies
+## Internal Modules
+- `LossFunction`: Various loss metrics
+- `GepUtils`: Utility functions
+- `EvoSelection`: Selection mechanisms
+- `GepEntities`: Core GEP data structures
+
+## External Packages
+- `Random`: For stochastic operations
+- `Statistics`: Statistical computations
+- `LinearAlgebra`: Matrix operations
+- `ProgressMeter`: Progress visualization
+- `OrderedCollections`: Ordered data structures
+- `DynamicExpressions`: Expression handling
+- `Logging`: Error and debug logging
+- `Printf`: Formatted output
+
+# Usage Example
+```julia
+using GepRegression
+
+# Setup parameters
+toolbox = Toolbox(...)
+operators = OperatorEnum(...)
+
+# Run GEP regression
+best_solutions, history = runGep(
+    100,                    # epochs
+    50,                     # population size
+    operators,
+    x_train, y_train,      # training data
+    toolbox;
+    x_data_test=x_test,    # test data
+    y_data_test=y_test,
+    loss_fun_="rmse"       # loss function
+)
+```
+
+"""
+
+module GepRegression
 
 
 include("Losses.jl")
@@ -107,8 +162,9 @@ Performs one evolutionary step in the GEP algorithm, creating and evaluating new
     Threads.@threads for i in 1:mating_size-1
         try
             population[end-i] = next_gen[i]
-        catch
-            @show "sth went wrong"
+        catch e
+            error_message = sprint(showerror, e, catch_backtrace())
+            @error "Error in perform_step!: $error_message"
         end
     end
 end
@@ -139,20 +195,22 @@ Applies correction operations to ensure dimensional homogeneity in chromosomes.
 
     if !isnothing(correction_callback) && epoch % correction_epochs == 0
         pop_amount = Int(ceil(length(population) * correction_amount))
-        Threads.@threads for i in 1:pop_amount
+        #todo Threads.@threads 
+        for i in 1:pop_amount
             if !(population[i].dimension_homogene)
                 distance, correction = correction_callback(population[i].genes, population[i].toolbox.gen_start_indices,
                     population[i].expression_raw)
                 if correction
                     compile_expression!(population[i]; force_compile=true)
-                    population[i].dimension_homogene = true
+                    population[i].dimension_homogene = true 
+                else
+                    population[i].penalty = distance
+                    population[i].fitness += distance*10^3
                 end
             end
         end
     end
 end
-
-
 
 """
     runGep(epochs::Int, population_size::Int, operators::OperatorEnum,
@@ -170,7 +228,7 @@ Main function that executes the GEP algorithm for regression problems.
 # Arguments
 - `epochs::Int`: Number of evolutionary epochs to run
 - `population_size::Int`: Size of the chromosome population
-- `operators::OperatorEnum`: Available mathematical operators
+- `operators::OperatorEnum`: Mathematical operators for the DynamicExpressions
 - `x_data::AbstractArray{T}`: Training input features
 - `y_data::AbstractArray{T}`: Training target values
 - `toolbox::Toolbox`: Contains genetic operators and algorithm parameters
@@ -194,7 +252,6 @@ Best solutions include both training and test R² scores when test data is provi
 2. For each epoch:
    - Applies dimensional homogeneity corrections
    - Computes fitness for all chromosomes
-   - Sorts population by fitness
    - Optimizes constants for best solution periodically
    - Records training progress
    - Performs tournament selection
@@ -268,7 +325,7 @@ function runGep(epochs::Int,
                 prev_best = result
             end
         catch
-            @show "Opt. issue"
+            @show "Ignored constant opt."
         end
 
         Threads.@threads for index in eachindex(population)

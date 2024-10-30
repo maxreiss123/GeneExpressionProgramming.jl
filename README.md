@@ -61,7 +61,7 @@ The repository contains the implementation of the Gene Expression Programming [1
   x_train, y_train, x_test, y_test = train_test_split(data[:, 1:num_cols-1], data[:, num_cols]; consider=4)
 
   #define a target dimension - here ampere - (units inspired by openFoam) - https://doc.cfd.direct/openfoam/user-guide-v6/basic-file-format
-  target_dim = Float16[0, 0, 0, 0, 0, 1, 0] # Aiming for electric current (Ampere)
+  target_dim = Float16[0, -2, 0, 0, 0, 1, 0] # Aiming for electric current (Ampere/m^2)
 
 
   #define dims for the features
@@ -74,11 +74,11 @@ The repository contains the implementation of the Gene Expression Programming [1
   )
 
 
-  #define the regressor
-  regressor = GepRegressor(number_features)
+  #define the features, here the numbers of the first two cols - here we add the feature dims and a maximum of permutations per tree high - rounds, referring to the tree high
+  regressor = GepRegressor(num_cols; considered_dimensions=feature_dims,max_permutations_lib=10000, rounds=7)
 
    #perform the regression by entering epochs, population_size, the feature cols, the target col and the loss function
-  fit!(regressor, epochs, population_size, x_data, y_data; loss_fun="mse")
+  fit!(regressor, epochs, population_size, x_data, y_data; loss_fun="mse", target_dimension=target_dim)
 
   pred = regressor(x_data')
 

@@ -1,5 +1,71 @@
-module LossFunction
+"""
+    LossFunction
 
+A module providing various loss functions for evaluating model predictions in machine learning tasks.
+
+# Loss Functions
+The module includes the following loss functions, accessible via `get_loss_function(name)`:
+
+- `"r2_score"`: Standard R² score (coefficient of determination)
+  - Range: (-∞, 1], where 1 indicates perfect prediction
+  - Handles scale-dependent data
+
+- `"r2_score_f"`: R² score with floor scaling
+  - Similar to standard R², but with automatic scaling to handle numerical stability
+  - Better for comparing vastly different scales
+
+- `"mse"`: Mean Squared Error
+  - Standard L2 loss function
+  - More sensitive to outliers
+  - Scale-dependent
+
+- `"rmse"`: Root Mean Squared Error
+  - Square root of MSE
+  - Same units as target variable
+  - Scale-dependent
+
+- `"mae"`: Mean Absolute Error
+  - L1 loss function
+  - More robust to outliers than MSE
+  - Scale-dependent
+
+- `"srmse"`: Scaled Root Mean Squared Error
+  - RMSE with automatic scaling
+  - Better for comparing errors across different scales
+  - More numerically stable
+
+- `"xi_core"`: XiCor correlation
+  - Non-parametric correlation measure
+  - More robust to outliers than Pearson correlation
+  - Handles ties in data
+
+# Usage
+```julia
+using LossFunction
+
+# Get a specific loss function
+loss_fn = get_loss_function("mse")
+
+# Use the loss function
+error = loss_fn(y_true, y_pred)
+
+# Alternative direct usage
+error = mean_squared_error(y_true, y_pred)
+```
+
+# Performance Notes
+- All functions are optimized for performance using `@fastmath`, `@inbounds`, and `@simd`
+- Thread-safe implementations where applicable
+- Automatic type stability through parametric types
+- Efficient memory usage with in-place operations
+
+# Implementation Details
+- All functions accept AbstractArray{T} where T<:AbstractFloat
+- Input arrays must be of equal length
+- NaN and Inf values are handled appropriately
+- Numerical stability is ensured through appropriate scaling and epsilon values
+"""
+module LossFunction
 
 export get_loss_function
 using Statistics
