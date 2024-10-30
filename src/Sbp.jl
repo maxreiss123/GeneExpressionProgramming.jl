@@ -193,7 +193,63 @@ function sqr_unit_backward(u1::Vector{Float16})
     return 0.5 .* u1
 end
 
+"""
+    TokenLib
 
+A container structure for managing physical dimensions, operations, and symbol arities to support dimensional analysis
+
+# Fields
+- `physical_dimension_dict::Ref{OrderedDict{Int8,Vector{Float16}}}`: Maps symbol IDs to their physical dimensions
+- `physical_operation_dict::Ref{OrderedDict{Int8,Function}}`: Maps symbol IDs to their physical operations
+- `symbol_arity_mapping::Ref{OrderedDict{Int8,Int8}}`: Maps symbol IDs to their arities 
+
+# Constructor
+```julia
+TokenLib(
+    physical_dimension_dict::OrderedDict{Int8,Vector{Float16}},
+    physical_operation_dict::OrderedDict{Int8,Function},
+    symbol_arity_mapping::OrderedDict{Int8,Int8}
+)
+```
+
+# Arguments
+- `physical_dimension_dict`: Dictionary mapping symbol IDs to their physical dimension vectors
+- `physical_operation_dict`: Dictionary mapping symbol IDs to their dimension transformation functions
+- `symbol_arity_mapping`: Dictionary mapping symbol IDs to their arity values (0 for terminals, 1 or 2 for functions)
+
+# Examples
+```julia
+# Create dimension dictionary
+dims = OrderedDict{Int8,Vector{Float16}}(
+    1 => Float16[1, 0, 0],  # Length
+    2 => Float16[0, 1, 0]   # Time
+)
+
+# Create operation dictionary
+ops = OrderedDict{Int8,Function}(
+    1 => mul_unit_forward,
+    2 => div_unit_forward
+)
+
+# Create arity mapping
+arities = OrderedDict{Int8,Int8}(
+    1 => 2,  # Binary operation
+    2 => 2   # Binary operation
+)
+
+# Create TokenLib instance
+lib = TokenLib(dims, ops, arities)
+```
+
+# Notes
+- Uses `Ref` for thread-safe dictionary access
+- Dimensions are stored as `Float16` vectors for memory efficiency
+- Operations should handle dimensional transformations
+- Arity values determine function argument counts
+
+See also: [`SBPUtils.mul_unit_forward`](@ref), [`SBPUtils.div_unit_forward`](@ref), 
+[`SBPUtils.equal_unit_forward`](@ref), [`LibEntry`](@ref), [`TokenDto`](@ref)
+"""
 mutable struct TokenLib
     physical_dimension_dict::Ref{OrderedDict{Int8,Vector{Float16}}}
     physical_operation_dict::Ref{OrderedDict{Int8,Function}}
@@ -219,6 +275,70 @@ function get_physical_operation(elem::TokenLib, item::Int8)
 end
 
 
+"""
+    LibEntry
+
+A mutable structure representing an entry in the symbolic computation library,
+tracking elements, their physical dimensions, and arity status.
+
+# Fields
+- `elements::Vector{Int8}`: Sequence of symbol IDs representing the expression
+- `physical_dimension::Vector{Float16}`: Physical dimension vector of the expression
+- `arity_potential::Int`: Current arity potential (0: terminal, 1: unary ready, 2: binary ready)
+- `homogene::Bool`: Dimensional homogeneity status
+- `tokenLib::TokenLib`: Reference to the token library for symbol information
+
+# Constructor
+```julia
+LibEntry(symbol_ref::TokenLib)
+```
+
+Creates an empty library entry initialized with:
+- Empty elements vector
+- Empty dimension vector
+- Zero arity potential
+- True homogeneity status
+- Reference to provided TokenLib
+
+# Usage
+```julia
+# Create token library
+token_lib = TokenLib(dimension_dict, operation_dict, arity_mapping)
+
+# Create empty library entry
+entry = LibEntry(token_lib)
+
+# Add elements (using append!)
+append!(entry, Int8(1))  # Add terminal
+append!(entry, Int8(2))  # Add operator
+```
+
+# States
+## Arity Potential
+- `0`: Ready for terminal symbol
+- `1`: Ready for unary operation
+- `2`: Ready for binary operation
+
+## Homogeneity
+- `true`: Expression maintains dimensional consistency
+- `false`: Dimensional inconsistency detected
+
+# Methods
+The following methods are commonly used with LibEntry:
+- `Base.append!`: Add new symbol to entry
+- `Base.copy`: Create deep copy of entry
+- `Base.length`: Get number of elements
+- `Base.:(==)`: Compare entries
+- `Base.hash`: Hash entry for collections
+- `clean!`: Reset entry to valid state
+
+# Notes
+- Maintains dimensional homogeneity tracking
+- Supports incremental expression building
+- Automatically validates dimensional consistency
+
+See also: [`TokenLib`](@ref), [`TempComputeTree`](@ref)
+"""
 mutable struct LibEntry
     elements::Vector{Int8}
     physical_dimension::Vector{Float16}
@@ -226,10 +346,6 @@ mutable struct LibEntry
     homogene::Bool
     tokenLib::TokenLib
 
-    #=
-        physical_dimension_dict: Int is related to the corresponding feature dimension
-        Correponding operation_dict: provides the correspnding operation for converting the unit 
-    =#
     function LibEntry(symbol_ref::TokenLib)
         new(Int8[], Float16[], 0, true, symbol_ref)
     end
@@ -271,7 +387,7 @@ function Base.copy(entry::LibEntry)
     return new_entry
 end
 
-#Hint inline is a directive to copy paste code at a certain position-> mitigate function calls and therefore heap shifting
+
 @inline function Base.append!(entry::LibEntry, item::Int8)
     arity = get_arity(entry.tokenLib, item)
 
@@ -429,6 +545,81 @@ function reorganize_lib(old_lib::Set{LibEntry})
     return merged_lib
 end
 
+"""
+    TokenDto
+
+A data transfer object (DTO) for managing token operations, library access, and gene configuration
+in Gene Expression Programming with dimensional analysis support.
+
+# Fields
+- `tokenLib::TokenLib`: Reference to token library containing symbol information
+- `point_operations::Vector{Int8}`: Vector of point operation symbol IDs (e.g., multiplication, division)
+- `lib::Ref{OrderedDict{Tuple{Vector{Float16},Int},Vector{Vector{Int8}}}}`: Library mapping dimensions and lengths to valid expressions
+- `inverse_operation::Dict{Int8,Function}`: Maps symbol IDs to their inverse dimensional operations
+- `gene_count::Int`: Number of genes in chromosomes
+- `head_len::Int`: Length of head section in genes
+
+# Constructor
+```julia
+TokenDto(
+    tokenLib::TokenLib,
+    point_operations::Vector{Int8},
+    lib::OrderedDict{Tuple{Vector{Float16},Int},Vector{Vector{Int8}}},
+    inverse_operation::Dict{Int8,Function},
+    gene_count::Int;
+    head_len::Int=-1
+)
+```
+
+# Arguments
+- `tokenLib`: Token library instance
+- `point_operations`: Vector of point operation symbols
+- `lib`: Library mapping (dimension, length) tuples to valid expressions
+- `inverse_operation`: Dictionary of inverse operations for backward propagation
+- `gene_count`: Number of genes
+- `head_len`: Head length (optional, defaults to -1)
+
+# Library Structure
+The `lib` field maps tuples of (dimension vector, expression length) to vectors of valid expressions:
+```julia
+(dimension::Vector{Float16}, length::Int) => Vector{Vector{Int8}}
+```
+
+# Usage Example
+```julia
+# Create components
+token_lib = TokenLib(dims_dict, ops_dict, arity_dict)
+point_ops = Int8[1, 2]  # multiplication and division
+expression_lib = create_lib(token_lib, features, functions, constants)
+inverse_ops = Dict{Int8,Function}(
+    1 => mul_unit_backward,
+    2 => div_unit_backward
+)
+
+# Create TokenDto
+dto = TokenDto(
+    token_lib,
+    point_ops,
+    expression_lib,
+    inverse_ops,
+    3;  # gene count
+    head_len=6
+)
+```
+
+# Purpose
+1. Centralizes access to token operations and library
+2. Manages dimensional analysis configuration
+4. Supports both forward and backward dimension propagation
+5. Facilitates library lookup for valid expressions
+
+# Notes
+- Supports dimensional homogeneity checking
+- Maintains expression validity through library lookups
+
+See also: [`TokenLib`](@ref), [`LibEntry`](@ref), [`TempComputeTree`](@ref),
+[`SBPUtils.create_lib`](@ref), [`SBPUtils.mul_unit_backward`](@ref), [`SBPUtils.div_unit_backward`](@ref)
+"""
 mutable struct TokenDto
     tokenLib::TokenLib
     point_operations::Vector{Int8}
@@ -443,7 +634,88 @@ mutable struct TokenDto
 
 end
 
+"""
+    TempComputeTree
 
+A mutable structure representing a temporary computation tree for symbolic manipulation
+and dimensional analysis in Gene Expression Programming.
+
+# Fields
+- `symbol::Int8`: Symbol ID representing the current node's operation or terminal
+- `depend_on::Vector{Union{TempComputeTree,Int8}}`: Vector of child nodes or terminal symbols
+- `vector_dimension::Vector{Float16}`: Physical dimension vector of the current subtree
+- `tokenDto::TokenDto`: Reference to token configuration and library
+- `depend_on_total_number::Int`: Total number of nodes in subtree
+- `exchange_len::Int`: Length of potential exchange segment (-1 if not set)
+
+# Constructor
+```julia
+TempComputeTree(
+    symbol::Int8,
+    depend_on::Vector{T}=Union{TempComputeTree,Int8}[],
+    vector_dimension::Vector{Float16}=Float16[],
+    tokenDto::TokenDto=nothing
+) where {T}
+```
+
+# Tree Structure Example
+```julia
+# Binary operation tree (e.g., multiplication)
+root = TempComputeTree(
+    1,  # multiplication symbol
+    [   # children
+        TempComputeTree(3, [], [1.0, 0.0]),  # length dimension
+        TempComputeTree(4, [], [0.0, 1.0])   # time dimension
+    ],
+    [],  # dimension computed later
+    token_dto
+)
+```
+
+# Operations
+Common operations on TempComputeTree:
+- `flatten_dependents`: Flattens tree to symbol sequence
+- `flush!`: Clears dimension vector
+- `calculate_vector_dimension!`: Computes dimensions
+- `propagate_necessary_changes!`: Ensures dimensional consistency
+- `enforce_changes!`: Applies dimensional corrections
+
+# Dimensional Analysis
+The tree supports:
+1. Forward dimension propagation
+2. Backward dimension propagation
+3. Dimensional homogeneity checking
+4. Automatic correction of dimensional inconsistencies
+
+# Usage Example
+```julia
+# Create computation tree
+tree = TempComputeTree(mul_symbol, [], [], token_dto)
+
+# Calculate dimensions
+calculate_vector_dimension!(tree)
+
+# Check and correct dimensions
+if !isapprox(tree.vector_dimension, target_dim)
+    propagate_necessary_changes!(tree, target_dim)
+end
+```
+
+# Notes
+## Tree Properties
+- Recursive structure for expression representation
+- Maintains dimensional information at each node
+- Supports both terminal and operation symbols
+- Allows for tree modification and correction
+
+## Performance Considerations
+- Use `flush!` to clear cached dimensions
+- `depend_on_total_number` tracks subtree size
+- `exchange_len` optimizes tree modifications
+- Efficient memory usage with Int8 symbols
+
+See also: [`TokenDto`](@ref), [`SBPUtils.propagate_necessary_changes!`](@ref), [`SBPUtils.enforce_changes!`](@ref)
+"""
 mutable struct TempComputeTree
     symbol::Int8
     depend_on::Vector{Union{TempComputeTree,Int8}}
@@ -532,7 +804,62 @@ function enforce_changes!(tree::TempComputeTree, expected_dim::Vector{Float16}, 
 
 end
 
+"""
+    enforce_changes!(tree::TempComputeTree, expected_dim::Vector{Float16}; flexible::Bool=true)
 
+Enforces dimensional changes on a computation tree by attempting to replace it with a dimensionally
+compatible expression from the library.
+
+# Arguments
+- `tree::TempComputeTree`: The computation tree to modify
+- `expected_dim::Vector{Float16}`: Target dimension vector to achieve
+- `flexible::Bool=true`: Whether to allow flexible length matching in library lookup
+
+# Returns
+- `Bool`: `true` if changes were successful and resulting dimensions match expected dimensions
+         within Float16 epsilon precision, `false` otherwise
+
+# Algorithm
+1. Determines exchange length:
+   - Uses `tree.exchange_len` if set (> -1)
+   - Otherwise uses total number of dependent nodes + 1
+2. Retrieves potential replacement from library matching:
+   - Expected dimensions
+   - Determined length
+   - Flexibility constraints
+3. Creates new computation tree from retrieved expression
+4. If successful:
+   - Updates current tree's symbol and dependencies
+   - Recalculates dimensional vector
+5. Verifies dimensional match within epsilon
+
+# Effects
+When successful:
+- Modifies tree's symbol
+- Updates tree's dependencies
+- Recalculates tree's dimensional vector
+Original tree remains unchanged if operation fails.
+
+# Example
+```julia
+# Create a tree with incorrect dimensions
+tree = TempComputeTree(mul_symbol, [...], current_dim, token_dto)
+
+# Try to enforce correct dimensions
+target_dim = Float16[1.0, 0.0, 0.0]  # Length dimension
+success = enforce_changes!(tree, target_dim)
+
+if success
+    @assert isapprox(tree.vector_dimension, target_dim, atol=eps(Float16))
+end
+```
+
+# Notes
+- Can operate in flexible or strict length matching mode
+- May fail if no suitable replacement exists in library
+
+See also: [`TempComputeTree`](@ref)
+"""
 function enforce_changes!(tree::TempComputeTree, expected_dim::Vector{Float16}; flexible::Bool=true)
     extraction_len = tree.exchange_len > -1 ? tree.exchange_len : tree.depend_on_total_number+1
         exchange = retrieve_exchange_from_lib(tree,
@@ -600,6 +927,87 @@ function find_closest(distance::Vector{Float16},
     return nothing
 end
 
+"""
+    propagate_necessary_changes!(
+        tree::TempComputeTree,
+        expected_dim::Vector{Float16},
+        distance_to_change::Int=0
+    )
+
+Recursively propagates dimensional changes through a computation tree to achieve
+desired dimensional consistency.
+
+# Arguments
+- `tree::TempComputeTree`: The computation tree to modify
+- `expected_dim::Vector{Float16}`: Target dimension vector to achieve
+- `distance_to_change::Int=0`: Current recursion depth for change propagation
+
+# Returns
+- `Bool`: `true` if changes were successful and dimensions match expected values,
+         `false` if propagation failed or max depth was reached
+
+# Algorithm Flow
+1. Recursion Depth Check:
+   - Returns `false` if `distance_to_change < FAILURE_RECURSION_SIZE`
+   - Issues warning when max depth reached
+
+2. Early Success Check:
+   - If current dimensions match expected (within Float16 epsilon)
+   - Random 90% chance of accepting match to allow exploration
+   - Returns `true` if match accepted
+
+3. Critical Update Check:
+   - Checks if direct tree replacement is possible
+   - Attempts enforcement if at or beyond max distance
+   - Uses `check_crit_up!` and `enforce_changes!`
+
+4. Operation Handling:
+   - Binary operations: Propagates through both children
+   - Unary operations: Propagates through single child
+   - Recalculates dimensions after changes
+
+# Effects
+May modify:
+- Tree structure
+- Node symbols
+- Dimensional vectors
+- Child dependencies
+
+# Example
+```julia
+# Create computation tree
+tree = create_compute_tree(expression, token_dto)
+
+# Target length dimension
+target_dim = Float16[1.0, 0.0, 0.0]
+
+# Attempt to achieve target dimension
+success = propagate_necessary_changes!(tree, target_dim)
+
+if success
+    @assert isapprox(tree.vector_dimension, target_dim, atol=eps(Float16))
+end
+```
+
+# Error Handling
+- Returns `false` if recursion depth exceeded
+- Issues warning via `@warn` at max depth
+- Handles both successful and failed propagations
+- Validates final dimensions after changes
+
+# Notes
+## Performance Considerations
+- Includes randomization to prevent local optima
+- Caches dimension calculations
+- Optimizes tree modifications
+
+## Implementation Details
+- Recursive implementation
+- Aims to maintain consistency
+- Supports both unary and binary operations
+
+See also: [`TempComputeTree`](@ref), [`SBPUtils.enforce_changes!`](@ref)
+"""
 function propagate_necessary_changes!(
     tree::TempComputeTree,
     expected_dim::Vector{Float16},
@@ -715,7 +1123,101 @@ function edit_gene_from_compute_tree!(gene::Vector{Int8}, compute_tree::Union{Te
     end
 end
 
+"""
+    correct_genes!(
+        genes::Vector{Int8},
+        start_indices::Vector{Int},
+        expression::Vector{Int8},
+        target_dimension::Vector{Float16},
+        token_dto::TokenDto;
+        cycles::Int=5
+    )
 
+Modifies genes to achieve dimensional consistency with target dimensions through
+iterative tree transformation and correction.
+
+# Arguments
+- `genes::Vector{Int8}`: Gene sequence to modify
+- `start_indices::Vector{Int}`: Starting indices for each gene segment
+- `expression::Vector{Int8}`: Current expression to analyze
+- `target_dimension::Vector{Float16}`: Target dimension vector to achieve
+- `token_dto::TokenDto`: Token configuration and library reference
+- `cycles::Int=5`: Maximum number of correction attempts
+
+# Returns
+Tuple containing:
+- `distance::Float16`: Final dimensional distance from target
+- `success::Bool`: `true` if correction achieved target dimensions within epsilon
+
+# Algorithm Steps
+1. Tree Creation:
+   - Creates computation tree from expression
+   - Initializes with token configuration
+
+2. Correction Cycles:
+   - Attempts dimensional correction up to specified cycles
+   - Propagates necessary changes through tree
+   - Recalculates dimensions after each attempt
+   - Breaks early on success
+
+3. Success Processing:
+   - If target dimensions achieved (distance < eps)
+   - Updates genes based on corrected tree
+   - Handles both single and multi-gene cases
+   - Preserves gene structure integrity
+
+# Error Handling
+- Catches and logs any errors during correction
+- Returns (Inf16, false) on failure
+- Provides detailed error messages
+- Preserves original genes on failure
+
+# Example
+```julia
+# Setup
+genes = Int8[...]
+indices = [1, 10, 20]  # Gene start positions
+expression = Int8[...]  # Current expression
+target_dim = Float16[1.0, 0.0, 0.0]  # Length dimension
+
+# Attempt correction
+distance, success = correct_genes!(
+    genes,
+    indices,
+    expression,
+    target_dim,
+    token_dto;
+    cycles=7
+)
+
+if success
+    println("Correction successful!")
+else
+    println("Failed to achieve target dimensions")
+end
+```
+
+# Performance Notes
+- `@inline` directive for performance optimization
+- Early breaking on successful correction
+- Efficient tree traversal
+- Minimal memory allocation
+
+# Implementation Details
+## Gene Update Process
+1. Processes genes in reverse index order
+2. Special handling for first gene index
+3. Updates both symbol and dependencies
+4. Maintains gene structure constraints
+
+## Error Conditions
+- Tree creation failure
+- Propagation errors
+- Dimension calculation issues
+- Invalid tree structures
+
+See also: [`TempComputeTree`](@ref), [`SBPUtils.propagate_necessary_changes!`](@ref)
+"""
 @inline function correct_genes!(genes::Vector{Int8}, start_indices::Vector{Int}, expression::Vector{Int8},
     target_dimension::Vector{Float16}, token_dto::TokenDto; cycles::Int=5)
     gene_count = token_dto.gene_count

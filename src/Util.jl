@@ -1,3 +1,93 @@
+"""
+    GepUtils
+
+A utility module providing essential functions and types for Gene Expression Programming (GEP)
+operations, including optimization, history tracking, data manipulation, and state management.
+
+# Core Features
+## Optimization
+- Constant optimization with multiple algorithms
+- Node compilation and manipulation
+- Distance calculations and scaling
+
+## History Recording
+- Asynchronous history tracking
+- Training metrics recording
+- Optimization history management
+- Progress monitoring
+
+## Data Handling
+- Train-test splitting
+- Minmax scaling
+- Data type conversion
+- State serialization
+
+# Main Types
+## History Management
+- `OptimizationHistory`: Stores training metrics and statistics
+- `HistoryRecorder`: Asynchronous recorder for optimization metrics
+
+# Main Functions
+## Optimization
+- `optimize_constants!`: Optimize constant values in expressions
+- `compile_djl_datatype`: Compile recursive expressions
+- `retrieve_constants_from_node`: Extract constants from nodes
+
+## Scaling and Metrics
+- `minmax_scale`: Scale data to specific range
+- `float16_scale`: Scale to Float16 range
+- `isclose`: Approximate equality comparison
+
+## History Recording
+- `create_history_recorder`: Initialize recording
+- `record!`: Record optimization step
+- `close_recorder!`: Finalize recording
+- `get_history_arrays`: Extract history data
+
+## Data Management
+- `train_test_split`: Split dataset for training/testing
+- `save_state`, `load_state`: State persistence
+
+# Usage Example
+```julia
+# History recording
+recorder = HistoryRecorder(100, Float64)  # 100 epochs
+record!(recorder, epoch, train_loss, val_loss, fitness_vector)
+close_recorder!(recorder)
+
+# Data scaling
+scaled_data = minmax_scale(data, feature_range=(0.0, 1.0))
+
+# Train-test split
+x_train, y_train, x_test, y_test = train_test_split(X, y, train_ratio=0.8)
+
+# Constant optimization
+optimized_node, final_loss = optimize_constants!(
+    node,
+    loss_function;
+    opt_method=:cg,
+    max_iterations=250
+)
+```
+
+# Implementation Details
+## Performance Optimizations
+- Thread-safe operations via channels
+- SIMD optimizations where applicable
+- Efficient memory management
+- Asynchronous history recording
+
+## Dependencies
+- `OrderedCollections`: Ordered data structures
+- `DynamicExpressions`: Expression handling
+- `LinearAlgebra`: Matrix operations
+- `Optim`: Optimization algorithms
+- `LineSearches`: Line search methods
+- `Zygote`: Automatic differentiation
+- `Serialization`: State persistence
+- `Statistics`: Statistical computations
+- `Random`: Random number generation
+"""
 module GepUtils
 
 export find_indices_with_sum, compile_djl_datatype, optimize_constants!, minmax_scale, float16_scale, isclose
@@ -81,6 +171,77 @@ function get_history_arrays(hist::OptimizationHistory)
     )
 end
 
+
+"""
+    HistoryRecorder{T<:AbstractFloat}
+
+A thread-safe structure for asynchronous recording of optimization history during
+GEP evolution, using channels for communication between optimization and recording tasks.
+
+# Fields
+- `channel::Channel{Tuple{Int,T,T,Vector{T}}}`: Communication channel for metrics
+  - Tuple format: (epoch, train_loss, validation_loss, fitness_vector)
+- `task::Task`: Asynchronous task handling the recording process
+- `history::OptimizationHistory{T}`: Storage for optimization metrics
+
+# Constructor
+```julia
+HistoryRecorder(
+    epochs::Int,
+    ::Type{T};
+    buffer_size::Int=32
+) where {T<:AbstractFloat}
+```
+
+# Arguments
+- `epochs::Int`: Number of epochs to record
+- `T`: Numeric type for metrics (e.g., Float64)
+- `buffer_size::Int=32`: Channel buffer size for async communication
+
+# Example Usage
+```julia
+# Create recorder for 100 epochs using Float64
+recorder = HistoryRecorder(100, Float64)
+
+# Record metrics for each epoch
+for epoch in 1:100
+    train_loss = compute_training_loss()
+    val_loss = compute_validation_loss()
+    fitness_vector = get_population_fitness()
+    
+    record!(recorder, epoch, train_loss, val_loss, fitness_vector)
+end
+
+# Close recorder and wait for completion
+close_recorder!(recorder)
+
+# Access recorded history
+final_history = recorder.history
+```
+
+# Thread Safety
+- Uses channels for thread-safe communication
+- Spawns separate task for recording
+- Ensures non-blocking metric recording
+- Maintains data consistency
+
+# Performance Notes
+## Buffer Size
+- Default 32 provides balance between memory and performance
+- Increase for high-frequency recording
+- Decrease for memory-constrained environments
+
+## Memory Management
+- Preallocates history arrays
+- Reuses metric tuples
+- Minimizes allocation during recording
+
+# Notes
+- Automatically spawns recording task on creation
+- Must be closed with `close_recorder!` to ensure proper cleanup
+- Supports any AbstractFloat type
+- Channel depth can be adjusted for different recording patterns
+"""
 struct HistoryRecorder{T<:AbstractFloat}
     channel::Channel{Tuple{Int,T,T,Vector{T}}}
     task::Task
@@ -157,6 +318,91 @@ function find_indices_with_sum(arr::SubArray, target_sum::Int, num_indices::Int)
     end
 end
 
+"""
+    compile_djl_datatype(
+        rek_string::Vector,
+        arity_map::OrderedDict,
+        callbacks::Dict,
+        nodes::OrderedDict
+    )
+
+Compiles a reverse Polish notation (postfix) expression into an executable form using
+a stack-based algorithm with support for unary and binary operations.
+
+# Arguments
+- `rek_string::Vector`: Expression in reverse Polish notation
+- `arity_map::OrderedDict`: Maps symbols to their arities (number of operands)
+- `callbacks::Dict`: Maps symbols to their corresponding operations
+- `nodes::OrderedDict`: Maps terminal symbols to their node representations
+
+# Returns
+The compiled expression as a DynamicExpressions.Node object
+
+# Algorithm
+1. Initializes empty stack
+2. Processes expression in reverse order:
+   - For binary operators (arity 2):
+     * Pops two operands
+     * Applies operation
+     * Pushes result
+   - For unary operators (arity 1):
+     * Pops one operand
+     * Applies operation
+     * Pushes result
+   - For terminals (arity 0):
+     * Pushes directly to stack
+3. Returns final stack element
+
+# Example
+```julia
+# Define components
+rek_string = [1, 2, :+, 3, :*]  # represents (1 + 2) * 3 -> Examplified - in our application, we use tokenized version of that
+arity_map = OrderedDict(
+    :+ => 2,
+    :* => 2
+)
+callbacks = Dict(
+    :+ => +,
+    :* => *
+)
+nodes = OrderedDict(
+    1 => Node(1.0),
+    2 => Node(2.0),
+    3 => Node(3.0)
+)
+
+# Compile expression
+result = compile_djl_datatype(rek_string, arity_map, callbacks, nodes)
+# Returns Node representing (1 + 2) * 3
+```
+
+# Error Handling
+- Allows expression to fail if invalid
+- Invalid expressions may occur from:
+  * Stack underflow
+  * Unknown operators
+  * Mismatched arities
+  * Invalid node references
+
+# Implementation Notes
+## Stack Operations
+- Uses pop! for operand retrieval
+- Uses push! for result storage
+- Handles Int8 to Node conversion
+
+## Type Handling
+- Supports Int8 terminal symbols
+- Converts terminals via nodes dictionary
+- Preserves operation types from callbacks
+
+## Performance Considerations
+- Single pass through expression
+- Minimal memory allocation
+- Direct operation application
+- Early failure for invalid expressions
+
+See also: [`DynamicExpressions.Node`](@ref)
+"""
 function compile_djl_datatype(rek_string::Vector, arity_map::OrderedDict, callbacks::Dict, nodes::OrderedDict)
     #just let it fail when it becomes invalid, because then the equation is not that use ful
     stack = []
@@ -187,7 +433,93 @@ function retrieve_constants_from_node(node::Node)
     constants
 end
 
+"""
+    optimize_constants!(
+        node::Node,
+        loss::Function;
+        opt_method::Symbol=:cg,
+        max_iterations::Int=250,
+        n_restarts::Int=3
+    )
 
+Optimizes constant values in a symbolic expression tree to minimize a given loss function.
+
+# Arguments
+- `node::Node`: Expression tree containing constants to optimize
+- `loss::Function`: Loss function to minimize
+- `opt_method::Symbol=:cg`: Optimization method (:newton, :cg, or other for NelderMead)
+- `max_iterations::Int=250`: Maximum iterations per optimization attempt
+- `n_restarts::Int=3`: Number of random restarts to avoid local minima
+
+# Returns
+Tuple containing:
+- `best_node::Node`: Expression tree with optimized constants
+- `best_loss::Float64`: Final loss value achieved
+
+# Optimization Methods
+## Available Algorithms
+- `:newton`: Newton's method with backtracking line search
+- `:cg`: Conjugate Gradient with backtracking line search
+- `other`: Nelder-Mead simplex method (default fallback)
+
+## Random Restart Strategy
+1. First attempt uses original constants
+2. Subsequent restarts randomly perturb constants:
+   - Multiplication by (1 + 0.5 * randn())
+   - Targets only degree-0 constant nodes
+   - Preserves variable nodes
+
+# Example
+```julia
+# Create expression with constants
+expr = Node(*, [
+    Node(1.5),  # constant to optimize
+    Node(x, degree=1)  # variable
+])
+
+# Define loss function
+loss(node) = sum((node(x_data) .- y_data).^2)
+
+# Optimize constants
+optimized_expr, final_loss = optimize_constants!(
+    expr,
+    loss;
+    opt_method=:cg,
+    max_iterations=500,
+    n_restarts=5
+)
+```
+
+# Implementation Notes
+## Performance
+- `@inline` directive for function inlining
+- Early return for expressions without constants
+- Efficient constant counting and modification
+- Minimal memory allocation during optimization
+
+## Algorithm Selection
+- Newton's method: Second-order optimization
+- Conjugate Gradient: First-order optimization
+- Nelder-Mead: Derivative-free optimization
+
+## Optimization Process
+1. Count constants in expression
+2. Establish baseline loss
+3. For each restart:
+   - Create new expression copy (except first attempt)
+   - Randomly perturb constants (except first attempt)
+   - Optimize using selected algorithm
+   - Update best result if improved
+4. Return best found solution
+
+# Notes
+- Modifies input node during optimization
+- Uses Optim.jl for optimization algorithms
+- Supports automatic differentiation through Zygote
+- Multiple restarts help avoid local minima
+
+See also: [`DynamicExpressions.Node`](@ref), [`Optim.optimize`](@ref), [`LineSearches.BackTracking`](@ref)
+"""
 @inline function optimize_constants!(
     node::Node,
     loss::Function;

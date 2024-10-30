@@ -1,18 +1,13 @@
 """
     GepRegression
 
-A module implementing Gene Expression Programming (GEP) for symbolic regression tasks with 
-support for dimensional analysis and multi-threading.
+A module implementing Gene Expression Programming (GEP) for symbolic regression 
 
 # Features
 - Symbolic regression using Gene Expression Programming
 - Dimensional homogeneity enforcement
-- Parallel computation using multi-threading
 - Constant optimization
-- Progress monitoring and history recording
 - Validation on test data
-- Early stopping capabilities
-- Tournament selection for evolution
 
 # Dependencies
 ## Internal Modules
@@ -51,6 +46,17 @@ best_solutions, history = runGep(
     loss_fun_="rmse"       # loss function
 )
 ```
+
+See also: 
+- [`GepEntities.Chromosome`](@ref): Individual solution representation in GEP
+- [`GepEntities.Toolbox`](@ref): GEP algorithm parameters and operations
+- [`GepEntities.genetic_operations!`](@ref): Genetic modification operations
+- [`GepEntities.compile_expression!`](@ref): Chromosome expression compilation
+- [`GepEntities.generate_chromosome`](@ref): New chromosome creation
+- [`GepEntities.generate_population`](@ref): Initial population generation
+- [`GepEntities.fitness`](@ref): Fitness value access
+- [`GepEntities.set_fitness!`](@ref): Fitness value modification
+
 
 """
 

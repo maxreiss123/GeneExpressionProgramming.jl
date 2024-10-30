@@ -61,7 +61,7 @@ The repository contains the implementation of the Gene Expression Programming [1
   x_train, y_train, x_test, y_test = train_test_split(data[:, 1:num_cols-1], data[:, num_cols]; consider=4)
 
   #define a target dimension - here ampere - (units inspired by openFoam) - https://doc.cfd.direct/openfoam/user-guide-v6/basic-file-format
-  target_dim = Float16[0, -2, 0, 0, 0, 1, 0] # Aiming for electric current (Ampere/m^2)
+  target_dim = Float16[0, -2, 0, 0, 0, 1, 0] # Aiming for electric conductivity (Ampere/m^2)
 
 
   #define dims for the features
