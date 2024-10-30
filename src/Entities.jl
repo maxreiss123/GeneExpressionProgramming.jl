@@ -1,3 +1,81 @@
+"""
+    GepEntities
+
+A module implementing core data structures and genetic operations for Gene Expression
+Programming (GEP).
+
+# Core Types
+## Symbol Types - depreacated
+- `AbstractSymbol`: Base type for GEP symbols
+- `BasicSymbol`: Terminal symbols (constants and variables)
+- `FunctionalSymbol`: Function symbols with arithmetic operations
+- `SymbolConfig`: Configuration container for all symbols
+
+## Evolution Types
+- `Chromosome`: Individual solution representation
+- `Toolbox`: Container for GEP algorithm parameters and operations
+
+# Features
+## Symbol Management
+- Flexible symbol representation system
+- Support for physical dimensions
+- Arithmetic operation mapping
+- Forward/reverse function handling
+
+## Genetic Operations
+### Crossover Operations
+- One-point crossover
+- Two-point crossover
+- Gene fusion (dominant/recessive) - experimental
+
+### Mutation Operations
+- Random mutation
+- Gene inversion
+- Gene insertion
+- Reverse insertion
+- Tail insertion
+
+
+# Implementation Details
+## Performance Optimizations
+- Inlined genetic operations
+- View-based array operations
+
+## Memory Management
+- Efficient gene replication through vector representation
+- In-place modifications
+
+## Type System
+- Int8-based gene representation
+- AbstractFloat fitness values
+- Flexible symbol representation
+
+# Exports
+## Types
+- `Chromosome`, `Toolbox`, `AbstractGepToolbox`
+- `AbstractSymbol`, `FunctionalSymbol`, `BasicSymbol`, `SymbolConfig`
+
+## Functions
+### Core Operations
+- `fitness`, `set_fitness!`
+- `generate_gene`, `generate_preamle!`, `compile_expression!`
+- `generate_chromosome`, `generate_population`
+
+### Genetic Operations
+- `genetic_operations!`, `replicate`
+- `gene_inversion!`, `gene_mutation!`
+- `gene_one_point_cross_over!`, `gene_two_point_cross_over!` - 
+- `gene_fussion!` - experimental
+
+# Dependencies
+- `GepUtils`: Utility functions
+- `OrderedCollections`: Ordered data structures
+
+# Notes
+- All genetic operations are implemented as in-place modifications
+- Chromosomes maintain their own compilation state
+
+"""
 module GepEntities
 
 
