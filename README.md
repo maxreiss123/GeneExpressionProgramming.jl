@@ -101,7 +101,6 @@ The repository contains the implementation of the Gene Expression Programming [1
 
 # Todo 
 - [ ] Documentation
-- [ ] Naming conventions!
-- [ ] Re-write postprocessing
-- [ ] Improve usability for user interaction
+- [x] Naming conventions!
+- [x] Improve usability for user interaction
 - [ ] Next operations: Tail flip, Connection symbol flip, wrapper class for easy usage, config class for predefinition, staggered exploration
