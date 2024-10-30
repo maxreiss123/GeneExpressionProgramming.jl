@@ -56,20 +56,15 @@ providing tools for symbolic regression and evolutionary computation.
 - `create_history_recorder`, `record_history!`, `record!`: Recording functions
 - `close_recorder!`, `get_history_arrays`: History management
 
-# Types and Structures
-```julia
-export AbstractSymbol, FunctionalSymbol, BasicSymbol, SymbolConfig
-```
-
 # Example Usage
 ```julia
 using VGeneExpressionProgramming
 
 # Create a GEP regressor
-regressor = GepRegressor(population_size=100, epochs=50)
+regressor = GepRegressor(feature_count)
 
 # Fit the model
-fit!(regressor, X_train, y_train)
+fit!(regressor, population_size, epochs,X_train, y_train)
 
 # Access physical constants
 constant = get_constant("speed_of_light")

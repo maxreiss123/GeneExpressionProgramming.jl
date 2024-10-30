@@ -80,7 +80,6 @@ module GepEntities
 
 
 export Chromosome, Toolbox, AbstractGepToolbox
-export AbstractSymbol, FunctionalSymbol, BasicSymbol, SymbolConfig
 export fitness, set_fitness!
 export generate_gene, generate_preamle!, compile_expression!, generate_chromosome, generate_population 
 export genetic_operations!, replicate, gene_inversion!, gene_mutation!, gene_one_point_cross_over!, gene_two_point_cross_over!, gene_fussion!
@@ -91,45 +90,6 @@ include("Util.jl")
 using .GepUtils
 using OrderedCollections
 
-
-abstract type AbstractSymbol end
-
-struct BasicSymbol <: AbstractSymbol
-    representation::Union{String,Real}
-    unit::Vector{Float16}
-    index::Int
-    arity::Int8
-    feature::Bool
-end
-
-# Concrete type for functional symbols
-struct FunctionalSymbol <: AbstractSymbol
-    representation::String
-    unit::Vector{Float16}
-    index::Int
-    arity::Int8
-    arithmetic_operation::Function
-    forward_function::Union{Function, Nothing}
-    reverse_function::Union{Function, Nothing}
-end
-
-
-struct SymbolConfig
-    basic_symbols::OrderedDict{Int8, BasicSymbol}
-    constant_symbols::OrderedDict{Int8, BasicSymbol}
-    functional_symbols::OrderedDict{Int8, FunctionalSymbol}
-    callbacks::Dict{Int8,Function}
-    operators_djl::Any
-    nodes_djl::OrderedDict{Int8, Any}
-    symbol_arity_mapping::OrderedDict{Int8, Int8}
-    physical_operation_dict::Union{OrderedDict{Int8, Function},Nothing}
-    physical_dimension_dict::OrderedDict{Int8, Vector{Float16}}
-    features_idx::Vector{Int8}
-    functions_idx::Vector{Int8}
-    constants_idx::Vector{Int8}
-    point_operations_idx::Vector{Int8}
-    inverse_operations::Union{Dict{Int8, Function},Nothing}
-end
 
 
 """
@@ -182,7 +142,7 @@ struct Toolbox
 
     function Toolbox(gene_count::Int, head_len::Int, symbols::OrderedDict{Int8,Int8}, gene_connections::Vector{Int8},
         callbacks::Dict, nodes::OrderedDict, gep_probs::Dict{String,AbstractFloat};
-        unary_prob::Real=0.4, fitness_reset::Tuple=(Inf, NaN), preamble_syms=Int8[])
+        unary_prob::Real=0.1, fitness_reset::Tuple=(Inf, NaN), preamble_syms=Int8[])
         gene_len = head_len * 2 + 1
         headsyms = [key for (key, arity) in symbols if arity == 2]
         unary_syms = [key for (key, arity) in symbols if arity == 1]
