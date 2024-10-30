@@ -201,9 +201,8 @@ Applies correction operations to ensure dimensional homogeneity in chromosomes.
 
     if !isnothing(correction_callback) && epoch % correction_epochs == 0
         pop_amount = Int(ceil(length(population) * correction_amount))
-        #todo Threads.@threads 
-        for i in 1:pop_amount
-            if !(population[i].dimension_homogene)
+        Threads.@threads  for i in 1:pop_amount
+            if !(population[i].dimension_homogene) && population[i].compiled
                 distance, correction = correction_callback(population[i].genes, population[i].toolbox.gen_start_indices,
                     population[i].expression_raw)
                 if correction
@@ -304,7 +303,6 @@ function runGep(epochs::Int,
     fits_representation = Vector{T}(undef, population_size)
 
     population = generate_population(population_size, toolbox)
-
     next_gen = Vector{eltype(population)}(undef, mating_size)
     progBar = Progress(epochs; showspeed=true, desc="Training: ")
 

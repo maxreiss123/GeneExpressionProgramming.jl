@@ -7,7 +7,3 @@ The file ConstrainViaSBP.jl contains the test setup. Please follow the steps out
 
 # Source
 - [1] Reissmann, M., Fang, Y., Ooi, A., & Sandberg, R. (2024). Constraining genetic symbolic regression via semantic backpropagation. arXiv. https://arxiv.org/abs/2409.07369
-
-
-# Remark 
-To perform all the tests use the pre-release version
