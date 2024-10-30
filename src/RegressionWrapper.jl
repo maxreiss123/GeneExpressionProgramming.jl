@@ -76,6 +76,28 @@ predictions = regressor(X_test)
 - External: DynamicExpressions, OrderedCollections
 
 
+See also:
+## Core GEP Components
+- [`GepRegression.runGep`](@ref): Core GEP algorithm implementation
+- [`GepEntities.Chromosome`](@ref): Solution representation
+- [`GepEntities.Toolbox`](@ref): Algorithm configuration
+
+## Dimension Handling Functions
+### Forward Operations
+- [`SBPUtils.equal_unit_forward`](@ref): Dimension equality checking
+- [`SBPUtils.mul_unit_forward`](@ref): Dimension multiplication
+- [`SBPUtils.div_unit_forward`](@ref): Dimension division
+- [`SBPUtils.zero_unit_forward`](@ref): Zero dimension checking
+- [`SBPUtils.sqr_unit_forward`](@ref): Dimension squaring
+- [`SBPUtils.arbitrary_unit_forward`](@ref): Direct dimension passing
+
+### Backward Operations
+- [`SBPUtils.equal_unit_backward`](@ref): Backward equality propagation
+- [`SBPUtils.mul_unit_backward`](@ref): Backward multiplication propagation
+- [`SBPUtils.div_unit_backward`](@ref): Backward division propagation
+- [`SBPUtils.zero_unit_backward`](@ref): Backward zero propagation
+- [`SBPUtils.sqr_unit_backward`](@ref): Backward square propagation
+
 """
 
 module RegressionWrapper
