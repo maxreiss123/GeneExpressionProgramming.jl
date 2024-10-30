@@ -1,3 +1,83 @@
+"""
+    RegressionWrapper
+
+A high-level wrapper module for Gene Expression Programming (GEP) regression that provides
+simplified interfaces and utilities for symbolic regression tasks with physical dimension support.
+
+# Features
+- User-friendly interface for GEP regression via `GepRegressor`
+- Support for physical dimensions and dimensional homogeneity
+- Extensive mathematical function library
+- Customizable gene structure and operations
+- Forward and backward dimension propagation
+- Ensemble prediction capabilities
+- Constant optimization
+- Feature and constant dimension handling
+
+# Exports
+## Main Components
+- `GepRegressor`: Main regression class
+- `fit!`: Training function
+- `create_function_entries`: Function symbol creation
+- `create_feature_entries`: Feature symbol creation
+- `create_constants_entries`: Constant symbol creation
+- `create_physical_operations`: Physical operation setup
+
+## Constants
+- `GENE_COMMON_PROBS`: Default genetic operation probabilities
+- `FUNCTION_LIB_BACKWARD_COMMON`: Backward dimension propagation functions
+- `FUNCTION_LIB_FORWARD_COMMON`: Forward dimension propagation functions
+- `FUNCTION_LIB_COMMON`: Available mathematical functions
+
+# Function Library
+Includes extensive mathematical operations:
+- Basic arithmetic: +, -, *, /, ^
+- Comparisons: min, max
+- Rounding: floor, ceil, round
+- Exponential: exp, log, log10, log2
+- Trigonometric: sin, cos, tan, asin, acos, atan
+- Hyperbolic: sinh, cosh, tanh, asinh, acosh, atanh
+- Special: sqr, sqrt, sign, abs
+
+# Usage Example
+```julia
+# Create regressor
+regressor = GepRegressor(
+    2,                              # number of features
+    entered_features=[:x1, :x2],    # feature names
+    gene_count=3,                   # genes per individual
+    head_len=6                      # head length per gene
+)
+
+# Train model
+fit!(regressor, 
+    100,                           # epochs
+    50,                            # population size
+    X_train, y_train;
+    x_test=X_test,
+    y_test=y_test,
+    loss_fun="mse"
+)
+
+# Make predictions
+predictions = regressor(X_test)
+```
+
+# Implementation Details
+## Type Aliases
+- `SymbolDict = OrderedDict{Int8,Int8}`
+- `CallbackDict = Dict{Int8,Function}`
+- `OrderedCallBackDict = OrderedDict{Int8,Function}`
+- `NodeDict = OrderedDict{Int8,Any}`
+- `DimensionDict = OrderedDict{Int8,Vector{Float16}}`
+
+## Dependencies
+- Internal: GepEntities, LossFunction, GepRegression, SBPUtils, GepUtils
+- External: DynamicExpressions, OrderedCollections
+
+
+"""
+
 module RegressionWrapper
 
 
@@ -161,7 +241,7 @@ const GENE_COMMON_PROBS = Dict{String,AbstractFloat}(
     "fusion_rate" => 0.0,
     "inversion_prob" => 0.1,
     "mating_size" => 0.5,
-    "penalty_consideration" => 0.0)
+    "penalty_consideration" => 0.2)
 
 const SymbolDict = OrderedDict{Int8,Int8}
 const CallbackDict = Dict{Int8,Function}
@@ -361,7 +441,7 @@ mutable struct GepRegressor
         rnd_count::Int=1,
         node_type::Type=Float64,
         gene_count::Int=2,
-        head_len::Int=8,
+        head_len::Int=10,
         preamble_syms::Vector{Symbol}=Symbol[],
         max_permutations_lib::Int=10000, rounds::Int=4
     )
@@ -457,7 +537,7 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size, x_train::Ab
     y_train::AbstractArray; x_test::AbstractArray, y_test::AbstractArray,
     optimization_epochs::Int=500,
     hof::Int=3, loss_fun::Union{String,Function}="mse",
-    correction_epochs::Int=1, correction_amount::Real=0.3,
+    correction_epochs::Int=1, correction_amount::Real=0.1,
     tourni_size::Int=3, opt_method_const::Symbol=:cg,
     target_dimension::Union{Vector{Float16},Nothing}=nothing,
     cycles::Int=10
