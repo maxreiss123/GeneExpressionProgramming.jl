@@ -27,7 +27,7 @@ The repository contains the implementation of the Gene Expression Programming [1
   #define the regressor
   regressor = GepRegressor(number_features)
 
-  #perform the regression by entering epochs, population_size, the feature cols, the target col and the loss function
+  #perform the regression by entering epochs, population_size and the loss function
   fit!(regressor, epochs, population_size, x_data, y_data; loss_fun="mse")
 
   pred = regressor(x_data') # Can be utilized to perform the prediction for further data
