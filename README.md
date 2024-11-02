@@ -75,7 +75,7 @@ The repository contains the implementation of the Gene Expression Programming [1
 
 
   #define the features, here the numbers of the first two cols - here we add the feature dims and a maximum of permutations per tree high - rounds, referring to the tree high
-  regressor = GepRegressor(num_cols; considered_dimensions=feature_dims,max_permutations_lib=10000, rounds=7)
+  regressor = GepRegressor(num_cols-1; considered_dimensions=feature_dims,max_permutations_lib=10000, rounds=7)
 
    #perform the regression by entering epochs, population_size, the feature cols, the target col and the loss function
   fit!(regressor, epochs, population_size, x_train', y_train; x_test=x_test', y_test=y_test, loss_fun="mse")
