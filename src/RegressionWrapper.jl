@@ -63,6 +63,35 @@ fit!(regressor,
 predictions = regressor(X_test)
 ```
 
+
+# Dimensional Analysis Example
+```julia
+using VGeneExpressionProgramming
+
+# Load data (features: charge density, charge, vector potential, mass)
+data = Matrix(CSV.read("data.txt", DataFrame))
+num_features = size(data, 2) - 1
+
+# Define physical dimensions using SI base units [kg, m, s, K, mol, A, cd]
+feature_dims = Dict{Symbol,Vector{Float16}}(
+    :x1 => Float16[0, -3, 1, 0, 0, 1, 0],   # charge density: A⋅s/m³
+    :x2 => Float16[0, 0, 1, 0, 0, 1, 0],    # charge: A⋅s
+    :x3 => Float16[1, 1, -2, 0, 0, -1, 0],  # vector potential: kg⋅m/s²⋅A
+    :x4 => Float16[1, 0, 0, 0, 0, 0, 0]     # mass: kg
+)
+
+# Target dimension (electric conductivity: A/m²)
+target_dim = Float16[0, -2, 0, 0, 0, 1, 0]
+
+# Create and train regressor
+regressor = GepRegressor(num_features; considered_dimensions=feature_dims)
+fit!(regressor, epochs, population_size, x_train', y_train;
+     x_test=x_test', y_test=y_test,
+     target_dimension=target_dim,
+     correction_epochs=5,    # Apply dimension correction every 5 epochs
+     correction_amount=0.1)  # Correct 10% of population
+```
+
 # Implementation Details
 ## Type Aliases
 - `SymbolDict = OrderedDict{Int8,Int8}`
@@ -108,6 +137,11 @@ export create_function_entries, create_feature_entries, create_constants_entries
 export GENE_COMMON_PROBS, FUNCTION_LIB_BACKWARD_COMMON, FUNCTION_LIB_FORWARD_COMMON, FUNCTION_LIB_COMMON
 export fit!
 
+export list_all_functions, list_all_arity, list_all_forward_handlers, 
+       list_all_backward_handlers, list_all_genetic_params,
+       set_function!, set_arity!, set_forward_handler!, set_backward_handler!,
+       update_function!
+
 include("Entities.jl")
 include("Gep.jl")
 include("Losses.jl")
@@ -140,6 +174,24 @@ function sqr(x::T) where {T<:Union{AbstractFloat,Node{<:AbstractFloat}}}
 end
 
 
+"""
+    FUNCTION_LIB_COMMON::Dict{Symbol,Function}
+
+Dictionary mapping function symbols to their corresponding functions.
+Contains basic mathematical operations, trigonometric, and other common functions.
+
+# Available Functions
+- Basic arithmetic: `+`, `-`, `*`, `/`, `^`
+- Comparison: `min`, `max`
+- Rounding: `floor`, `ceil`, `round`
+- Exponential & Logarithmic: `exp`, `log`, `log10`, `log2`
+- Trigonometric: `sin`, `cos`, `tan`, `asin`, `acos`, `atan`
+- Hyperbolic: `sinh`, `cosh`, `tanh`, `asinh`, `acosh`, `atanh`
+- Other: `abs`, `sqr`, `sqrt`, `sign`
+
+To add a new function, ensure you also add corresponding entries in `ARITY_LIB_COMMON`,
+`FUNCTION_LIB_FORWARD_COMMON`, and `FUNCTION_LIB_BACKWARD_COMMON`.
+"""
 const FUNCTION_LIB_COMMON = Dict{Symbol,Function}(
     :+ => +,
     :- => -,
@@ -167,6 +219,15 @@ const FUNCTION_LIB_COMMON = Dict{Symbol,Function}(
     :sqrt => sqrt, :sign => sign
 )
 
+"""
+    ARITY_LIB_COMMON::Dict{Symbol,Int8}
+
+Dictionary specifying the number of arguments (arity) for each function in the library.
+- Value of 1 indicates unary functions (e.g., `sin`, `cos`, `abs`)
+- Value of 2 indicates binary functions (e.g., `+`, `-`, `*`, `/`)
+
+When adding new functions to `FUNCTION_LIB_COMMON`, ensure to specify their arity here.
+"""
 const ARITY_LIB_COMMON = Dict{Symbol,Int8}(
     :+ => 2,
     :- => 2,
@@ -198,7 +259,22 @@ const ARITY_LIB_COMMON = Dict{Symbol,Int8}(
     :sqr => 1
 )
 
+"""
+    FUNCTION_LIB_FORWARD_COMMON::Dict{Symbol,Function}
 
+Dictionary mapping functions to their forward unit handling implementations.
+Defines how units are propagated through operations in forward mode.
+
+Available unit handlers:
+- `equal_unit_forward`: For operations requiring equal units
+- `mul_unit_forward`: For multiplication operations
+- `div_unit_forward`: For division operations
+- `arbitrary_unit_forward`: For operations that work with any unit
+- `zero_unit_forward`: For operations requiring dimensionless input
+- `sqr_unit_forward`: For square root operations
+
+When adding new functions, define appropriate unit handling behavior here.
+"""
 const FUNCTION_LIB_FORWARD_COMMON = Dict{Symbol,Function}(
     :+ => equal_unit_forward,
     :- => equal_unit_forward,
@@ -224,6 +300,22 @@ const FUNCTION_LIB_FORWARD_COMMON = Dict{Symbol,Function}(
     :atanh => zero_unit_forward, :sqrt => sqr_unit_forward, :sign => arbitrary_unit_forward
 )
 
+"""
+    FUNCTION_LIB_BACKWARD_COMMON::Dict{Symbol,Function}
+
+Dictionary mapping functions to their backward unit handling implementations.
+Defines how units are propagated through operations in backward mode.
+
+Available unit handlers:
+- `equal_unit_backward`: For operations requiring equal units
+- `mul_unit_backward`: For multiplication operations
+- `div_unit_backward`: For division operations
+- `arbitrary_unit_forward`: For operations that work with any unit
+- `zero_unit_forward`: For operations requiring dimensionless input
+- `sqr_unit_backward`: For square root operations
+
+When adding new functions, define appropriate unit handling behavior here.
+"""
 const FUNCTION_LIB_BACKWARD_COMMON = Dict{Symbol,Function}(
     :+ => equal_unit_backward,
     :- => equal_unit_backward,
@@ -250,6 +342,28 @@ const FUNCTION_LIB_BACKWARD_COMMON = Dict{Symbol,Function}(
 )
 
 
+"""
+    GENE_COMMON_PROBS::Dict{String,AbstractFloat}
+
+Dictionary containing default probabilities and parameters for genetic algorithm operations.
+
+# Parameters
+- `one_point_cross_over_prob`: Probability of single-point crossover (0.4)
+- `two_point_cross_over_prob`: Probability of two-point crossover (0.3)
+- `mutation_prob`: Probability of mutation occurring (0.9)
+- `mutation_rate`: Rate of mutation when it occurs (0.05)
+- `dominant_fusion_prob`: Probability of dominant fusion (0.1)
+- `dominant_fusion_rate`: Rate of dominant fusion (0.1)
+- `rezessiv_fusion_prob`: Probability of recessive fusion (0.1)
+- `rezessiv_fusion_rate`: Rate of recessive fusion (0.1)
+- `fusion_prob`: Probability of general fusion (0.0)
+- `fusion_rate`: Rate of general fusion (0.0)
+- `inversion_prob`: Probability of inversion (0.1)
+- `mating_size`: Relative size of mating pool (0.5)
+- `penalty_consideration`: Weight of penalty in fitness evaluation (0.2)
+
+These values can be adjusted to fine-tune the genetic algorithm's behavior.
+"""
 const GENE_COMMON_PROBS = Dict{String,AbstractFloat}(
     "one_point_cross_over_prob" => 0.4,
     "two_point_cross_over_prob" => 0.3,
@@ -550,13 +664,13 @@ Train the GEP regressor model.
 - `hof::Int=3`: Number of best models to keep
 - `loss_fun::Union{String,Function}="mse"`: Loss function ("mse", "mae", or custom function)
 - `correction_epochs::Int=1`: Epochs between dimension corrections
-- `correction_amount::Real=1.0`: Fraction of population to correct
+- `correction_amount::Real=1.0`: Fraction of population to correct for the dimensioal homogeneity
 - `tourni_size::Int=3`: Tournament selection size
 - `opt_method_const::Symbol=:cg`: Optimization method for constants
 - `target_dimension::Union{Vector{Float16},Nothing}=nothing`: Target physical dimension
 """
 function fit!(regressor::GepRegressor, epochs::Int, population_size, x_train::AbstractArray,
-    y_train::AbstractArray; x_test::AbstractArray, y_test::AbstractArray,
+    y_train::AbstractArray; x_test::Union{AbstractArray,Nothing}=nothing, y_test::Union{AbstractArray,Nothing}=nothing,
     optimization_epochs::Int=500,
     hof::Int=3, loss_fun::Union{String,Function}="mse",
     correction_epochs::Int=1, correction_amount::Real=0.05,
@@ -578,7 +692,7 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size, x_train::Ab
         nothing
     end
 
-
+    
     best, history = runGep(epochs,
         population_size,
         regressor.operators_,
@@ -586,8 +700,8 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size, x_train::Ab
         y_train,
         regressor.toolbox_;
         hof=hof,
-        x_data_test=x_test,
-        y_data_test=y_test,
+        x_data_test=!isnothing(x_test) ? x_test : x_train,
+        y_data_test=!isnothing(y_test) ? y_test : y_train,
         loss_fun_=loss_fun,
         correction_callback=correction_callback,
         correction_epochs=correction_epochs,
@@ -619,6 +733,252 @@ function (regressor::GepRegressor)(x_data::AbstractArray; ensemble::Bool=false)
     return regressor.best_models_[1].compiled_function(x_data, regressor.operators_)
 end
 
+
+
+"""
+    list_all_functions() -> Dict{Symbol, NamedTuple}
+
+List all functions in the library with their complete information including arity and handlers.
+
+# Returns
+- Dictionary mapping function symbols to NamedTuples containing:
+  - `function`: The actual function
+  - `arity`: Number of arguments
+  - `forward_handler`: Forward unit handling function
+  - `backward_handler`: Backward unit handling function
+
+# Examples
+```julia
+funcs = list_all_functions()
+sin_info = funcs[:sin]
+println(sin_info.arity)  # 1
+```
+"""
+function list_all_functions()
+    return Dict(sym => (
+        function_ = _FUNCTION_LIB_COMMON[sym],
+        arity = _ARITY_LIB_COMMON[sym],
+        forward_handler = _FUNCTION_LIB_FORWARD_COMMON[sym],
+        backward_handler = _FUNCTION_LIB_BACKWARD_COMMON[sym]
+    ) for sym in keys(_FUNCTION_LIB_COMMON))
+end
+
+"""
+    list_all_arity() -> Dict{Symbol, Int8}
+
+List all functions and their arities.
+
+# Returns
+- Dictionary mapping function symbols to their arity values
+
+# Examples
+```julia
+arities = list_all_arity()
+println(arities[:+])  # 2
+```
+"""
+function list_all_arity()
+    return Dict(k => v for (k, v) in _ARITY_LIB_COMMON)
+end
+
+"""
+    list_all_forward_handlers() -> Dict{Symbol, Function}
+
+List all functions and their forward unit handlers.
+
+# Returns
+- Dictionary mapping function symbols to their forward unit handling functions
+
+# Examples
+```julia
+handlers = list_all_forward_handlers()
+sin_handler = handlers[:sin]
+```
+"""
+function list_all_forward_handlers()
+    return Dict(k => v for (k, v) in _FUNCTION_LIB_FORWARD_COMMON)
+end
+
+"""
+    list_all_backward_handlers() -> Dict{Symbol, Function}
+
+List all functions and their backward unit handlers.
+
+# Returns
+- Dictionary mapping function symbols to their backward unit handling functions
+
+# Examples
+```julia
+handlers = list_all_backward_handlers()
+sin_handler = handlers[:sin]
+```
+"""
+function list_all_backward_handlers()
+    return Dict(k => v for (k, v) in _FUNCTION_LIB_BACKWARD_COMMON)
+end
+
+"""
+    list_all_genetic_params() -> Dict{String, AbstractFloat}
+
+List all genetic algorithm parameters and their current values.
+
+# Returns
+- Dictionary mapping parameter names to their current values
+
+# Examples
+```julia
+params = list_all_genetic_params()
+println(params["mutation_prob"])  # 0.9
+```
+"""
+function list_all_genetic_params()
+    return Dict(k => v for (k, v) in _GENE_COMMON_PROBS)
+end
+
+# Setters
+
+"""
+    set_function!(sym::Symbol, func::Function)
+
+Set or update a function in the library. Requires the function to already exist in the library.
+
+# Arguments
+- `sym::Symbol`: Symbol representing the function
+- `func::Function`: New function implementation
+
+# Examples
+```julia
+set_function!(:sin, new_sin_implementation)
+```
+
+# Throws
+- ArgumentError if the function symbol doesn't exist in the library
+"""
+function set_function!(sym::Symbol, func::Function)
+    haskey(_FUNCTION_LIB_COMMON, sym) || throw(ArgumentError("Function $sym not found in library"))
+    _FUNCTION_LIB_COMMON[sym] = func
+    return nothing
+end
+
+"""
+    set_arity!(sym::Symbol, arity::Int8)
+
+Set or update the arity for a function. Requires the function to already exist in the library.
+
+# Arguments
+- `sym::Symbol`: Symbol representing the function
+- `arity::Int8`: New arity value (must be 1 or 2)
+
+# Examples
+```julia
+set_arity!(:custom_func, 2)
+```
+
+# Throws
+- ArgumentError if the function symbol doesn't exist or arity is invalid
+"""
+function set_arity!(sym::Symbol, arity::Int8)
+    haskey(_ARITY_LIB_COMMON, sym) || throw(ArgumentError("Function $sym not found in library"))
+    arity in (1, 2) || throw(ArgumentError("Arity must be 1 or 2"))
+    _ARITY_LIB_COMMON[sym] = arity
+    return nothing
+end
+
+"""
+    set_forward_handler!(sym::Symbol, handler::Function)
+
+Set or update the forward unit handler for a function.
+
+# Arguments
+- `sym::Symbol`: Symbol representing the function
+- `handler::Function`: New forward unit handling function
+
+# Examples
+```julia
+set_forward_handler!(:custom_func, zero_unit_forward)
+```
+
+# Throws
+- ArgumentError if the function symbol doesn't exist
+"""
+function set_forward_handler!(sym::Symbol, handler::Function)
+    haskey(_FUNCTION_LIB_FORWARD_COMMON, sym) || throw(ArgumentError("Function $sym not found in library"))
+    _FUNCTION_LIB_FORWARD_COMMON[sym] = handler
+    return nothing
+end
+
+"""
+    set_backward_handler!(sym::Symbol, handler::Function)
+
+Set or update the backward unit handler for a function.
+
+# Arguments
+- `sym::Symbol`: Symbol representing the function
+- `handler::Function`: New backward unit handling function
+
+# Examples
+```julia
+set_backward_handler!(:custom_func, zero_unit_backward)
+```
+
+# Throws
+- ArgumentError if the function symbol doesn't exist
+"""
+function set_backward_handler!(sym::Symbol, handler::Function)
+    haskey(_FUNCTION_LIB_BACKWARD_COMMON, sym) || throw(ArgumentError("Function $sym not found in library"))
+    _FUNCTION_LIB_BACKWARD_COMMON[sym] = handler
+    return nothing
+end
+
+"""
+    update_function!(sym::Symbol; 
+                    func::Union{Function,Nothing}=nothing,
+                    arity::Union{Int8,Nothing}=nothing,
+                    forward_handler::Union{Function,Nothing}=nothing,
+                    backward_handler::Union{Function,Nothing}=nothing)
+
+Update multiple aspects of a function at once.
+
+# Arguments
+- `sym::Symbol`: Symbol representing the function
+- `func::Function`: (optional) New function implementation
+- `arity::Int8`: (optional) New arity value
+- `forward_handler::Function`: (optional) New forward unit handler
+- `backward_handler::Function`: (optional) New backward unit handler
+
+# Examples
+```julia
+update_function!(:custom_func, 
+                func=new_implementation,
+                arity=2,
+                forward_handler=new_forward_handler)
+```
+
+# Throws
+- ArgumentError if the function symbol doesn't exist or parameters are invalid
+"""
+function update_function!(sym::Symbol; 
+                         func::Union{Function,Nothing}=nothing,
+                         arity::Union{Int8,Nothing}=nothing,
+                         forward_handler::Union{Function,Nothing}=nothing,
+                         backward_handler::Union{Function,Nothing}=nothing)
+    haskey(_FUNCTION_LIB_COMMON, sym) || throw(ArgumentError("Function $sym not found in library"))
+    
+    if !isnothing(func)
+        set_function!(sym, func)
+    end
+    if !isnothing(arity)
+        set_arity!(sym, arity)
+    end
+    if !isnothing(forward_handler)
+        set_forward_handler!(sym, forward_handler)
+    end
+    if !isnothing(backward_handler)
+        set_backward_handler!(sym, backward_handler)
+    end
+    
+    return nothing
+end
 
 
 end
