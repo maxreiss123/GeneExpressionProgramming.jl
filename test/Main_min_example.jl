@@ -18,7 +18,7 @@ y_data = @. x_data[:,1] * x_data[:,1] + x_data[:,1] * x_data[:,2] - 2 * x_data[:
 
 #define the 
 regressor = GepRegressor(number_features)
-fit!(regressor, epochs, population_size, x_data, y_data; loss_fun="mse")
+fit!(regressor, epochs, population_size, x_data', y_data; loss_fun="mse")
 
 pred = regressor(x_data')
 
