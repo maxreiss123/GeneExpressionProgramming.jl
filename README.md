@@ -5,7 +5,7 @@ The repository contains the implementation of the Gene Expression Programming [1
 - Install the package:
   ```julia
     using Pkg
-    Pkg.add(url="https://github.com/maxreiss123/GEP_SBP_.git")
+    Pkg.add(url="https://github.com/maxreiss123/VGep.jl.git")
   ```
 
   ```julia
