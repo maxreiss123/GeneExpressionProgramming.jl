@@ -1,6 +1,6 @@
-include("../src/VGeneExpressionProgramming.jl")
+include("../src/GeneExpressionProgramming.jl")
 
-using .VGeneExpressionProgramming
+using .GeneExpressionProgramming
 using Random
 using Plots
 

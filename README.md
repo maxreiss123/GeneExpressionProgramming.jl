@@ -1,16 +1,16 @@
-# VGeneExpressionProgramming for symbolic regression
-The repository contains the implementation of the Gene Expression Programming [1], whereby the 'V' refers to the internal representation of the equation as a vector of integers. This representation allows a lower memory footprint, leading to faster processing of the application of the genetic operators. Moreover, the implementation also contains a mechanism for semantic backpropagation, ensuring dimensional homogeneity for physical units [2]. 
+# GeneExpressionProgramming for symbolic regression
+The repository contains the implementation of the Gene Expression Programming [1], whereby the internal representation of the equation is fully tokenized as a vector of integers. This representation allows a lower memory footprint, leading to faster processing of the application of the genetic operators. Moreover, the implementation also contains a mechanism for semantic backpropagation, ensuring dimensional homogeneity for physical units [2]. 
 
 # How to use it?
 - Install the package:
   ```julia
     using Pkg
-    Pkg.add(url="https://github.com/maxreiss123/GEP_SBP_.git")
+    Pkg.add(url="https://github.com/maxreiss123/GeneExpressionProgramming.jl.git")
   ```
 
   ```julia
   # Min_example 
-  using VGeneExpressionProgramming
+  using GeneExpressionProgramming
 
   Random.seed!(1)
 
@@ -28,7 +28,7 @@ The repository contains the implementation of the Gene Expression Programming [1
   regressor = GepRegressor(number_features)
 
   #perform the regression by entering epochs, population_size, the feature cols, the target col and the loss function
-  fit!(regressor, epochs, population_size, x_data, y_data; loss_fun="mse")
+  fit!(regressor, epochs, population_size, x_data', y_data; loss_fun="mse")
 
   pred = regressor(x_data') # Can be utilized to perform the prediction for further data
 
@@ -42,7 +42,7 @@ The repository contains the implementation of the Gene Expression Programming [1
 
  ```julia
   # Min_example 
-  using VGeneExpressionProgramming
+  using GeneExpressionProgramming
 
   Random.seed!(1)
 

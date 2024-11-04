@@ -1,5 +1,5 @@
-include("../src/VGeneExpressionProgramming.jl")
-using .VGeneExpressionProgramming
+include("../src/GeneExpressionProgramming.jl")
+using .GeneExpressionProgramming
 using DynamicExpressions
 using OrderedCollections
 using BenchmarkTools
