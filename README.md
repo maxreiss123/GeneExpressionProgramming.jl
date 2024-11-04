@@ -5,7 +5,9 @@ The repository contains the implementation of the Gene Expression Programming [1
 - Install the package:
   ```julia
     using Pkg
+    
     Pkg.add(url="https://github.com/maxreiss123/GeneExpressionProgramming.jl.git")
+
   ```
 
   ```julia
@@ -75,7 +77,7 @@ The repository contains the implementation of the Gene Expression Programming [1
 
 
   #define the features, here the numbers of the first two cols - here we add the feature dims and a maximum of permutations per tree high - rounds, referring to the tree high
-  regressor = GepRegressor(num_cols; considered_dimensions=feature_dims,max_permutations_lib=10000, rounds=7)
+  regressor = GepRegressor(num_cols-1; considered_dimensions=feature_dims,max_permutations_lib=10000, rounds=7)
 
    #perform the regression by entering epochs, population_size, the feature cols, the target col and the loss function
   fit!(regressor, epochs, population_size, x_train', y_train; x_test=x_test', y_test=y_test, loss_fun="mse")
@@ -85,9 +87,7 @@ The repository contains the implementation of the Gene Expression Programming [1
   @show regressor.best_models_[1].compiled_function
   @show regressor.best_models_[1].fitness
   ```
-
-- Remark for your CSV file: Main_min_with_csv.jl in the test folder provides a step-by-step guide on how to initialize the GEP for your own problem
-- Remark for your CSV file and utilizing dimensional homogeneity: Main_min_with_csv_and_units.jl in the test folder provides a step-by-step guide
+- Remark: Template for rerunning the test from the paper is located in the paper directory
 - Remark: the tutorial folder contains notebook, that can be run with google-colab, while showing a step-by-step introduction
 
 
@@ -101,7 +101,6 @@ The repository contains the implementation of the Gene Expression Programming [1
 
 # Todo 
 - [ ] Documentation
-- [ ] Naming conventions!
-- [ ] Re-write postprocessing
-- [ ] Improve usability for user interaction
+- [x] Naming conventions!
+- [x] Improve usability for user interaction
 - [ ] Next operations: Tail flip, Connection symbol flip, wrapper class for easy usage, config class for predefinition, staggered exploration
