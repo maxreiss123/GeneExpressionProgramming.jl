@@ -1,5 +1,5 @@
-include("../src/VGeneExpressionProgramming.jl")
-using .VGeneExpressionProgramming
+include("../src/GeneExpressionProgramming.jl")
+using .GeneExpressionProgramming
 using DynamicExpressions
 using OrderedCollections
 using BenchmarkTools
@@ -17,7 +17,7 @@ population_size = 2000
 
 
 # Data file, here is expected to be a csv, where the columns are in the order x1,x2...xk, y 
-data = Matrix(CSV.read("paper/srsd/feynman-III.21.20\$0.01.txt", DataFrame))
+data = Matrix(CSV.read("paper/srsd/feynman-III.21.20\$0.txt", DataFrame))
 data = data[all.(x -> !any(isnan, x), eachrow(data)), :]
 num_cols = size(data, 2)
 

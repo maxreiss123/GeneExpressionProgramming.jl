@@ -1,16 +1,18 @@
-# VGeneExpressionProgramming for symbolic regression
-The repository contains the implementation of the Gene Expression Programming [1], whereby the 'V' refers to the internal representation of the equation as a vector of integers. This representation allows a lower memory footprint, leading to faster processing of the application of the genetic operators. Moreover, the implementation also contains a mechanism for semantic backpropagation, ensuring dimensional homogeneity for physical units [2]. 
+# GeneExpressionProgramming for symbolic regression
+The repository contains the implementation of the Gene Expression Programming [1], whereby the internal representation of the equation is fully tokenized as a vector of integers. This representation allows a lower memory footprint, leading to faster processing of the application of the genetic operators. Moreover, the implementation also contains a mechanism for semantic backpropagation, ensuring dimensional homogeneity for physical units [2]. 
 
 # How to use it?
 - Install the package:
   ```julia
     using Pkg
-    Pkg.add(url="https://github.com/maxreiss123/VGep.jl.git")
+    
+    Pkg.add(url="https://github.com/maxreiss123/GeneExpressionProgramming.jl.git")
+
   ```
 
   ```julia
   # Min_example 
-  using VGeneExpressionProgramming
+  using GeneExpressionProgramming
 
   Random.seed!(1)
 
@@ -27,7 +29,7 @@ The repository contains the implementation of the Gene Expression Programming [1
   #define the regressor
   regressor = GepRegressor(number_features)
 
-  #perform the regression by entering epochs, population_size and the loss function
+  #perform the regression by entering epochs, population_size, the feature cols, the target col and the loss function
   fit!(regressor, epochs, population_size, x_data', y_data; loss_fun="mse")
 
   pred = regressor(x_data') # Can be utilized to perform the prediction for further data
@@ -42,7 +44,7 @@ The repository contains the implementation of the Gene Expression Programming [1
 
  ```julia
   # Min_example 
-  using VGeneExpressionProgramming
+  using GeneExpressionProgramming
 
   Random.seed!(1)
 
@@ -85,9 +87,7 @@ The repository contains the implementation of the Gene Expression Programming [1
   @show regressor.best_models_[1].compiled_function
   @show regressor.best_models_[1].fitness
   ```
-
-- Remark for your CSV file: Main_min_with_csv.jl in the test folder provides a step-by-step guide on how to initialize the GEP for your own problem
-- Remark for your CSV file and utilizing dimensional homogeneity: Main_min_with_csv_and_units.jl in the test folder provides a step-by-step guide
+- Remark: Template for rerunning the test from the paper is located in the paper directory
 - Remark: the tutorial folder contains notebook, that can be run with google-colab, while showing a step-by-step introduction
 
 

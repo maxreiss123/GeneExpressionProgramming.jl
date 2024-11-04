@@ -1,7 +1,7 @@
-module VGeneExpressionProgramming
+module GeneExpressionProgramming
 
 """
-    VGeneExpressionProgramming
+    GeneExpressionProgramming
 
 A comprehensive module for Gene Expression Programming (GEP) implementation in Julia,
 providing tools for symbolic regression and evolutionary computation.
@@ -58,7 +58,7 @@ providing tools for symbolic regression and evolutionary computation.
 
 # Example Usage
 ```julia
-using VGeneExpressionProgramming
+using GeneExpressionProgramming
 
 # Create a GEP regressor
 regressor = GepRegressor(feature_count)

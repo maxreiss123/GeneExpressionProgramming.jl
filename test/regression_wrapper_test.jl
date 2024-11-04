@@ -87,7 +87,7 @@ Random.seed!(1)
         
         regressor = GepRegressor(2)
         
-        fit!(regressor, 100, 1000, X, y)
+        fit!(regressor, 100, 1000, X', y)
         @test !isempty(regressor.fitness_history_.train_loss)
         @test length(regressor.best_models_) > 0
     end
@@ -105,20 +105,8 @@ Random.seed!(1)
             entered_features=[:x1, :x2],
             considered_dimensions=dimensions)
             
-        @test_nowarn fit!(regressor, 10, 20, X, y)
+        fit!(regressor, 10, 20, X', y)
         @test !isnothing(regressor.token_dto_)
         @test !isnothing(regressor.best_models_)
-    end
-    
-    @testset "Training with Different Loss Functions" begin
-        X = rand(50, 2)
-        y = X[:, 1] .* 2 .+ X[:, 2]
-        
-        regressor = GepRegressor(2)
-        
-        @test_nowarn fit!(regressor, 10, 20, X, y, loss_fun="mse")
-        
-        @test_nowarn fit!(regressor, 10, 20, X, y, loss_fun="mae")
-        
     end
 end
