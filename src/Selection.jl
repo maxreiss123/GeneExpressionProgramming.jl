@@ -9,7 +9,16 @@ export selection_NSGA, basic_tournament_selection, dominates_, fast_non_dominate
 
 @inline function basic_tournament_selection(population::AbstractArray{T}, tournament_size::Int, number_of_winners::Int) where {T<:Number}
     selected_indices = Vector{Int}(undef, number_of_winners)
-    valid_indices = findall(isfinite, population)
+    valid_indices_ = findall(isfinite, population)
+    valid_indices = []
+    doubles = Set()
+    for elem in valid_indices_
+    	if !(population[elem] in doubles)
+    		push!(doubles,population[elem])
+    		push!(valid_indices, elem)
+    	end
+    end
+    
     Threads.@threads for index in 1:number_of_winners-1
         contenders = rand(valid_indices, tournament_size)
         winner = reduce((best, contender) -> population[contender] < population[best] ? contender : best, contenders)
