@@ -24,6 +24,9 @@ The module includes the following loss functions, accessible via `get_loss_funct
   - Same units as target variable
   - Scale-dependent
 
+- `"nrmse"`: Normalized Root Mean Squared Error
+  - Norm. of the rmse
+
 - `"mae"`: Mean Absolute Error
   - L1 loss function
   - More robust to outliers than MSE
@@ -168,14 +171,55 @@ function mean_squared_error(y_true::AbstractArray{T}, y_pred::AbstractArray{T}) 
         return d/length(y_true)
 end
       
+function mean_squared_error(y_true::AbstractArray{T}, y_pred::AbstractArray{T}) where T<:AbstractFloat
+        d::T = zero(T)
+        @assert length(y_true) == length(y_pred)
+        @fastmath @inbounds @simd for i in eachindex(y_true, y_pred)
+              temp = (y_true[i]-y_pred[i])
+              d += temp*temp
+        end
+        return d/length(y_true)
+end
+      
+
 function root_mean_squared_error(y_true::AbstractArray{T}, y_pred::AbstractArray{T}) where T<:AbstractFloat
-          d::T = zero(T)
-          @assert length(y_true) == length(y_pred)
-          @fastmath @inbounds @simd for i in eachindex(y_true, y_pred)
-                temp = (y_true[i]-y_pred[i])
-                d += temp*temp
-          end
-          return abs2(d/length(y_true))
+    d::T = zero(T)
+    @assert length(y_true) == length(y_pred)
+    @fastmath @inbounds @simd for i in eachindex(y_true, y_pred)
+        temp = (y_true[i] - y_pred[i])
+        d += temp * temp
+    end
+    return sqrt(d/length(y_true)) 
+end
+
+function normalized_root_mean_squared_error(y_true::AbstractArray{T}, y_pred::AbstractArray{T}) where T<:AbstractFloat
+    n = length(y_true)
+    @assert n == length(y_pred) "Arrays must have equal length"
+    
+    rmse::T = zero(T)
+    sum_true::T = zero(T)
+    sum_sq_true::T = zero(T)
+    
+    
+    @fastmath @inbounds @simd for i in eachindex(y_true, y_pred)
+        diff = y_true[i] - y_pred[i]
+        rmse += diff * diff
+        sum_true += y_true[i]
+        sum_sq_true += y_true[i] * y_true[i]
+    end
+    
+    
+    rmse = sqrt(rmse / n)
+    
+    
+    mean_true = sum_true / n
+    std_true = sqrt((sum_sq_true - (sum_true * sum_true) / n) / (n - 1))
+    
+    if std_true < eps(T)
+        return rmse < eps(T) ? zero(T) : T(Inf)
+    end
+    
+    return rmse / std_true
 end
 
 function mean_absolute_error(y_true::AbstractArray{T}, y_pred::AbstractArray{T}) where T<:AbstractFloat
@@ -218,7 +262,8 @@ loss_functions = Dict{String, Function}(
     "rmse" => root_mean_squared_error,
     "mae" => mean_absolute_error,
     "srsme" => save_root_mean_squared_error,
-    "xi_core" => xicor
+    "xi_core" => xicor,
+    "nrmse" => normalized_root_mean_squared_error
     )
 
 function get_loss_function(name::String)
