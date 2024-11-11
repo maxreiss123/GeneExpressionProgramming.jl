@@ -343,8 +343,8 @@ function runGep(epochs::Int,
 
         ProgressMeter.update!(progBar, epoch, showvalues=[
             (:epoch_, @sprintf("%.0f", epoch)),
-            (:train_loss, @sprintf("%.6f", fits_representation[1])),
-            (:validation_loss, @sprintf("%.6f", val_loss))
+            (:train_loss, @sprintf("%.6e", fits_representation[1])),
+            (:validation_loss, @sprintf("%.6e", val_loss))
         ])
 
 
