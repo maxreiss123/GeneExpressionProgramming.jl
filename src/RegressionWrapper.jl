@@ -297,7 +297,8 @@ const FUNCTION_LIB_FORWARD_COMMON = Dict{Symbol,Function}(
     :tanh => zero_unit_forward,
     :asinh => zero_unit_forward,
     :acosh => zero_unit_forward,
-    :atanh => zero_unit_forward, :sqrt => sqr_unit_forward, :sign => arbitrary_unit_forward
+    :sqr => sqr_unit_forward,
+    :atanh => zero_unit_forward, :sqrt => sqr_unit_backward, :sign => arbitrary_unit_forward
 )
 
 """
@@ -338,7 +339,8 @@ const FUNCTION_LIB_BACKWARD_COMMON = Dict{Symbol,Function}(
     :tanh => zero_unit_forward,
     :asinh => zero_unit_forward,
     :acosh => zero_unit_forward,
-    :atanh => zero_unit_forward, :sqrt => sqr_unit_backward, :sign => arbitrary_unit_forward
+    :sqr => sqr_unit_backward,
+    :atanh => zero_unit_forward, :sqrt => sqr_unit_forward, :sign => arbitrary_unit_forward
 )
 
 
@@ -370,12 +372,14 @@ const GENE_COMMON_PROBS = Dict{String,AbstractFloat}(
     "mutation_prob" => 0.9,
     "mutation_rate" => 0.05,
     "dominant_fusion_prob" => 0.1,
-    "dominant_fusion_rate" => 0.1,
+    "dominant_fusion_rate" => 0.2,
     "rezessiv_fusion_prob" => 0.1,
-    "rezessiv_fusion_rate" => 0.1,
-    "fusion_prob" => 0.0,
-    "fusion_rate" => 0.0,
+    "rezessiv_fusion_rate" => 0.2,
+    "fusion_prob" => 0.1,
+    "fusion_rate" => 0.2,
     "inversion_prob" => 0.1,
+    "reverse_insertion" => 0.05,
+    "reverse_insertion_tail" => 0.05,
     "mating_size" => 0.5,
     "penalty_consideration" => 0.2)
 
