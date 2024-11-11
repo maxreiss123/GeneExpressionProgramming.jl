@@ -678,19 +678,19 @@ Modify chromosome genes in place
         gene_insertion!(space_next[i+1])
     end
 
-    if rand_space[12] < toolbox.gep_probs["inversion_prob"]
+    if rand_space[12] < toolbox.gep_probs["reverse_insertion"]
         reverse_insertion!(space_next[i])
     end
 
-    if rand_space[13] < toolbox.gep_probs["inversion_prob"]
+    if rand_space[13] < toolbox.gep_probs["reverse_insertion"]
         reverse_insertion!(space_next[i+1])
     end
 
-    if rand_space[14] < toolbox.gep_probs["inversion_prob"]
+    if rand_space[14] < toolbox.gep_probs["reverse_insertion_tail"]
         reverse_insertion_tail!(space_next[i+1])
     end
 
-    if rand_space[15] < toolbox.gep_probs["inversion_prob"]
+    if rand_space[15] < toolbox.gep_probs["reverse_insertion_tail"]
         reverse_insertion_tail!(space_next[i+1])
     end
 
