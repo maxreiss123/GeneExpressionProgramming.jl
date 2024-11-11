@@ -1,0 +1,12 @@
+# Ignore all .txt files in subfolders
+**/*.txt
+
+# Ignore all .log files in subfolders
+**/*.log
+
+# Ignore all hidden dotfiles in subfolders (e.g., .env, .config)
+**/.*
+
+# Ignore .vscode settings folder
+.vscode/
+
