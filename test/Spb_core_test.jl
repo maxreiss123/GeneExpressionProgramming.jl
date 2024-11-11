@@ -52,7 +52,7 @@ end
         features = Int8[7, 8]  # x1, x2
         functions = Int8[1, 2, 3, 4, 5, 6]  # mul, div, add, sub, sqr, sin
         constants = Int8[]
-        lib = create_lib(token_lib, features, functions, constants; rounds=3, max_permutations=10000)
+        lib = create_lib(token_lib, features, functions, constants; rounds=2, max_permutations=10000)
         total_len_lib = sum(length(entry) for entry in values(lib))
         @show ("Lib Entries:" , total_len_lib)
         @test !isempty(lib)

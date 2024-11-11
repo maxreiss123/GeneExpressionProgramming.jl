@@ -357,7 +357,7 @@ Vector{Int8} representing gene
 """
 function generate_gene(headsyms::Vector{Int8}, tailsyms::Vector{Int8}, headlen::Int; unarys::Vector{Int8}=[], unary_prob::Real=0.2)
     if !isempty(unarys) && rand() < unary_prob
-        heads = vcat(headsyms)
+        heads = vcat(headsyms,tailsyms)
         push!(heads, rand(unarys))
     else
         heads = headsyms
