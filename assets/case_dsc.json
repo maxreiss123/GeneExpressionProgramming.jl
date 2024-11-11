@@ -1377,7 +1377,9 @@
             "lambd",
             "d",
             "n"
-        ]
+        ],
+        "true_model": "arcsin(lambd/(n*d))",
+        "true_model_in_x_notation": "arcsin(x1/(x3*x2))"
     },
     "I.32.17": {
         "vars": [
@@ -2657,7 +2659,15 @@
             0.0,
             0.0,
             0.0
-        ]
+        ],
+        "level": "hard",
+        "dataset": "feynman_I_6_20",
+        "orig_values": [
+            "sigma",
+            "theta"
+        ],
+        "true_model": "exp(-(theta/sigma)**2/2)/(sqrt(2*pi)*sigma)",
+        "true_model_in_x_notation": "exp(-(x2/x1)**2/2)/(sqrt(2*pi)*x2)"
     },
     "I.6.20a": {
         "vars": [

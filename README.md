@@ -1,5 +1,5 @@
 # GeneExpressionProgramming for symbolic regression
-The repository contains the implementation of the Gene Expression Programming [1], whereby the internal representation of the equation is fully tokenized as a vector of integers. This representation allows a lower memory footprint, leading to faster processing of the application of the genetic operators. Moreover, the implementation also contains a mechanism for semantic backpropagation, ensuring dimensional homogeneity for physical units [2]. 
+The repository contains an implementation of the Gene Expression Programming [1], whereby the internal representation of the equation is fully tokenized as a vector of integers. This representation allows a lower memory footprint, leading to faster processing of the application of the genetic operators. Moreover, the implementation also contains a mechanism for semantic backpropagation, ensuring dimensional homogeneity for physical units [2]. 
 
 # How to use it?
 - Install the package:

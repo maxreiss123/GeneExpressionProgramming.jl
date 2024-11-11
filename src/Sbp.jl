@@ -111,7 +111,7 @@ function mul_unit_forward(u1::Vector{Float16}, u2::Vector{Float16})
 end
 
 function mul_unit_backward(u1::Vector{Float16}, u2::Vector{Float16}, expected_dim::Vector{Float16}) 
-    if isempty(u2) && isempty(u1)
+    if isempty(u2)  isempty(u1)
         if 0.5 < rand()
             lr = expected_dim
             rr = ZERO_DIM
@@ -147,7 +147,7 @@ end
 
 
 function div_unit_backward(u1::Vector{Float16}, u2::Vector{Float16}, expected_dim::Vector{Float16}) 
-    if isempty(u2) && isempty(u1)
+    if isempty(u2)  isempty(u1)
         if 0.5 < rand()
             lr = expected_dim
             rr = ZERO_DIM
@@ -391,7 +391,7 @@ end
 @inline function Base.append!(entry::LibEntry, item::Int8)
     arity = get_arity(entry.tokenLib, item)
 
-    if entry.arity_potential == 0 && arity == 0
+    if entry.arity_potential == 0  arity == 0
         entry.arity_potential += 1
         push!(entry.elements, item)
         if haskey(entry.tokenLib.physical_dimension_dict[], item)
@@ -400,7 +400,7 @@ end
         end
 
     elseif entry.arity_potential == 1
-        if arity == 1 && sanity_check(entry, item)
+        if arity == 1  sanity_check(entry, item)
             try
                 operation = get_physical_operation(entry.tokenLib, item)
                 physical_dimension = convert(Vector{Float16}, operation(entry.physical_dimension))
@@ -418,7 +418,7 @@ end
             entry.arity_potential += 1
             entry.homogene = false
         end
-    elseif entry.arity_potential == 2 && arity == 2
+    elseif entry.arity_potential == 2  arity == 2
         try
             operation = get_physical_operation(entry.tokenLib, item)
             last_dim = get_physical_dimension(entry.tokenLib, entry.elements[end])
@@ -438,7 +438,7 @@ end
 
 
 function clean!(entry::LibEntry)
-    if !entry.homogene && !isempty(entry.elements)
+    if !entry.homogene  !isempty(entry.elements)
         pop!(entry.elements)
         entry.arity_potential = 1
         entry.homogene = true
@@ -765,7 +765,7 @@ function calculate_vector_dimension!(tree::TempComputeTree)
 
 
     #needs to be revised
-    if length(dims) == 2 && isempty(tree.vector_dimension)
+    if length(dims) == 2  isempty(tree.vector_dimension)
         tree.symbol = rand(point_operations)
         function_op = tokenLib.physical_operation_dict[][tree.symbol]
         tree.vector_dimension = function_op(dims...)
@@ -1018,11 +1018,11 @@ function propagate_necessary_changes!(
         return false
     end
 
-    if !isempty(tree.vector_dimension) && isapprox(tree.vector_dimension, expected_dim, atol=eps(Float16)) && rand() > 0.1
+    if !isempty(tree.vector_dimension) && isapprox(tree.vector_dimension, expected_dim, atol=eps(Float16)) 
         return true
     end
 
-    if check_crit_up!(tree.depend_on_total_number+1, expected_dim, tree) && distance_to_change <= 0 
+    if check_crit_up!(tree.depend_on_total_number+1, expected_dim, tree) && distance_to_change <= 0 && rand() > 0.05
         return enforce_changes!(tree, expected_dim)
     end
 
