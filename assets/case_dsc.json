@@ -659,7 +659,7 @@
         "true_model": "k_spring*x**2/2",
         "true_model_in_x_notation": "x1*x2**2/2"
     },
-    "I.15.10": {
+    "I.15.1": {
         "vars": [
             "x1",
             "x2",
@@ -704,7 +704,7 @@
             0
         ],
         "level": "medium",
-        "dataset": "feynman_I_15_10",
+        "dataset": "feynman_I_15_1",
         "orig_values": [
             "m_0",
             "v",
@@ -950,6 +950,71 @@
         ],
         "true_model": "F*r*sin(theta)",
         "true_model_in_x_notation": "x2*x1*sin(x3)"
+    },
+    "I.18.14": {
+        "vars": [
+            "x1",
+            "x2",
+            "x3",
+            "x4"
+        ],
+        "dims": [
+            [
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            [
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            [
+                0,
+                1,
+                -1,
+                0,
+                0,
+                0,
+                0
+            ],
+            [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ]
+        ],
+        "targetdims": [
+            1,
+            2,
+            -1,
+            0,
+            0,
+            0,
+            0
+        ],
+        "level": "easy",
+        "dataset": "feynman_I_18_14",
+        "orig_values": [
+            "m",
+            "r",
+            "v",
+            "theta"
+        ],
+        "true_model": "m*r*v*sin(theta)",
+        "true_model_in_x_notation": "x1*x2*x3*sin(x4)"
     },
     "I.18.4": {
         "vars": [
@@ -2626,7 +2691,7 @@
         "true_model": "x1*(alpha*cos(omega*t)**2 + cos(omega*t))",
         "true_model_in_x_notation": "x1*(x4*cos(x2*x3)**2 + cos(x2*x3))"
     },
-    "I.6.20": {
+    "I.6.2": {
         "vars": [
             "x1",
             "x2"
@@ -2661,15 +2726,15 @@
             0.0
         ],
         "level": "hard",
-        "dataset": "feynman_I_6_20",
+        "dataset": "feynman_I_6_2",
         "orig_values": [
             "sigma",
             "theta"
         ],
-        "true_model": "exp(-(theta/sigma)**2/2)/(sqrt(2*pi)*sigma)",
-        "true_model_in_x_notation": "exp(-(x2/x1)**2/2)/(sqrt(2*pi)*x2)"
+        "true_model": "exp(-(theta/sigma)**2/2)/(sqrt(2*3.1415)*sigma)",
+        "true_model_in_x_notation": "exp(-(x2/x1)**2/2)/(sqrt(2*3.1415)*x2)"
     },
-    "I.6.20a": {
+    "I.6.2a": {
         "vars": [
             "x1"
         ],
@@ -2692,9 +2757,16 @@
             0.0,
             0.0,
             0.0
-        ]
+        ],
+        "level": "hard",
+        "dataset": "feynman_I_6_2a",
+        "orig_values": [
+            "theta"
+        ],
+        "true_model": "exp(-x1**2/2)/sqrt(2*3.1415)",
+        "true_model_in_x_notation": "exp(-theta**2/2)/sqrt(2*3.1415)"
     },
-    "I.6.20b": {
+    "I.6.2b": {
         "vars": [
             "x1",
             "x2",
@@ -2737,7 +2809,16 @@
             0.0,
             0.0,
             0.0
-        ]
+        ],
+        "level": "hard",
+        "dataset": "feynman_I_6_2b",
+        "orig_values": [
+            "sigma",
+            "theta",
+            "theta1"
+        ],
+        "true_model": "exp(-((x2-x3)/x1)**2/2)/(sqrt(2*3.1415)*x1)",
+        "true_model_in_x_notation": "exp(-((theta-theta1)/sigma)**2/2)/(sqrt(2*3.1415)*sigma)"
     },
     "I.8.14": {
         "vars": [
