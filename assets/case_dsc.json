@@ -1446,6 +1446,60 @@
         "true_model": "arcsin(lambd/(n*d))",
         "true_model_in_x_notation": "arcsin(x1/(x3*x2))"
     },
+    "I.30.3": {
+        "vars": [
+            "x1",
+            "x2",
+            "x3"
+        ],
+        "dims": [
+            [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ]
+        ],
+        "targetdims": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        ],
+        "level": "easy",
+        "dataset": "feynman_I_30_3",
+        "orig_values": [
+            "Int_0",
+            "theta",
+            "n"
+        ],
+        "true_model": "Int_0*sin(n*theta/2)**2/sin(theta/2)**2",
+        "true_model_in_x_notation": "x1*sin(x3*x2/2)**2/sin(x2/2)**2"
+    },
     "I.32.17": {
         "vars": [
             "x1",
@@ -2763,8 +2817,8 @@
         "orig_values": [
             "theta"
         ],
-        "true_model": "exp(-x1**2/2)/sqrt(2*3.1415)",
-        "true_model_in_x_notation": "exp(-theta**2/2)/sqrt(2*3.1415)"
+        "true_model": "exp(-theta**2/2)/sqrt(2*3.1415)",
+        "true_model_in_x_notation": "exp(-x1**2/2)/sqrt(2*3.1415)"
     },
     "I.6.2b": {
         "vars": [
@@ -2817,8 +2871,8 @@
             "theta",
             "theta1"
         ],
-        "true_model": "exp(-((x2-x3)/x1)**2/2)/(sqrt(2*3.1415)*x1)",
-        "true_model_in_x_notation": "exp(-((theta-theta1)/sigma)**2/2)/(sqrt(2*3.1415)*sigma)"
+        "true_model": "exp(-((theta-theta1)/sigma)**2/2)/(sqrt(2*3.1415)*sigma)",
+        "true_model_in_x_notation": "exp(-((x2-x3)/x1)**2/2)/(sqrt(2*3.1415)*x1)"
     },
     "I.8.14": {
         "vars": [
