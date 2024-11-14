@@ -1703,8 +1703,8 @@
             "v",
             "omega_0"
         ],
-        "true_model": "x3/(1-x2/x1)",
-        "true_model_in_x_notation": "omega_0/(1 - v/c)"
+        "true_model": "omega_0/(1 - v/c)",
+        "true_model_in_x_notation": "x3/(1-x2/x1)"
     },
     "I.34.14": {
         "vars": [
