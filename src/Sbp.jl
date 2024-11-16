@@ -73,7 +73,7 @@ const SMALLEST_TREE_SEGMENT = 3
 const FAILURE_RECURSION_SIZE = -21
 const STD_DIM_SIZE = 7
 const ZERO_DIM = zeros(Float16, STD_DIM_SIZE)
-const EMPTY_DIM = Float16[]
+const EMPTY_DIM = Float16[typemax(Float16) for _ in 1:STD_DIM_SIZE]
 
 using OrderedCollections
 using Random
@@ -87,10 +87,14 @@ export zero_unit_backward, mul_unit_backward, div_unit_backward, equal_unit_back
 export get_feature_dims_json, get_target_dim_json, retrieve_coeffs_based_on_similarity
 export ZERO_DIM
 
-function equal_unit_forward(u1::Vector{Float16}, u2::Vector{Float16}) 
-    if isempty(u1) || isempty(u2)
-        return EMPTY_DIM
+@inline function has_inf16(u::Vector{Float16})
+    @inbounds for x in u
+        reinterpret(UInt16, x) == 0x7c00 && return true
     end
+    return false
+end
+
+function equal_unit_forward(u1::Vector{Float16}, u2::Vector{Float16}) 
     @inbounds return all(u1 .== u2) ? u1 : EMPTY_DIM
 end
 
@@ -103,15 +107,12 @@ function arbitrary_unit_forward(u1::Vector{Float16})
     return u1
 end
 
-function mul_unit_forward(u1::Vector{Float16}, u2::Vector{Float16}) 
-    if isempty(u1) || isempty(u2)
-        return EMPTY_DIM
-    end
+function mul_unit_forward(u1::Vector{Float16}, u2::Vector{Float16})
     return u1 .+ u2
 end
 
 function mul_unit_backward(u1::Vector{Float16}, u2::Vector{Float16}, expected_dim::Vector{Float16}) 
-    if isempty(u2) && isempty(u1)
+    if has_inf16(u2) && has_inf16(u1)
         if 0.5 < rand()
             lr = expected_dim
             rr = ZERO_DIM
@@ -120,9 +121,9 @@ function mul_unit_backward(u1::Vector{Float16}, u2::Vector{Float16}, expected_di
             lr = ZERO_DIM
         end
         return lr, rr
-    elseif isempty(u2)
+    elseif has_inf16(u2)
         return u1, expected_dim .- u1
-    elseif isempty(u1)
+    elseif has_inf16(u1)
         return expected_dim .- u2, u2
     else
         if isapprox(u1, u2, atol=eps(Float16))
@@ -139,15 +140,12 @@ end
 
 
 function div_unit_forward(u1::Vector{Float16}, u2::Vector{Float16}) 
-    if isempty(u1) || isempty(u2)
-        return EMPTY_DIM
-    end
     return u1 .- u2
 end
 
 
 function div_unit_backward(u1::Vector{Float16}, u2::Vector{Float16}, expected_dim::Vector{Float16}) 
-    if isempty(u2) && isempty(u1)
+    if has_inf16(u2) && has_inf16(u1)
         if 0.5 < rand()
             lr = expected_dim
             rr = ZERO_DIM
@@ -156,9 +154,9 @@ function div_unit_backward(u1::Vector{Float16}, u2::Vector{Float16}, expected_di
             lr = ZERO_DIM
         end
         return lr, rr
-    elseif isempty(u2)
+    elseif has_inf16(u2)
         return u1, .-(expected_dim .+ u1)
-    elseif isempty(u1)
+    elseif has_inf16(u1)
         return expected_dim .+ u2, u2
     else
         if isapprox(u1, u2, atol=eps(Float16))
@@ -175,9 +173,6 @@ end
 
 
 function zero_unit_forward(u1::Vector{Float16})
-    if isempty(u1)
-        return EMPTY_DIM
-    end
     @inbounds return all(u1 .== 0) ? ZERO_DIM .* u1 : EMPTY_DIM
 end
 
