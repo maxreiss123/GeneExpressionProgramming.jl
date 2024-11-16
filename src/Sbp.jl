@@ -1060,8 +1060,8 @@ function handle_unary_operation(
 )
     if tree.depend_on[1] isa TempComputeTree && tree.symbol in keys(tree.tokenDto.inverse_operation)
         inverse_op = tree.tokenDto.inverse_operation[tree.symbol]
-        expected_dim_new = convert.(Float16,inverse_op(tree.vector_dimension))
-        return propagate_necessary_changes!(tree.depend_on[1], expected_dim_new, distance_to_change - 1)
+        expected_dim_new = inverse_op(tree.vector_dimension)
+        return propagate_necessary_changes!(tree.depend_on[1], convert.(Float16,expected_dim_new), distance_to_change - 1)
     else
         return enforce_changes!(tree, expected_dim)
     end
