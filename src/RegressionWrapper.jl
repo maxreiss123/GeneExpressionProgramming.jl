@@ -312,7 +312,7 @@ Available unit handlers:
 - `mul_unit_backward`: For multiplication operations
 - `div_unit_backward`: For division operations
 - `arbitrary_unit_forward`: For operations that work with any unit
-- `zero_unit_forward`: For operations requiring dimensionless input
+- `zero_unit_backward`: For operations requiring dimensionless input
 - `sqr_unit_backward`: For square root operations
 
 When adding new functions, define appropriate unit handling behavior here.
@@ -326,22 +326,23 @@ const FUNCTION_LIB_BACKWARD_COMMON = Dict{Symbol,Function}(
     :max => equal_unit_backward, :abs => arbitrary_unit_forward,
     :floor => arbitrary_unit_forward,
     :ceil => arbitrary_unit_forward,
-    :round => arbitrary_unit_forward, :exp => zero_unit_forward,
-    :log => zero_unit_forward,
-    :log10 => zero_unit_forward,
-    :log2 => zero_unit_forward, :sin => zero_unit_forward,
-    :cos => zero_unit_forward,
-    :tan => zero_unit_forward,
-    :asin => zero_unit_forward,
-    :acos => zero_unit_forward,
-    :atan => zero_unit_forward, :sinh => zero_unit_forward,
-    :cosh => zero_unit_forward,
-    :tanh => zero_unit_forward,
-    :asinh => zero_unit_forward,
-    :acosh => zero_unit_forward,
+    :round => arbitrary_unit_forward, :exp => zero_unit_backward,
+    :log => zero_unit_backward,
+    :log10 => zero_unit_backward,
+    :log2 => zero_unit_backward, :sin => zero_unit_backward,
+    :cos => zero_unit_backward,
+    :tan => zero_unit_backward,
+    :asin => zero_unit_backward,
+    :acos => zero_unit_backward,
+    :atan => zero_unit_backward, :sinh => zero_unit_backward,
+    :cosh => zero_unit_backward,
+    :tanh => zero_unit_backward,
+    :asinh => zero_unit_backward,
+    :acosh => zero_unit_backward,
     :sqr => sqr_unit_backward,
-    :atanh => zero_unit_forward, :sqrt => sqr_unit_forward, :sign => arbitrary_unit_forward
+    :atanh => zero_unit_backward, :sqrt => sqr_unit_forward, :sign => arbitrary_unit_forward
 )
+
 
 
 """
