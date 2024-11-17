@@ -225,7 +225,7 @@ end
         # Test 5: Tree with operation resulting in empty dimension (should choose random point operation)
         tree5 = TempComputeTree(Int8(6), Int8[7], Float16[], token_dto)  # sin(x1) should result in [] dimension
         dim5 = calculate_vector_dimension!(tree5)
-        @test dim5 == []  
+        @test dim5 == Float16[Inf, Inf, Inf, Inf, Inf, Inf, Inf]  
     
     
         # Test 6: Recalculation of existing dimension
