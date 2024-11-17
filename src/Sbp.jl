@@ -399,7 +399,7 @@ end
             try
                 operation = get_physical_operation(entry.tokenLib, item)
                 physical_dimension = convert(Vector{Float16}, operation(entry.physical_dimension))
-                if !isempty(physical_dimension)
+                if !isempty(physical_dimension) && !has_inf16(physical_dimension)
                     push!(entry.elements, item)
                     entry.physical_dimension = physical_dimension
                     entry.homogene = true
@@ -418,7 +418,7 @@ end
             operation = get_physical_operation(entry.tokenLib, item)
             last_dim = get_physical_dimension(entry.tokenLib, entry.elements[end])
             temp_dim = convert(Vector{Float16}, operation(last_dim, entry.physical_dimension))
-            if !isempty(temp_dim)
+            if !isempty(temp_dim) && !has_inf16(temp_dim)
                 entry.arity_potential = 1
                 push!(entry.elements, item)
                 entry.physical_dimension = temp_dim
@@ -760,7 +760,7 @@ function calculate_vector_dimension!(tree::TempComputeTree)
 
 
     #needs to be revised
-    if length(dims) == 2 && isempty(tree.vector_dimension)
+    if length(dims) == 2 && has_inf16(tree.vector_dimension)
         tree.symbol = rand(point_operations)
         function_op = tokenLib.physical_operation_dict[][tree.symbol]
         tree.vector_dimension = function_op(dims...)
@@ -888,9 +888,6 @@ function retrieve_exchange_from_lib(tree::TempComputeTree,
 end
 
 function calculate_distance(k1::Vector{Float16}, k2::Vector{Float16})
-    if isempty(k2) || isempty(k1)
-        return Inf16
-    end
     return sqrt(sum((k1 .- k2) .^ 2))
 end
 
@@ -1013,7 +1010,7 @@ function propagate_necessary_changes!(
         return false
     end
 
-    if !isempty(tree.vector_dimension) && isapprox(tree.vector_dimension, expected_dim, atol=eps(Float16)) 
+    if !has_inf16(tree.vector_dimension) && isapprox(tree.vector_dimension, expected_dim, atol=eps(Float16)) 
         return true
     end
 
