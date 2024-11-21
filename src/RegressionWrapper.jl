@@ -66,7 +66,7 @@ predictions = regressor(X_test)
 
 # Dimensional Analysis Example
 ```julia
-using VGeneExpressionProgramming
+using GeneExpressionProgramming
 
 # Load data (features: charge density, charge, vector potential, mass)
 data = Matrix(CSV.read("data.txt", DataFrame))
