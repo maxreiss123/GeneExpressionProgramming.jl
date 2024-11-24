@@ -43,7 +43,7 @@ Includes extensive mathematical operations:
 ```julia
 # Create regressor
 regressor = GepRegressor(
-    2,                              # number of features
+    2;                              # number of features
     entered_features=[:x1, :x2],    # feature names
     gene_count=3,                   # genes per individual
     head_len=6                      # head length per gene
