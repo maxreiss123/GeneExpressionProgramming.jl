@@ -13,6 +13,7 @@ The repository contains an implementation of the Gene Expression Programming [1]
   ```julia
   # Min_example 
   using GeneExpressionProgramming
+  using Random
 
   Random.seed!(1)
 
@@ -45,6 +46,7 @@ The repository contains an implementation of the Gene Expression Programming [1]
  ```julia
   # Min_example 
   using GeneExpressionProgramming
+  using Random
 
   Random.seed!(1)
 
