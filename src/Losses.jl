@@ -158,18 +158,6 @@ function r2_score_floor(y_true::AbstractArray{T}, y_pred::AbstractArray{T}) wher
     
     return r2_score(y_true_scaled, y_pred_scaled)
 end
-
-
-
-function mean_squared_error(y_true::AbstractArray{T}, y_pred::AbstractArray{T}) where T<:AbstractFloat
-        d::T = zero(T)
-        @assert length(y_true) == length(y_pred)
-        @fastmath @inbounds @simd for i in eachindex(y_true, y_pred)
-              temp = (y_true[i]-y_pred[i])
-              d += temp*temp
-        end
-        return d/length(y_true)
-end
       
 function mean_squared_error(y_true::AbstractArray{T}, y_pred::AbstractArray{T}) where T<:AbstractFloat
         d::T = zero(T)
@@ -179,8 +167,7 @@ function mean_squared_error(y_true::AbstractArray{T}, y_pred::AbstractArray{T}) 
               d += temp*temp
         end
         return d/length(y_true)
-end
-      
+end      
 
 function root_mean_squared_error(y_true::AbstractArray{T}, y_pred::AbstractArray{T}) where T<:AbstractFloat
     d::T = zero(T)
