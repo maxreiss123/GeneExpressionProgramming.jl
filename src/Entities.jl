@@ -169,7 +169,6 @@ Represents an individual solution in GEP.
 - `fitness_r2_test::AbstractFloat`: R² score on testing
 - `expression_raw::Vector{Int8}`: Raw expression
 - `dimension_homogene::Bool`: Dimensional homogeneity
-- `penalty::AbstractFloat`: Penalty value
 - `chromo_id::Int`: Chromosome identifier
 
 # Constructor
@@ -185,7 +184,6 @@ mutable struct Chromosome
     fitness_r2_test::AbstractFloat
     expression_raw::Vector{Int8}
     dimension_homogene::Bool
-    penalty::AbstractFloat
     chromo_id::Int
 
     function Chromosome(genes::Vector{Int8}, toolbox::Toolbox, compile::Bool=false)
@@ -198,7 +196,6 @@ mutable struct Chromosome
         obj.fitness_r2_test = 0.0
         obj.compiled = false
         obj.dimension_homogene = false
-        obj.penalty = 0.0
         obj.chromo_id = -1
         if compile
             compile_expression!(obj)

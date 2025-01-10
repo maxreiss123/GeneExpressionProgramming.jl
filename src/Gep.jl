@@ -93,7 +93,7 @@ const Toolbox = GepEntities.Toolbox
 """
     compute_fitness(elem::Chromosome, operators::OperatorEnum, x_data::AbstractArray{T},
         y_data::AbstractArray{T}, loss_function::Function, crash_value::T; 
-        validate::Bool=false, penalty_consideration::Real=0.0) where {T<:AbstractFloat}
+        validate::Bool=false) where {T<:AbstractFloat}
 
 Computes the fitness score for a chromosome using the specified loss function.
 
@@ -105,24 +105,22 @@ Computes the fitness score for a chromosome using the specified loss function.
 - `loss_function::Function`: The loss function used to compute fitness
 - `crash_value::T`: Default value returned if computation fails
 - `validate::Bool=false`: If true, forces recomputation of fitness even if already calculated
-- `penalty_consideration::Real=0.0`: Additional penalty term added to the fitness score
 
 # Returns
-Returns the computed fitness value (loss + penalty) or crash_value if computation fails
+Returns the computed fitness value (loss) or crash_value if computation fails
 
 # Details
 - Checks if fitness needs to be computed (if NaN or validate=true)
 - Evaluates the chromosome's compiled function on input data
-- Applies loss function and adds any penalty consideration
 - Returns crash_value if any errors occur during computation
 """
 @inline function compute_fitness(elem::Chromosome, operators::OperatorEnum, x_data::AbstractArray{T},
     y_data::AbstractArray{T}, loss_function::Function,
-    crash_value::T; validate::Bool=false, penalty_consideration::Real=0.0) where {T<:AbstractFloat}
+    crash_value::T; validate::Bool=false) where {T<:AbstractFloat}
     try
         if isnan(elem.fitness) || validate
             y_pred = elem.compiled_function(x_data, operators)
-            return loss_function(y_data, y_pred) + penalty_consideration
+            return loss_function(y_data, y_pred)
         else
             return elem.fitness
         end
@@ -296,7 +294,6 @@ function runGep(epochs::Int,
         return get_loss_function("mse")(y_pred, y_data)
     end
 
-    penalty_consideration = convert(Real,toolbox.gep_probs["penalty_consideration"])
     mating_ = toolbox.gep_probs["mating_size"]
     mating_size = Int(ceil(population_size * mating_))
     mating_size = mating_size % 2 == 0 ? mating_size : mating_size - 1
@@ -313,8 +310,7 @@ function runGep(epochs::Int,
 
         Threads.@threads for i in eachindex(population)
             if isnan(population[i].fitness)
-                population[i].fitness = compute_fitness(population[i], operators, x_data, y_data, loss_fun, typemax(T);
-                    penalty_consideration=population[i].penalty * penalty_consideration)
+                population[i].fitness = compute_fitness(population[i], operators, x_data, y_data, loss_fun, typemax(T))
             end
         end
 
@@ -351,8 +347,8 @@ function runGep(epochs::Int,
             break
         end
         
+        #ref -> done - dyn select method
         if epoch < epochs
-            #needs to be adapted for multi objective -> how to return two 
             selectedMembers = selection_mechanism(fits_representation[1:mating_size], mating_size, tourni_size)
             parents = population[selectedMembers.indices]
             perform_step!(population, parents, next_gen, toolbox, mating_size)
@@ -371,4 +367,27 @@ function runGep(epochs::Int,
     close_recorder!(recorder)
     return best, recorder.history
 end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 end

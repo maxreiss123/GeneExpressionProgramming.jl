@@ -363,7 +363,6 @@ Dictionary containing default probabilities and parameters for genetic algorithm
 - `fusion_rate`: Rate of general fusion (0.0)
 - `inversion_prob`: Probability of inversion (0.1)
 - `mating_size`: Relative size of mating pool (0.5)
-- `penalty_consideration`: Weight of penalty in fitness evaluation (0.2)
 
 These values can be adjusted to fine-tune the genetic algorithm's behavior.
 """
@@ -381,8 +380,7 @@ const GENE_COMMON_PROBS = Dict{String,AbstractFloat}(
     "inversion_prob" => 0.1,
     "reverse_insertion" => 0.05,
     "reverse_insertion_tail" => 0.05,
-    "mating_size" => 0.5,
-    "penalty_consideration" => 0.2)
+    "mating_size" => 0.5)
 
 const SymbolDict = OrderedDict{Int8,Int8}
 const CallbackDict = Dict{Int8,Function}

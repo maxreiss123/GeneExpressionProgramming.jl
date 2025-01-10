@@ -14,7 +14,7 @@ population_size = 1000
 number_features = 2
 
 x_data = randn(Float64, 100, number_features)
-y_data = @. x_data[:,1] * x_data[:,1] + x_data[:,1] * x_data[:,2] - 2 * x_data[:,1] * x_data[:,2]
+y_data = @. x_data[:,1] * x_data[:,1] + x_data[:,1] * x_data[:,2] - 2 * x_data[:,2] * x_data[:,2]
 
 #define the 
 regressor = GepRegressor(number_features)
