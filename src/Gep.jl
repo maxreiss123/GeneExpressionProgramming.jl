@@ -335,8 +335,6 @@ function runGep(epochs::Int,
             fits_representation[index] =  population[index].fitness
         end
 
-        best_r = compute_fitness(population[1], operators, x_data, y_data,
-            get_loss_function("r2_score"), zero(T); validate=true)
         val_loss = compute_fitness(population[1], operators, x_data_test, y_data_test, loss_fun, typemax(T); validate=true)
         record!(recorder, epoch, fits_representation[1], val_loss, fits_representation)
 
@@ -348,7 +346,7 @@ function runGep(epochs::Int,
         ])
 
 
-        if isclose(best_r, one(T))
+        if isclose(fits_representation[1], zero(T))
             break
         end
 
