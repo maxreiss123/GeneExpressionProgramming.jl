@@ -6,7 +6,7 @@ include("../src/Util.jl")
 using .SBPUtils
 using Random
 using OrderedCollections
-
+Random.seed!(1)
 
 function create_token_lib_test()
     physical_dimension_dict = OrderedDict{Int8, Vector{Float16}}(
@@ -52,7 +52,7 @@ end
         features = Int8[7, 8]  # x1, x2
         functions = Int8[1, 2, 3, 4, 5, 6]  # mul, div, add, sub, sqr, sin
         constants = Int8[]
-        lib = create_lib(token_lib, features, functions, constants; rounds=2, max_permutations=10000)
+        lib = create_lib(token_lib, features, functions, constants; rounds=8, max_permutations=10000)
         total_len_lib = sum(length(entry) for entry in values(lib))
         @show ("Lib Entries:" , total_len_lib)
         @test !isempty(lib)
@@ -106,7 +106,7 @@ end
         features = Int8[7, 8]  # x1, x2
         functions = Int8[1, 2, 3, 4, 5, 6]  # mul, div, add, sub, sqr, sin
         constants = Int8[]
-        lib = create_lib(token_lib, features, functions, constants; rounds=6, max_permutations=10000)
+        lib = create_lib(token_lib, features, functions, constants; rounds=8, max_permutations=100000)
         point_operations = Int8[1,2]
         inverse_operation = Dict{Int8, Function}(
             1 =>  (mul_unit_backward),

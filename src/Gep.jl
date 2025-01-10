@@ -284,7 +284,8 @@ function runGep(epochs::Int,
     correction_amount::Real=0.6,
     tourni_size::Int=3,
     opt_method_const::Symbol=:cg,
-    optimisation_epochs::Int=500) where {T<:AbstractFloat}
+    optimisation_epochs::Int=500,
+    selection_mechanism::Function=basic_tournament_selection) where {T<:AbstractFloat}
 
     loss_fun = typeof(loss_fun_) == String ? get_loss_function(loss_fun_) : loss_fun_
 
@@ -349,10 +350,11 @@ function runGep(epochs::Int,
         if isclose(fits_representation[1], zero(T))
             break
         end
-
+        
         if epoch < epochs
-            indices = basic_tournament_selection(fits_representation[1:mating_size], tourni_size, mating_size)
-            parents = population[indices]
+            #needs to be adapted for multi objective -> how to return two 
+            selectedMembers = selection_mechanism(fits_representation[1:mating_size], mating_size, tourni_size)
+            parents = population[selectedMembers.indices]
             perform_step!(population, parents, next_gen, toolbox, mating_size)
         end
 
