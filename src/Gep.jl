@@ -57,7 +57,7 @@ See also:
 - [`GepEntities.fitness`](@ref): Fitness value access
 - [`GepEntities.set_fitness!`](@ref): Fitness value modification
 
-
+#TODO need to create different strategies for wrapping costum functions
 """
 
 module GepRegression
@@ -89,7 +89,24 @@ using Printf
 const Chromosome = GepEntities.Chromosome
 const Toolbox = GepEntities.Toolbox
 
+abstract type EvaluationStrategy{R} end
 
+struct StandardRegression{T<:AbstractFloat} <: EvaluationStrategy{T}
+    operators::OperatorEnum
+    x_data::AbstractArray{T}
+    y_data::AbstractArray{T}
+    evaluator::Function
+    crash_value::T
+end
+
+struct GenerEvaluation{R} <: EvaluationStrategy{R}
+    operators::OperatorEnum
+    evaluator::Function
+    crash_value::R
+end
+
+
+#redesign -> compute fitness should return fitness and crash, we just need to insert the chromosome
 """
     compute_fitness(elem::Chromosome, operators::OperatorEnum, x_data::AbstractArray{T},
         y_data::AbstractArray{T}, loss_function::Function, crash_value::T; 
@@ -283,21 +300,22 @@ function runGep(epochs::Int,
     tourni_size::Int=3,
     opt_method_const::Symbol=:cg,
     optimisation_epochs::Int=500,
-    selection_mechanism::Function=basic_tournament_selection) where {T<:AbstractFloat}
+    selection_mechanism::Function=basic_tournament_selection, 
+    num_objectives::Int=1) where {T<:AbstractFloat}
 
     loss_fun = typeof(loss_fun_) == String ? get_loss_function(loss_fun_) : loss_fun_
 
     recorder = HistoryRecorder(epochs, Float64)
 
     function optimizer_function(sub_tree::Node)
-        y_pred, flag = eval_tree_array(sub_tree, x_data, operators)
+        y_pred, flag = eval_tree_array(sub_tree, x_data, operators) #another form of the compute fitness
         return get_loss_function("mse")(y_pred, y_data)
     end
 
     mating_ = toolbox.gep_probs["mating_size"]
     mating_size = Int(ceil(population_size * mating_))
     mating_size = mating_size % 2 == 0 ? mating_size : mating_size - 1
-    fits_representation = Vector{T}(undef, population_size)
+    fits_representation = num_objectives == 1 ? Vector{T}(undef, population_size) : Vector{Tuple}(undef, population_size)
 
     population = generate_population(population_size, toolbox)
     next_gen = Vector{eltype(population)}(undef, mating_size)
@@ -309,12 +327,12 @@ function runGep(epochs::Int,
         perform_correction_callback!(population, epoch, correction_epochs, correction_amount, correction_callback)
 
         Threads.@threads for i in eachindex(population)
-            if isnan(population[i].fitness)
+            if isnan(mean(population[i].fitness))
                 population[i].fitness = compute_fitness(population[i], operators, x_data, y_data, loss_fun, typemax(T))
             end
         end
 
-        sort!(population, by=x -> x.fitness)
+        sort!(population, by=x -> mean(x.fitness))
 
         try
             if (prev_best == -1 || prev_best > population[1].fitness) && epoch % optimisation_epochs == 0
@@ -368,26 +386,89 @@ function runGep(epochs::Int,
     return best, recorder.history
 end
 
+#feature: has not been tested yet
+function runGepExtented(epochs::Int,
+    population_size::Int,
+    toolbox::Toolbox,
+    compute_fitness_::Function;
+    hof::Int=3,
+    correction_callback::Union{Function,Nothing}=nothing,
+    correction_epochs::Int=1,
+    correction_amount::Real=0.6,
+    tourni_size::Int=3,
+    opt_method_const::Symbol=:cg,
+    optimisation_epochs::Int=500,
+    selection_mechanism::Function=basic_tournament_selection,
+    optimizer_function::Union{Function, Nothing}=nothing)
+
+    recorder = HistoryRecorder(epochs, Float64)
+    mating_ = toolbox.gep_probs["mating_size"]
+    mating_size = Int(ceil(population_size * mating_))
+    mating_size = mating_size % 2 == 0 ? mating_size : mating_size - 1
+    fits_representation = num_objectives == 1 ? Vector{T}(undef, population_size) : Vector{Tuple}(undef, population_size)
+
+    population = generate_population(population_size, toolbox)
+    next_gen = Vector{eltype(population)}(undef, mating_size)
+    progBar = Progress(epochs; showspeed=true, desc="Training: ")
+
+    prev_best = -1
+
+    for epoch in 1:epochs
+        perform_correction_callback!(population, epoch, correction_epochs, correction_amount, correction_callback)
+
+        Threads.@threads for i in eachindex(population)
+            if isnan(population[i].fitness)
+                population[i].fitness = compute_fitness_(population[i])
+            end
+        end
+
+        sort!(population, by=x -> mean(x.fitness))
+
+        try
+            if (prev_best == -1 || prev_best > population[1].fitness) && epoch % optimisation_epochs == 0
+                eqn, result = optimize_constants!(population[1].compiled_function, optimizer_function;
+                    opt_method=opt_method_const, max_iterations=150, n_restarts=5)
+                population[1].fitness = result
+                population[1].compiled_function = eqn
+                prev_best = result
+            end
+        catch
+            @show "Ignored constant opt."
+        end
+
+        Threads.@threads for index in eachindex(population)
+            fits_representation[index] =  population[index].fitness
+        end
+
+        val_loss = compute_fitness_(population[1]; validate=true)
+        record!(recorder, epoch, fits_representation[1], val_loss, fits_representation)
 
 
+        ProgressMeter.update!(progBar, epoch, showvalues=[
+            (:epoch_, @sprintf("%.0f", epoch)),
+            (:train_loss, @sprintf("%.6e", fits_representation[1])),
+            (:validation_loss, @sprintf("%.6e", val_loss))
+        ])
 
 
+        if isclose(mean(fits_representation[1]), zero(T))
+            break
+        end
+        
+        #ref -> done - dyn select method
+        if epoch < epochs
+            selectedMembers = selection_mechanism(fits_representation[1:mating_size], mating_size, tourni_size)
+            parents = population[selectedMembers.indices]
+            perform_step!(population, parents, next_gen, toolbox, mating_size)
+        end
 
+    end
 
+    best = population[1:hof]
+    close_recorder!(recorder)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+    return best, recorder.history
+end
 
 
 end
