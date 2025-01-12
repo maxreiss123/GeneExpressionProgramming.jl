@@ -338,7 +338,7 @@ function runGep(epochs::Int,
     next_gen = Vector{eltype(population)}(undef, mating_size)
     progBar = Progress(epochs; showspeed=true, desc="Training: ")
 
-    prev_best = -1
+    prev_best = -1.0
 
     for epoch in 1:epochs
         perform_correction_callback!(population, epoch, correction_epochs, correction_amount, correction_callback)
@@ -356,7 +356,7 @@ function runGep(epochs::Int,
         end
 
         if !isnothing(evalStrategy.secOptimizer) 
-            evalStrategy.secOptimizer(population,epoch)
+            prev_best=evalStrategy.secOptimizer(population,epoch)
         end
 
         val_loss = compute_fitness(population[1], evalStrategy; validate=true)
@@ -375,7 +375,7 @@ function runGep(epochs::Int,
         end
         
         if epoch < epochs
-            selectedMembers = selection(fits_representation[1:mating_size], mating_size, tourni_size)
+            selectedMembers = selection(fits_representation, mating_size, tourni_size)
             parents = population[selectedMembers.indices]
             perform_step!(population, parents, next_gen, toolbox, mating_size)
         end

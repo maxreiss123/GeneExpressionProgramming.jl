@@ -164,6 +164,7 @@ using OrderedCollections
 
 const Toolbox = GepRegression.GepEntities.Toolbox
 const TokenDto = SBPUtils.TokenDto
+const Chromosome = GepRegression.GepEntities.Chromosome
 
 function sqr(x::Vector{T}) where {T<:AbstractFloat}
     return x .* x
@@ -566,7 +567,7 @@ mutable struct GepRegressor
     toolbox_::Toolbox
     operators_::OperatorEnum
     dimension_information_::OrderedDict{Int8,Vector{Float16}}
-    best_models_::Union{Nothing,Vector{GepRegression.GepEntities.Chromosome}}
+    best_models_::Union{Nothing,Vector{Chromosome}}
     fitness_history_::Any
     token_dto_::Union{TokenDto,Nothing}
 
@@ -674,12 +675,12 @@ Train the GEP regressor model.
 """
 function fit!(regressor::GepRegressor, epochs::Int, population_size, x_train::AbstractArray,
     y_train::AbstractArray; x_test::Union{AbstractArray,Nothing}=nothing, y_test::Union{AbstractArray,Nothing}=nothing,
-    optimization_epochs::Int=500,
+    optimization_epochs::Int=100,
     hof::Int=3, loss_fun::Union{String,Function}="mse",
     correction_epochs::Int=1, correction_amount::Real=0.05,
     tourni_size::Int=3, opt_method_const::Symbol=:cg,
     target_dimension::Union{Vector{Float16},Nothing}=nothing,
-    cycles::Int=10
+    cycles::Int=10, max_iterations::Int=150, n_starts::Int=5
 )
 
     correction_callback = if !isnothing(target_dimension)
@@ -695,13 +696,33 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size, x_train::Ab
         nothing
     end
 
+    @inline function optimizer_function_(sub_tree::Node)
+        y_pred, flag = eval_tree_array(sub_tree, x_train, regressor.operators_) 
+        return get_loss_function("mse")(y_pred, y_train)
+    end
+    
+    function optimizer_wrapper(population::Vector{Chromosome}, epoch::Int)
+        try
+            if epoch % optimization_epochs == 0 
+                eqn, result = optimize_constants!(population[1].compiled_function, optimizer_function_;
+                    opt_method=opt_method_const, max_iterations=max_iterations, n_restarts=n_starts)
+                population[1].fitness = result
+                population[1].compiled_function = eqn
+                @show "Succesful"
+            end
+        catch 
+            @show "Ignored constant opt."
+        end
+    end
+
     evalStrat=StandardRegressionStrategy{typeof(first(x_train))}(
         regressor.operators_,
         x_train,
         y_train,
         !isnothing(x_test) ? x_test : x_train,
         !isnothing(y_test) ? y_test : y_train,
-        get_loss_function(loss_fun)
+        get_loss_function(loss_fun);
+        secOptimizer=optimizer_wrapper
     )
 
     best, history = runGep(epochs,
@@ -718,32 +739,6 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size, x_train::Ab
     regressor.best_models_ = best
     regressor.fitness_history_ = history
 end
-
-
-
-"""
-optimizer modes
-function optimizer_function(sub_tree::Node)
-    y_pred, flag = eval_tree_array(sub_tree, x_data, operators) #another form of the compute fitness
-    return get_loss_function("mse")(y_pred, y_data)
-end
-"""
-
-
-"""
-    try
-        if (prev_best == -1 || prev_best > population[1].fitness) && epoch % optimisation_epochs == 0
-            eqn, result = optimize_constants!(population[1].compiled_function, optimizer_function;
-                opt_method=opt_method_const, max_iterations=150, n_restarts=5)
-            population[1].fitness = result
-            population[1].compiled_function = eqn
-            prev_best = result
-        end
-    catch
-        @show "Ignored constant opt."
-    end
-"""
-
 
 
 
