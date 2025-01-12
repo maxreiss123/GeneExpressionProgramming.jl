@@ -3,12 +3,13 @@ include("../src/GeneExpressionProgramming.jl")
 using .GeneExpressionProgramming
 using Random
 using Plots
+using BenchmarkTools
 
 Random.seed!(1)
 
 #Define the iterations for the algorithm and the population size
-epochs = 1000
-population_size = 1000
+epochs = 100
+population_size = 100000
 
 #Number of features which needs to be inserted
 number_features = 2
@@ -18,8 +19,9 @@ y_data = @. x_data[:,1] * x_data[:,1] + x_data[:,1] * x_data[:,2] - 2 * x_data[:
 
 #define the 
 regressor = GepRegressor(number_features)
-fit!(regressor, epochs, population_size, x_data', y_data; loss_fun="mse")
+@btime fit!(regressor, epochs, population_size, x_data', y_data; loss_fun="mse")
 
+"""
 pred = regressor(x_data')
 
 @show regressor.best_models_[1].compiled_function
@@ -53,3 +55,4 @@ plot!(
     label="Validation Loss",
     linewidth=2
 )
+"""

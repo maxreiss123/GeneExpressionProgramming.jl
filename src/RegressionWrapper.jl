@@ -695,27 +695,56 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size, x_train::Ab
         nothing
     end
 
-    
-    best, history = runGep(epochs,
-        population_size,
+    evalStrat=StandardRegressionStrategy{typeof(first(x_train))}(
         regressor.operators_,
         x_train,
         y_train,
-        regressor.toolbox_;
+        !isnothing(x_test) ? x_test : x_train,
+        !isnothing(y_test) ? y_test : y_train,
+        get_loss_function(loss_fun)
+    )
+
+    best, history = runGep(epochs,
+        population_size,
+        regressor.toolbox_,
+        evalStrat;
         hof=hof,
-        x_data_test=!isnothing(x_test) ? x_test : x_train,
-        y_data_test=!isnothing(y_test) ? y_test : y_train,
-        loss_fun_=loss_fun,
         correction_callback=correction_callback,
         correction_epochs=correction_epochs,
         correction_amount=correction_amount,
-        tourni_size=tourni_size,
-        opt_method_const=opt_method_const,
-        optimisation_epochs=optimization_epochs)
+        tourni_size=tourni_size
+    )
 
     regressor.best_models_ = best
     regressor.fitness_history_ = history
 end
+
+
+
+"""
+optimizer modes
+function optimizer_function(sub_tree::Node)
+    y_pred, flag = eval_tree_array(sub_tree, x_data, operators) #another form of the compute fitness
+    return get_loss_function("mse")(y_pred, y_data)
+end
+"""
+
+
+"""
+    try
+        if (prev_best == -1 || prev_best > population[1].fitness) && epoch % optimisation_epochs == 0
+            eqn, result = optimize_constants!(population[1].compiled_function, optimizer_function;
+                opt_method=opt_method_const, max_iterations=150, n_restarts=5)
+            population[1].fitness = result
+            population[1].compiled_function = eqn
+            prev_best = result
+        end
+    catch
+        @show "Ignored constant opt."
+    end
+"""
+
+
 
 
 """

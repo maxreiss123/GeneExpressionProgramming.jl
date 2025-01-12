@@ -423,7 +423,7 @@ function compile_djl_datatype(rek_string::Vector, arity_map::OrderedDict, callba
     return last(stack)
 end
 
-function retrieve_constants_from_node(node::Node)
+@inline function retrieve_constants_from_node(node::Node)
     constants = AbstractFloat[]
     for op in node
         if op isa AbstractNode && op.degree == 0 && op.constant

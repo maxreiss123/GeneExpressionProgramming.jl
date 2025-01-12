@@ -89,7 +89,7 @@ end
         (1, 2), (2, 1),
         (1, 1)
     ])
-    selected2 = selection_NSGA(pop2, 10, 0)
+    selected2 = selection(pop2)
     @test length(selected2.indices) == 15
     @test 15 in selected2.indices  # Preserve the best!! alllllways 
     @test length(selected2.fronts) == 5
@@ -100,7 +100,7 @@ end
         (1, 2, 3), (2, 3, 1), (3, 1, 2),
         (1, 3, 2), (2, 1, 3), (3, 2, 1)
     ])
-    selected3 = selection_NSGA(pop3, 5, 0)
+    selected3 = selection(pop3)
     @test length(selected3.indices) == 9
     @test 1 in selected3.indices  # The best individual should always be selected
     @test length(selected3.fronts) == 3

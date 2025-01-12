@@ -1,7 +1,7 @@
 module EvoSelection
 using LinearAlgebra
 
-export selection_NSGA, basic_tournament_selection, dominates_, fast_non_dominated_sort, calculate_fronts, determine_ranks, assign_crowding_distance
+export selection, dominates_, fast_non_dominated_sort, calculate_fronts, determine_ranks, assign_crowding_distance
 
 
 struct SelectedMembers
@@ -10,8 +10,7 @@ struct SelectedMembers
 end
 
 #Note: selection is constructed to allways return a list of indices => {just care about the data not the objects}
-
-@inline function basic_tournament_selection(population::AbstractArray{T}, number_of_winners::Int, tournament_size::Int) where {T<:Number}
+@inline function selection(population::AbstractArray{T}, number_of_winners::Int, tournament_size::Int) where {T<:Number}
     selected_indices = Vector{Int}(undef, number_of_winners)
     valid_indices_ = findall(isfinite, population)
     valid_indices = []
@@ -165,7 +164,8 @@ end
     return distances
 end
 
-@inline function selection_NSGA(population::Vector{T}, number_of_winners::Int, tournament_size::Int) where {T<:Tuple}
+
+@inline function selection(population::Vector{T}) where {T<:Tuple}
     fronts = calculate_fronts(population)
     n_fronts = length(fronts)
 
