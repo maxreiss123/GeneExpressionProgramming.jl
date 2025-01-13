@@ -583,7 +583,8 @@ mutable struct GepRegressor
         gene_count::Int=2,
         head_len::Int=10,
         preamble_syms::Vector{Symbol}=Symbol[],
-        max_permutations_lib::Int=10000, rounds::Int=4
+        max_permutations_lib::Int=10000, rounds::Int=4,
+        number_of_objectives::Int=1
     )
 
         entered_features_ = isempty(entered_features) ?
@@ -636,7 +637,7 @@ mutable struct GepRegressor
         end
 
         toolbox = GepRegression.GepEntities.Toolbox(gene_count, head_len, utilized_symbols, gene_connections_,
-            callbacks, nodes, GENE_COMMON_PROBS; preamble_syms=preamble_syms_)
+            callbacks, nodes, GENE_COMMON_PROBS; preamble_syms=preamble_syms, number_of_objectives=number_of_objectives)
 
         obj = new()
         obj.toolbox_ = toolbox
@@ -739,7 +740,6 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, x_trai
 end
 
 function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, loss_function::Function;
-    number_of_objectives::Int=1,
     optimizer_function_::Union{Function,Nothing}=nothing,
     optimization_epochs::Int=100,
     hof::Int=3,
@@ -779,7 +779,7 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, loss_f
 
     evalStrat = GenericRegressionStrategy(
         regressor.operators_,
-        number_of_objectives,
+        length(regressor.toolbox_.fitness_reset[1]),
         loss_function;
         secOptimizer=optimizer_wrapper,
         break_condition=break_condition

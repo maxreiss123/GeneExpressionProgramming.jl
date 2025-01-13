@@ -140,7 +140,12 @@ struct Toolbox
 
     function Toolbox(gene_count::Int, head_len::Int, symbols::OrderedDict{Int8,Int8}, gene_connections::Vector{Int8},
         callbacks::Dict, nodes::OrderedDict, gep_probs::Dict{String,AbstractFloat};
-        unary_prob::Real=0.1, fitness_reset::Tuple=((Inf,), (NaN,)), preamble_syms=Int8[])
+        unary_prob::Real=0.1, preamble_syms=Int8[], number_of_objectives::Int=1)
+        
+        fitness_reset= (
+            ntuple(_ -> Inf, number_of_objectives),
+            ntuple(_ -> NaN, number_of_objectives)
+        )
         gene_len = head_len * 2 + 1
         headsyms = [key for (key, arity) in symbols if arity == 2]
         unary_syms = [key for (key, arity) in symbols if arity == 1]
