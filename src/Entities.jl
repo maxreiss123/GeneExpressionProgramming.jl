@@ -90,8 +90,6 @@ include("Util.jl")
 using .GepUtils
 using OrderedCollections
 
-
-
 """
     Toolbox
 
@@ -142,7 +140,7 @@ struct Toolbox
 
     function Toolbox(gene_count::Int, head_len::Int, symbols::OrderedDict{Int8,Int8}, gene_connections::Vector{Int8},
         callbacks::Dict, nodes::OrderedDict, gep_probs::Dict{String,AbstractFloat};
-        unary_prob::Real=0.1, fitness_reset::Tuple=(Inf, NaN), preamble_syms=Int8[])
+        unary_prob::Real=0.1, fitness_reset::Tuple=((Inf,), (NaN,)), preamble_syms=Int8[])
         gene_len = head_len * 2 + 1
         headsyms = [key for (key, arity) in symbols if arity == 2]
         unary_syms = [key for (key, arity) in symbols if arity == 1]
@@ -176,12 +174,10 @@ Represents an individual solution in GEP.
 """
 mutable struct Chromosome
     genes::Vector{Int8}
-    fitness::Union{AbstractFloat,Tuple}
+    fitness::Tuple
     toolbox::Toolbox
     compiled_function::Any
     compiled::Bool
-    fitness_r2_train::AbstractFloat
-    fitness_r2_test::AbstractFloat
     expression_raw::Vector{Int8}
     dimension_homogene::Bool
     chromo_id::Int
@@ -189,11 +185,8 @@ mutable struct Chromosome
     function Chromosome(genes::Vector{Int8}, toolbox::Toolbox, compile::Bool=false)
         obj = new()
         obj.genes = genes
-
         obj.fitness = toolbox.fitness_reset[2]
         obj.toolbox = toolbox
-        obj.fitness_r2_train = 0.0
-        obj.fitness_r2_test = 0.0
         obj.compiled = false
         obj.dimension_homogene = false
         obj.chromo_id = -1

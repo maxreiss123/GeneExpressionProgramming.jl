@@ -10,9 +10,9 @@ struct SelectedMembers
 end
 
 #Note: selection is constructed to allways return a list of indices => {just care about the data not the objects}
-@inline function selection(population::AbstractArray{T}, number_of_winners::Int, tournament_size::Int) where {T<:Number}
+@inline function selection(population::AbstractArray{Tuple}, number_of_winners::Int, tournament_size::Int) 
     selected_indices = Vector{Int}(undef, number_of_winners)
-    valid_indices_ = findall(isfinite, population)
+    valid_indices_ = findall(x -> isfinite(x[1]), population)
     valid_indices = []
     doubles = Set()
     for elem in valid_indices_

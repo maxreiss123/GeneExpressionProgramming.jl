@@ -91,7 +91,7 @@ abstract type EvaluationStrategy end
 
 struct StandardRegressionStrategy{T<:AbstractFloat} <: EvaluationStrategy
     operators::OperatorEnum
-    number_of_objective::Int
+    number_of_objectives::Int
     x_data::AbstractArray{T}
     y_data::AbstractArray{T}
     x_data_test::AbstractArray{T}
@@ -130,14 +130,14 @@ end
 
 struct GenericRegressionStrategy <: EvaluationStrategy
     operators::OperatorEnum
-    number_of_objective::Int
+    number_of_objectives::Int
     loss_function::Function
     secOptimizer::Union{Function,Nothing}
     break_condition::Union{Function,Nothing}
 
-    function GenericRegressionStrategy(operators::OperatorEnum,number_of_objective::Int, loss_function::Function;
+    function GenericRegressionStrategy(operators::OperatorEnum,number_of_objectives::Int, loss_function::Function;
         secOptimizer::Union{Function,Nothing},break_condition::Union{Function,Nothing})
-        new(operators, number_of_objective, loss_function, secOptimizer, break_condition)
+        new(operators, number_of_objectives, loss_function, secOptimizer, break_condition)
     end
 end
 
@@ -169,14 +169,14 @@ Returns the computed fitness value (loss) or crash_value if computation fails
 """
 @inline function compute_fitness(elem::Chromosome,evalArgs::StandardRegressionStrategy; validate::Bool=false)
     try
-        if isnan(elem.fitness) || validate
+        if isnan(mean(elem.fitness)) || validate
             y_pred = elem.compiled_function(evalArgs.x_data, evalArgs.operators)
-            return evalArgs.loss_function(evalArgs.y_data, y_pred)
+            return (evalArgs.loss_function(evalArgs.y_data, y_pred),)
         else
-            return elem.fitness
+            return (elem.fitness,)
         end
     catch e
-        return evalArgs.crash_value
+        return (evalArgs.crash_value,)
     end
 end
 
@@ -323,22 +323,21 @@ function runGep(epochs::Int,
     correction_callback::Union{Function,Nothing}=nothing,
     correction_epochs::Int=1,
     correction_amount::Real=0.6,
-    tourni_size::Int=3)
-    recorder = HistoryRecorder(epochs, Float64)
+    tourni_size::Int=3,
+    optimization_epochs::Int=500)
 
-
+    recorder = HistoryRecorder(epochs, Tuple)
     mating_ = toolbox.gep_probs["mating_size"]
     mating_size = Int(ceil(population_size * mating_))
     mating_size = mating_size % 2 == 0 ? mating_size : mating_size - 1
-    fits_representation = evalStrategy.number_of_objective == 1 ? Vector{eltype(
-        Float64
-    )}(undef, population_size) : Vector{Tuple}(undef, population_size)
-
+    fits_representation = Vector{Tuple}(undef, population_size)
+    
+    
     population = generate_population(population_size, toolbox)
     next_gen = Vector{eltype(population)}(undef, mating_size)
     progBar = Progress(epochs; showspeed=true, desc="Training: ")
 
-    prev_best = -1.0
+    prev_best = (typemax(Float64),)
 
     for epoch in 1:epochs
         perform_correction_callback!(population, epoch, correction_epochs, correction_amount, correction_callback)
@@ -355,8 +354,10 @@ function runGep(epochs::Int,
             fits_representation[index] =  population[index].fitness
         end
 
-        if !isnothing(evalStrategy.secOptimizer) 
-            prev_best=evalStrategy.secOptimizer(population,epoch)
+        if !isnothing(evalStrategy.secOptimizer) && epochs % optimization_epochs == 0 && population[1].fitness<prev_best
+            evalStrategy.secOptimizer(population)
+            fits_representation[1] = population[1].fitness
+            prev_best = fits_representation[1]
         end
 
         val_loss = compute_fitness(population[1], evalStrategy; validate=true)
@@ -365,8 +366,8 @@ function runGep(epochs::Int,
 
         ProgressMeter.update!(progBar, epoch, showvalues=[
             (:epoch_, @sprintf("%.0f", epoch)),
-            (:train_loss, @sprintf("%.6e", fits_representation[1])),
-            (:validation_loss, @sprintf("%.6e", val_loss))
+            (:train_loss, @sprintf("%.6e", mean(fits_representation[1]))),
+            (:validation_loss, @sprintf("%.6e", mean(val_loss)))
         ])
 
 

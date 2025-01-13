@@ -108,13 +108,13 @@ using Random
 using Base.Threads: @spawn
 
 
-struct OptimizationHistory{T<:AbstractFloat}
+struct OptimizationHistory{T<:Union{AbstractFloat,Tuple}}
     train_loss::Vector{T}
     val_loss::Vector{T}
     train_mean::Vector{T}
     train_std::Vector{T}
 
-    function OptimizationHistory(epochs::Int, ::Type{T}) where {T<:AbstractFloat}
+    function OptimizationHistory(epochs::Int, ::Type{T}) where {T<:Union{AbstractFloat,Tuple}}
         return new{T}(
             Vector{T}(undef, epochs),
             Vector{T}(undef, epochs),
@@ -242,12 +242,12 @@ final_history = recorder.history
 - Supports any AbstractFloat type
 - Channel depth can be adjusted for different recording patterns
 """
-struct HistoryRecorder{T<:AbstractFloat}
+struct HistoryRecorder{T<:Union{AbstractFloat,Tuple}}
     channel::Channel{Tuple{Int,T,T,Vector{T}}}
     task::Task
     history::OptimizationHistory{T}
 
-    function HistoryRecorder(epochs::Int, ::Type{T}; buffer_size::Int=32) where {T<:AbstractFloat}
+    function HistoryRecorder(epochs::Int, ::Type{T}; buffer_size::Int=32) where {T<:Union{AbstractFloat,Tuple}}
         history = OptimizationHistory(epochs, T)
         channel = Channel{Tuple{Int,T,T,Vector{T}}}(buffer_size)
         task = @spawn record_history!(channel, history)
@@ -255,17 +255,37 @@ struct HistoryRecorder{T<:AbstractFloat}
     end
 end
 
+
+@inline function tuple_agg(entries::Vector{T}, fun::Function) where {T<:Tuple}
+    isempty(entries) && return entries[1] 
+    N = length(first(entries))
+    L = length(entries)
+    
+    vectors = tuple(i -> Vector{Float64}(undef, L), N)
+    
+    for (j, entry) in enumerate(entries)
+        try
+        for i in 1:length(entry)
+            vectors[i][j] = entry[i]
+        end
+        catch
+        
+        end
+    end
+    return tuple(i -> fun(vectors[i]), N)
+end
+
 # Usage in record_history!
 @inline function record_history!(
     channel::Channel{Tuple{Int,T,T,Vector{T}}},
     history::OptimizationHistory{T}
-) where {T<:AbstractFloat}
+) where {T<:Union{AbstractFloat,Tuple}}
     for (epoch, train_loss, val_loss, fit_vector) in channel
         @inbounds begin
-            history.train_loss[epoch] = train_loss
-            history.val_loss[epoch] = val_loss
-            history.train_mean[epoch] = mean(fit_vector)
-            history.train_std[epoch] = std(fit_vector)
+           history.train_loss[epoch] = train_loss
+           history.val_loss[epoch] = val_loss
+           #history.train_mean[epoch] = tuple_agg(fit_vector,mean)
+           #history.train_std[epoch] = tuple_agg(fit_vector, std)
         end
     end
 end
@@ -276,10 +296,9 @@ end
     train_loss::T,
     val_loss::T,
     fit_vector::Vector{T}
-) where {T<:AbstractFloat}
+) where {T<:Union{AbstractFloat,Tuple}}
     put!(recorder.channel, (epoch, train_loss, val_loss, fit_vector))
 end
-
 
 @inline function close_recorder!(recorder::HistoryRecorder)
     close(recorder.channel)

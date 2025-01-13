@@ -137,10 +137,10 @@ export create_function_entries, create_feature_entries, create_constants_entries
 export GENE_COMMON_PROBS, FUNCTION_LIB_BACKWARD_COMMON, FUNCTION_LIB_FORWARD_COMMON, FUNCTION_LIB_COMMON
 export fit!
 
-export list_all_functions, list_all_arity, list_all_forward_handlers, 
-       list_all_backward_handlers, list_all_genetic_params,
-       set_function!, set_arity!, set_forward_handler!, set_backward_handler!,
-       update_function!
+export list_all_functions, list_all_arity, list_all_forward_handlers,
+    list_all_backward_handlers, list_all_genetic_params,
+    set_function!, set_arity!, set_forward_handler!, set_backward_handler!,
+    update_function!
 
 include("Entities.jl")
 include("Gep.jl")
@@ -673,7 +673,7 @@ Train the GEP regressor model.
 - `opt_method_const::Symbol=:cg`: Optimization method for constants
 - `target_dimension::Union{Vector{Float16},Nothing}=nothing`: Target physical dimension
 """
-function fit!(regressor::GepRegressor, epochs::Int, population_size, x_train::AbstractArray,
+function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, x_train::AbstractArray,
     y_train::AbstractArray; x_test::Union{AbstractArray,Nothing}=nothing, y_test::Union{AbstractArray,Nothing}=nothing,
     optimization_epochs::Int=100,
     hof::Int=3, loss_fun::Union{String,Function}="mse",
@@ -697,25 +697,22 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size, x_train::Ab
     end
 
     @inline function optimizer_function_(sub_tree::Node)
-        y_pred, flag = eval_tree_array(sub_tree, x_train, regressor.operators_) 
+        y_pred, flag = eval_tree_array(sub_tree, x_train, regressor.operators_)
         return get_loss_function("mse")(y_pred, y_train)
     end
-    
-    function optimizer_wrapper(population::Vector{Chromosome}, epoch::Int)
+
+    function optimizer_wrapper(population::Vector{Chromosome})
         try
-            if epoch % optimization_epochs == 0 
-                eqn, result = optimize_constants!(population[1].compiled_function, optimizer_function_;
-                    opt_method=opt_method_const, max_iterations=max_iterations, n_restarts=n_starts)
-                population[1].fitness = result
-                population[1].compiled_function = eqn
-                @show "Succesful"
-            end
-        catch 
+            eqn, result = optimize_constants!(population[1].compiled_function, optimizer_function_;
+                opt_method=opt_method_const, max_iterations=max_iterations, n_restarts=n_starts)
+            population[1].fitness = (result,)
+            population[1].compiled_function = eqn
+        catch
             @show "Ignored constant opt."
         end
     end
 
-    evalStrat=StandardRegressionStrategy{typeof(first(x_train))}(
+    evalStrat = StandardRegressionStrategy{typeof(first(x_train))}(
         regressor.operators_,
         x_train,
         y_train,
@@ -733,7 +730,71 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size, x_train::Ab
         correction_callback=correction_callback,
         correction_epochs=correction_epochs,
         correction_amount=correction_amount,
-        tourni_size=tourni_size
+        tourni_size=tourni_size,
+        optimization_epochs=optimization_epochs
+    )
+
+    regressor.best_models_ = best
+    regressor.fitness_history_ = history
+end
+
+function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, loss_function::Function;
+    number_of_objectives::Int=1,
+    optimizer_function_::Union{Function,Nothing}=nothing,
+    optimization_epochs::Int=100,
+    hof::Int=3,
+    correction_epochs::Int=1, 
+    correction_amount::Real=0.05,
+    tourni_size::Int=3, 
+    opt_method_const::Symbol=:cg,
+    target_dimension::Union{Vector{Float16},Nothing}=nothing,
+    cycles::Int=10, max_iterations::Int=150, n_starts::Int=5,
+    break_condition::Union{Function,Nothing}=nothing
+)
+
+    correction_callback = if !isnothing(target_dimension)
+        (genes, start_indices, expression) -> correct_genes!(
+            genes,
+            start_indices,
+            expression,
+            target_dimension,
+            regressor.token_dto_;
+            cycles=cycles
+        )
+    else
+        nothing
+    end
+
+
+    function optimizer_wrapper(population::Vector{Chromosome})
+        try
+            eqn, result = optimize_constants!(population[1].compiled_function, optimizer_function_;
+                opt_method=opt_method_const, max_iterations=max_iterations, n_restarts=n_starts)
+            population[1].fitness = result
+            population[1].compiled_function = eqn
+        catch
+            @show "Ignored constant opt."
+        end
+    end
+
+    evalStrat = GenericRegressionStrategy(
+        regressor.operators_,
+        number_of_objectives,
+        loss_function;
+        secOptimizer=optimizer_wrapper,
+        break_condition=break_condition
+    )
+
+    best, history = runGep(epochs,
+        population_size,
+        regressor.toolbox_,
+        evalStrat;
+        hof=hof,
+        correction_callback=correction_callback,
+        correction_epochs=correction_epochs,
+        correction_amount=correction_amount,
+        tourni_size=tourni_size,
+        optimization_epochs=optimization_epochs
     )
 
     regressor.best_models_ = best
@@ -783,10 +844,10 @@ println(sin_info.arity)  # 1
 """
 function list_all_functions()
     return Dict(sym => (
-        function_ = _FUNCTION_LIB_COMMON[sym],
-        arity = _ARITY_LIB_COMMON[sym],
-        forward_handler = _FUNCTION_LIB_FORWARD_COMMON[sym],
-        backward_handler = _FUNCTION_LIB_BACKWARD_COMMON[sym]
+        function_=_FUNCTION_LIB_COMMON[sym],
+        arity=_ARITY_LIB_COMMON[sym],
+        forward_handler=_FUNCTION_LIB_FORWARD_COMMON[sym],
+        backward_handler=_FUNCTION_LIB_BACKWARD_COMMON[sym]
     ) for sym in keys(_FUNCTION_LIB_COMMON))
 end
 
@@ -984,13 +1045,13 @@ update_function!(:custom_func,
 # Throws
 - ArgumentError if the function symbol doesn't exist or parameters are invalid
 """
-function update_function!(sym::Symbol; 
-                         func::Union{Function,Nothing}=nothing,
-                         arity::Union{Int8,Nothing}=nothing,
-                         forward_handler::Union{Function,Nothing}=nothing,
-                         backward_handler::Union{Function,Nothing}=nothing)
+function update_function!(sym::Symbol;
+    func::Union{Function,Nothing}=nothing,
+    arity::Union{Int8,Nothing}=nothing,
+    forward_handler::Union{Function,Nothing}=nothing,
+    backward_handler::Union{Function,Nothing}=nothing)
     haskey(_FUNCTION_LIB_COMMON, sym) || throw(ArgumentError("Function $sym not found in library"))
-    
+
     if !isnothing(func)
         set_function!(sym, func)
     end
@@ -1003,7 +1064,7 @@ function update_function!(sym::Symbol;
     if !isnothing(backward_handler)
         set_backward_handler!(sym, backward_handler)
     end
-    
+
     return nothing
 end
 

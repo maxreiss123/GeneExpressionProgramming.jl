@@ -91,7 +91,7 @@ include("RegressionWrapper.jl")
 export GepEntities, LossFunction, PhysicalConstants, GepUtils, GepRegression, RegressionWrapper
 
 using .GepRegression
-export runGep
+export runGep, EvaluationStrategy, StandardRegressionStrategy, GenericRegressionStrategy
 
 using .LossFunction
 export get_loss_function
@@ -104,7 +104,7 @@ export HistoryRecorder, OptimizationHistory, get_history_arrays
 export train_test_split
 
 using .EvoSelection
-export selection_NSGA, basic_tournament_selection, dominates_, fast_non_dominated_sort, calculate_fronts, determine_ranks, assign_crowding_distance
+export selection, dominates_, fast_non_dominated_sort, calculate_fronts, determine_ranks, assign_crowding_distance
 
 
 using .PhysicalConstants
