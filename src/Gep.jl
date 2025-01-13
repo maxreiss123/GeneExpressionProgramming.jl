@@ -344,8 +344,8 @@ function runGep(epochs::Int,
         perform_correction_callback!(population, epoch, correction_epochs, correction_amount, correction_callback)
 
         Threads.@threads for i in eachindex(population)
-            cache_value = get(fit_cache, population[i].expression_raw, nothing)
             if isnan(mean(population[i].fitness)) 
+                cache_value = get(fit_cache, population[i].expression_raw, nothing)
                 if isnothing(cache_value)
                     population[i].fitness = compute_fitness(population[i], evalStrategy)
                     lock(cache_lock)
@@ -353,7 +353,6 @@ function runGep(epochs::Int,
                     unlock(cache_lock)
                 else
                     population[i].fitness = cache_value
-                    same+=1
                 end
             end
         end
