@@ -236,6 +236,7 @@ function compile_expression!(chromosome::Chromosome; force_compile::Bool=false)
             chromosome.compiled = true
         catch 
             chromosome.fitness = chromosome.toolbox.fitness_reset[1]
+            chromosome.expression_raw = expression
         end
     end
 end
@@ -332,7 +333,6 @@ function _karva_raw(chromosome::Chromosome)
 
     return vcat(rolled_indices...)
 end
-
 
 """
     generate_gene(headsyms::Vector{Int8}, tailsyms::Vector{Int8}, headlen::Int; 

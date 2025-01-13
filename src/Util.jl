@@ -261,21 +261,16 @@ end
     N = length(first(entries))
     L = length(entries)
     
-    vectors = tuple(i -> Vector{Float64}(undef, L), N)
+    vectors = ntuple(i -> Vector{Float64}(undef, L), N)
     
     for (j, entry) in enumerate(entries)
-        try
         for i in 1:length(entry)
             vectors[i][j] = entry[i]
-        end
-        catch
-        
         end
     end
     return tuple(i -> fun(vectors[i]), N)
 end
 
-# Usage in record_history!
 @inline function record_history!(
     channel::Channel{Tuple{Int,T,T,Vector{T}}},
     history::OptimizationHistory{T}

@@ -83,6 +83,7 @@ using OrderedCollections
 using DynamicExpressions
 using Logging
 using Printf
+using Base.Threads: SpinLock
 
 const Chromosome = GepEntities.Chromosome
 const Toolbox = GepEntities.Toolbox
@@ -111,19 +112,19 @@ struct StandardRegressionStrategy{T<:AbstractFloat} <: EvaluationStrategy
         secOptimizer::Union{Function,Nothing}=nothing,
         break_condition::Union{Function,Nothing}=nothing,
         penalty::T=zero(T),
-        crash_value::T=typemax(T)) where T<:AbstractFloat
-        new(operators, 
+        crash_value::T=typemax(T)) where {T<:AbstractFloat}
+        new(operators,
             1,
-            x_data, 
-            y_data, 
-            x_data_test, 
+            x_data,
+            y_data,
+            x_data_test,
             y_data_test,
             loss_function,
             secOptimizer,
             break_condition,
             penalty,
             crash_value
-            )
+        )
     end
 
 end
@@ -135,8 +136,8 @@ struct GenericRegressionStrategy <: EvaluationStrategy
     secOptimizer::Union{Function,Nothing}
     break_condition::Union{Function,Nothing}
 
-    function GenericRegressionStrategy(operators::OperatorEnum,number_of_objectives::Int, loss_function::Function;
-        secOptimizer::Union{Function,Nothing},break_condition::Union{Function,Nothing})
+    function GenericRegressionStrategy(operators::OperatorEnum, number_of_objectives::Int, loss_function::Function;
+        secOptimizer::Union{Function,Nothing}, break_condition::Union{Function,Nothing})
         new(operators, number_of_objectives, loss_function, secOptimizer, break_condition)
     end
 end
@@ -167,7 +168,7 @@ Returns the computed fitness value (loss) or crash_value if computation fails
 - Evaluates the chromosome's compiled function on input data
 - Returns crash_value if any errors occur during computation
 """
-@inline function compute_fitness(elem::Chromosome,evalArgs::StandardRegressionStrategy; validate::Bool=false)
+@inline function compute_fitness(elem::Chromosome, evalArgs::StandardRegressionStrategy; validate::Bool=false)
     try
         if isnan(mean(elem.fitness)) || validate
             y_pred = elem.compiled_function(evalArgs.x_data, evalArgs.operators)
@@ -180,7 +181,7 @@ Returns the computed fitness value (loss) or crash_value if computation fails
     end
 end
 
-@inline function compute_fitness(elem::Chromosome, evalArgs::GenericRegressionStrategy; validate::Bool=false) 
+@inline function compute_fitness(elem::Chromosome, evalArgs::GenericRegressionStrategy; validate::Bool=false)
     return evalArgs.loss_function(elem, validate)
 end
 
@@ -254,13 +255,13 @@ Applies correction operations to ensure dimensional homogeneity in chromosomes.
 
     if !isnothing(correction_callback) && epoch % correction_epochs == 0
         pop_amount = Int(ceil(length(population) * correction_amount))
-        Threads.@threads  for i in 1:pop_amount
+        Threads.@threads for i in 1:pop_amount
             if !(population[i].dimension_homogene) && population[i].compiled
                 distance, correction = correction_callback(population[i].genes, population[i].toolbox.gen_start_indices,
                     population[i].expression_raw)
                 if correction
                     compile_expression!(population[i]; force_compile=true)
-                    population[i].dimension_homogene = true 
+                    population[i].dimension_homogene = true
                 else
                     population[i].fitness += distance
                 end
@@ -331,30 +332,38 @@ function runGep(epochs::Int,
     mating_size = Int(ceil(population_size * mating_))
     mating_size = mating_size % 2 == 0 ? mating_size : mating_size - 1
     fits_representation = Vector{Tuple}(undef, population_size)
-    
-    
+    fit_cache = Dict{Vector{Int8},Tuple}()
+    cache_lock = SpinLock()
+
     population = generate_population(population_size, toolbox)
     next_gen = Vector{eltype(population)}(undef, mating_size)
     progBar = Progress(epochs; showspeed=true, desc="Training: ")
 
     prev_best = (typemax(Float64),)
-
     for epoch in 1:epochs
         perform_correction_callback!(population, epoch, correction_epochs, correction_amount, correction_callback)
 
         Threads.@threads for i in eachindex(population)
-            if isnan(mean(population[i].fitness))
-                population[i].fitness = compute_fitness(population[i],evalStrategy)
+            cache_value = get(fit_cache, population[i].expression_raw, nothing)
+            if isnan(mean(population[i].fitness)) 
+                if isnothing(cache_value)
+                    population[i].fitness = compute_fitness(population[i], evalStrategy)
+                    lock(cache_lock)
+                        fit_cache[population[i].expression_raw] = population[i].fitness
+                    unlock(cache_lock)
+                else
+                    population[i].fitness = cache_value
+                    same+=1
+                end
             end
         end
-
         sort!(population, by=x -> mean(x.fitness))
-    
+
         Threads.@threads for index in eachindex(population)
-            fits_representation[index] =  population[index].fitness
+            fits_representation[index] = population[index].fitness
         end
 
-        if !isnothing(evalStrategy.secOptimizer) && epochs % optimization_epochs == 0 && population[1].fitness<prev_best
+        if !isnothing(evalStrategy.secOptimizer) && epochs % optimization_epochs == 0 && population[1].fitness < prev_best
             evalStrategy.secOptimizer(population)
             fits_representation[1] = population[1].fitness
             prev_best = fits_representation[1]
@@ -374,7 +383,7 @@ function runGep(epochs::Int,
         if !isnothing(evalStrategy.break_condition) && evalStrategy.break_condition(population, epoch)
             break
         end
-        
+
         if epoch < epochs
             selectedMembers = selection(fits_representation, mating_size, tourni_size)
             parents = population[selectedMembers.indices]

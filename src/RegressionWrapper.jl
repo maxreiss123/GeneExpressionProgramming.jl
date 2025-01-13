@@ -772,7 +772,7 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, loss_f
                 opt_method=opt_method_const, max_iterations=max_iterations, n_restarts=n_starts)
             population[1].fitness = result
             population[1].compiled_function = eqn
-        catch
+        catch e
             @show "Ignored constant opt."
         end
     end
@@ -781,7 +781,7 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, loss_f
         regressor.operators_,
         length(regressor.toolbox_.fitness_reset[1]),
         loss_function;
-        secOptimizer=optimizer_wrapper,
+        secOptimizer=nothing,
         break_condition=break_condition
     )
 
