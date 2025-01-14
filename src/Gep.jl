@@ -84,6 +84,7 @@ using DynamicExpressions
 using Logging
 using Printf
 using Base.Threads: SpinLock
+using .Threads
 
 const Chromosome = GepEntities.Chromosome
 const Toolbox = GepEntities.Toolbox
@@ -338,9 +339,9 @@ function runGep(epochs::Int,
     population = generate_population(population_size, toolbox)
     next_gen = Vector{eltype(population)}(undef, mating_size)
     progBar = Progress(epochs; showspeed=true, desc="Training: ")
-
     prev_best = (typemax(Float64),)
     for epoch in 1:epochs
+        same = Atomic{Int}(0)
         perform_correction_callback!(population, epoch, correction_epochs, correction_amount, correction_callback)
 
         Threads.@threads for i in eachindex(population)
@@ -352,12 +353,12 @@ function runGep(epochs::Int,
                         fit_cache[population[i].expression_raw] = population[i].fitness
                     unlock(cache_lock)
                 else
+                    atomic_add!(same, 1)
                     population[i].fitness = cache_value
                 end
             end
         end
         sort!(population, by=x -> mean(x.fitness))
-
         Threads.@threads for index in eachindex(population)
             fits_representation[index] = population[index].fitness
         end
@@ -374,6 +375,7 @@ function runGep(epochs::Int,
 
         ProgressMeter.update!(progBar, epoch, showvalues=[
             (:epoch_, @sprintf("%.0f", epoch)),
+            (:duplicates_per_epoch, @sprintf("%.0f", same[])),
             (:train_loss, @sprintf("%.6e", mean(fits_representation[1]))),
             (:validation_loss, @sprintf("%.6e", mean(val_loss)))
         ])

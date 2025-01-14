@@ -8,13 +8,13 @@ using BenchmarkTools
 Random.seed!(1)
 
 #Define the iterations for the algorithm and the population size
-epochs = 100
-population_size = 100000
+epochs = 1000
+population_size = 1500
 
 #Number of features which needs to be inserted
 number_features = 2
 
-x_data = randn(Float64, 100, number_features)
+x_data = randn(Float64, 10000, number_features)
 y_data = @. x_data[:,1] * x_data[:,1] + x_data[:,1] * x_data[:,2] - 2 * x_data[:,2] * x_data[:,2]
 
 #define the 

@@ -195,6 +195,7 @@ mutable struct Chromosome
         obj.compiled = false
         obj.dimension_homogene = false
         obj.chromo_id = -1
+        obj.expression_raw = Int8[]
         if compile
             compile_expression!(obj)
         end
@@ -236,7 +237,6 @@ function compile_expression!(chromosome::Chromosome; force_compile::Bool=false)
             chromosome.compiled = true
         catch 
             chromosome.fitness = chromosome.toolbox.fitness_reset[1]
-            chromosome.expression_raw = expression
         end
     end
 end
