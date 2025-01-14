@@ -9,6 +9,17 @@ using Random
 using Logging
 using Dates
 using JSON
+using Statistics
+
+
+function loss_new(eqn::Node, operators::OperatorEnum, x_data::AbstractArray, y_data::AbstractArray)
+    try
+        y_pred = eqn(x_data, operators)
+        return get_loss_function("r2_score")(y_data, y_pred)
+    catch e
+        return zero(Float64)
+    end
+end
 
 
 function setup_logger(log_file_path::String)
@@ -73,7 +84,7 @@ function main()
             if case_name in keys(case_data)
                 @show ("Current case: ", case_name)
                 #gep_params
-                epochs = 1000
+                epochs = 100
                 population_size = 1500
 
                 results = DataFrame(Seed=[],
@@ -88,7 +99,7 @@ function main()
                 println(feature_names)
                 println(case_name)
                 phy_dims = get_feature_dims_json(case_data, feature_names, case_name)
-                phy_dims = Dict{Symbol, Vector{Float16}}( Symbol(x_n) => dim_n for (x_n, dim_n) in phy_dims)
+                phy_dims = Dict{Symbol,Vector{Float16}}(Symbol(x_n) => dim_n for (x_n, dim_n) in phy_dims)
                 target_dim = get_target_dim_json(case_data, case_name)
 
                 print(phy_dims)
@@ -104,23 +115,26 @@ function main()
 
                 start_time = time_ns()
 
-                regressor = GepRegressor(num_cols-1;
+                regressor = GepRegressor(num_cols - 1;
                     considered_dimensions=phy_dims,
                     entered_non_terminals=[:+, :-, :*, :/, :sqrt, :sin, :cos, :exp, :log],
                     max_permutations_lib=10000, rounds=7)
 
                 #perform the regression by entering epochs, population_size, the feature cols, the target col and the loss function
                 fit!(regressor, epochs, population_size, x_train', y_train;
-                    x_test=x_test', y_test=y_test',
+                    x_test=x_test', y_test=y_test,
                     loss_fun="mse", target_dimension=target_dim)
 
                 end_time = (time_ns() - start_time) / 1e9
                 elem = regressor.best_models_[1]
-                #log_results
-                push!(results, (seed, case_name, noise_level, elem.fitness, string(elem.compiled_function),
-                    elem.fitness_r2_train, elem.fitness_r2_test, end_time, elem.dimension_homogene, target_dim))
+                fitness_r2_train = loss_new(elem.compiled_function, regressor.operators_, x_train', y_train)
+                fitness_r2_test = loss_new(elem.compiled_function, regressor.operators_, x_test', y_test)
 
-                @show elem.fitness_r2_test
+                #log_results
+                push!(results, (seed, case_name, noise_level, mean(elem.fitness), string(elem.compiled_function),
+                    fitness_r2_train, fitness_r2_test, end_time, elem.dimension_homogene, target_dim))
+
+                @show fitness_r2_test
                 save_results_to_csv(file_name_save, results)
             end
         end
