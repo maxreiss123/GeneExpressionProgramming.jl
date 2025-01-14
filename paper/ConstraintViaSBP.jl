@@ -118,12 +118,23 @@ function main()
                 regressor = GepRegressor(num_cols - 1;
                     considered_dimensions=phy_dims,
                     entered_non_terminals=[:+, :-, :*, :/, :sqrt, :sin, :cos, :exp, :log],
-                    max_permutations_lib=10000, rounds=7)
+                    max_permutations_lib=10000, rounds=7,number_of_objectives=2)
+
+                @inline function loss_new_(elem, validate::Bool)
+                    try
+                        if isnan(mean(elem.fitness)) || validate
+                            y_pred = elem.compiled_function(x_train', regressor.operators_)
+                            return (get_loss_function("mse")(y_train, y_pred), length(elem.expression_raw) * 0.01)
+                        else
+                            return (elem.fitness, length(elem.expression_raw) * elem.fitness)
+                        end
+                    catch e
+                        return (typemax(Float64), typemax(Float64))
+                    end
+                end
 
                 #perform the regression by entering epochs, population_size, the feature cols, the target col and the loss function
-                fit!(regressor, epochs, population_size, x_train', y_train;
-                    x_test=x_test', y_test=y_test,
-                    loss_fun="mse", target_dimension=target_dim)
+                fit!(regressor, epochs, population_size, loss_new_; target_dimension=target_dim)
 
                 end_time = (time_ns() - start_time) / 1e9
                 elem = regressor.best_models_[1]
