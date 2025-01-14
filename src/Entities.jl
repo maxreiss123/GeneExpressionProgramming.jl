@@ -263,7 +263,7 @@ Set chromosome's fitness value.
 - `chromosome::Chromosome`: Target chromosome
 - `value::AbstractFloat`: New fitness value
 """
-function set_fitness!(chromosome::Chromosome, value::AbstractFloat)
+function set_fitness!(chromosome::Chromosome, value::Tuple)
     chromosome.fitness = value
 end
 

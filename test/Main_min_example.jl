@@ -7,8 +7,8 @@ using Plots
 Random.seed!(1)
 
 #Define the iterations for the algorithm and the population size
-epochs = 1000
-population_size = 1000
+epochs = 100
+population_size = 100
 
 #Number of features which needs to be inserted
 number_features = 2
@@ -41,7 +41,7 @@ color=:red)
 
 #train loss vs validation loss
 train_validation = plot(
-    regressor.fitness_history_.train_loss,
+    [x[1] for x in regressor.fitness_history_.train_loss],
     label="Training Loss",
     ylabel="Loss",
     xlabel="Epoch",
@@ -50,7 +50,7 @@ train_validation = plot(
 
 plot!(
     train_validation,
-    regressor.fitness_history_.val_loss,
+    [x[1] for x in regressor.fitness_history_.val_loss],
     label="Validation Loss",
     linewidth=2
 )

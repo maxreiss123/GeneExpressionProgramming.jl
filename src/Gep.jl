@@ -386,7 +386,12 @@ function runGep(epochs::Int,
         end
 
         if epoch < epochs
-            selectedMembers = selection(fits_representation, mating_size, tourni_size)
+            if length(fits_representation[1]) == 1
+                selectedMembers = tournament_selection(fits_representation, mating_size, tourni_size)
+            else
+                selectedMembers = nsga_selection(fits_representation)
+            end
+
             parents = population[selectedMembers.indices]
             perform_step!(population, parents, next_gen, toolbox, mating_size)
         end

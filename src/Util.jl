@@ -542,7 +542,7 @@ See also: [`DynamicExpressions.Node`](@ref), [`Optim.optimize`](@ref), [`LineSea
     n_restarts::Int=3
 )
 
-    nconst = count_constants(node)
+    nconst = count_constant_nodes(node)
 
     if nconst == 0
         return node, 0.0

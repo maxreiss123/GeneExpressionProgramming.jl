@@ -104,7 +104,7 @@ export HistoryRecorder, OptimizationHistory, get_history_arrays
 export train_test_split
 
 using .EvoSelection
-export selection, dominates_, fast_non_dominated_sort, calculate_fronts, determine_ranks, assign_crowding_distance
+export tournament_selection, nsga_selection, dominates_, fast_non_dominated_sort, calculate_fronts, determine_ranks, assign_crowding_distance
 
 
 using .PhysicalConstants

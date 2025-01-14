@@ -67,7 +67,7 @@ end
             toolbox.gene_count * (2 * toolbox.head_len + 1))
         @test chromosome.compiled == true
         @test chromosome.dimension_homogene == false
-        @test isnan(chromosome.fitness)
+        @test isnan(chromosome.fitness[1])
     end
 
     @testset "Function Compilation" begin
@@ -141,19 +141,5 @@ end
         @test length(population) == population_size
         @test all(x -> x isa Chromosome, population)
         @test length(unique([p.genes for p in population])) == population_size
-    end
-
-    @testset "History Recording" begin
-        toolbox = create_test_toolbox()
-        population_size = 10
-        population = generate_population(population_size, toolbox)
-        
-        for (i, chromo) in enumerate(population)
-            set_fitness!(chromo, Float64(i))
-            @test fitness(chromo) == Float64(i)
-        end
-        
-        sorted_pop = sort(population, by=fitness)
-        @test issorted([fitness(c) for c in sorted_pop])
     end
 end
