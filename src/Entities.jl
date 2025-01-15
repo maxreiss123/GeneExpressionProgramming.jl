@@ -89,6 +89,7 @@ include("Util.jl")
 
 using .GepUtils
 using OrderedCollections
+using DynamicExpressions
 
 """
     Toolbox
@@ -136,11 +137,12 @@ struct Toolbox
     fitness_reset::Tuple
     preamble_syms::Vector{Int8}
     len_preamble::Int8
+    operators_::Union{GenericOperatorEnum,Nothing}
 
 
     function Toolbox(gene_count::Int, head_len::Int, symbols::OrderedDict{Int8,Int8}, gene_connections::Vector{Int8},
         callbacks::Dict, nodes::OrderedDict, gep_probs::Dict{String,AbstractFloat};
-        unary_prob::Real=0.1, preamble_syms=Int8[], number_of_objectives::Int=1)
+        unary_prob::Real=0.1, preamble_syms=Int8[], number_of_objectives::Int=1, operators_::Union{GenericOperatorEnum,Nothing}=nothing)
         
         fitness_reset= (
             ntuple(_ -> Inf, number_of_objectives),
@@ -150,10 +152,10 @@ struct Toolbox
         headsyms = [key for (key, arity) in symbols if arity == 2]
         unary_syms = [key for (key, arity) in symbols if arity == 1]
         tailsyms = [key for (key, arity) in symbols if arity < 1 && !(key in preamble_syms)]
-        len_preamble = length(preamble_syms) == 0 ? 0 : gene_count
-        gen_start_indices = [gene_count + len_preamble + (gene_len * (i - 1)) for i in 1:gene_count] #depending on the usage should shift everthing 
+        len_preamble = length(preamble_syms) 
+        gen_start_indices = [gene_count + (gene_len * (i - 1)) for i in 1:gene_count] #depending on the usage should shift everthing 
         new(gene_count, head_len, symbols, gene_connections, headsyms, unary_syms, tailsyms, symbols,
-            callbacks, nodes, gen_start_indices, gep_probs, unary_prob, fitness_reset, preamble_syms, len_preamble)
+            callbacks, nodes, gen_start_indices, gep_probs, unary_prob, fitness_reset, preamble_syms, len_preamble, operators_)
     end
 end
 
@@ -230,12 +232,13 @@ function compile_expression!(chromosome::Chromosome; force_compile::Bool=false)
         try
             expression = _karva_raw(chromosome)
             expression_tree = compile_djl_datatype(expression, chromosome.toolbox.symbols, chromosome.toolbox.callbacks,
-                chromosome.toolbox.nodes)
+                chromosome.toolbox.nodes, max(chromosome.toolbox.len_preamble,1))
             chromosome.compiled_function = expression_tree
             chromosome.expression_raw = expression
             chromosome.fitness = chromosome.toolbox.fitness_reset[2]
             chromosome.compiled = true
-        catch 
+        catch e
+            @error "something went wrong" exception=(e,catch_backtrace())
             chromosome.fitness = chromosome.toolbox.fitness_reset[1]
         end
     end
@@ -315,9 +318,8 @@ Vector{Int8} representing the K-expression of the chromosome
 function _karva_raw(chromosome::Chromosome)
     gene_len = chromosome.toolbox.head_len * 2 + 1
     gene_count = chromosome.toolbox.gene_count
-    len_preamble = chromosome.toolbox.len_preamble
 
-    connectionsym = @view chromosome.genes[1+len_preamble:gene_count+len_preamble-1]
+    connectionsym = @view chromosome.genes[1:gene_count-1]
     genes = chromosome.genes[gene_count:end] 
 
     arity_gene_ = map(x -> chromosome.toolbox.arrity_by_id[x], genes)
@@ -350,7 +352,7 @@ Generate a single gene for GEP.
 # Returns
 Vector{Int8} representing gene
 """
-function generate_gene(headsyms::Vector{Int8}, tailsyms::Vector{Int8}, headlen::Int; unarys::Vector{Int8}=[], unary_prob::Real=0.2)
+@inline function generate_gene(headsyms::Vector{Int8}, tailsyms::Vector{Int8}, headlen::Int; unarys::Vector{Int8}=[], unary_prob::Real=0.2)
     if !isempty(unarys) && rand() < unary_prob
         heads = vcat(headsyms,tailsyms)
         push!(heads, rand(unarys))
@@ -361,6 +363,13 @@ function generate_gene(headsyms::Vector{Int8}, tailsyms::Vector{Int8}, headlen::
     head = rand(heads, headlen)
     tail = rand(tailsyms, headlen + 1)
     return vcat(head, tail)
+end
+
+
+@inline function generate_preamle!(toolbox::Toolbox, preamble::Vector{Int8})
+    if !isempty(toolbox.preamble_syms)
+        append!(preamble, rand(toolbox.preamble_syms, toolbox.gene_count))
+    end
 end
 
 

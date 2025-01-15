@@ -107,6 +107,10 @@ using Statistics
 using Random
 using Base.Threads: @spawn
 
+import Base: +, *, ^
+using DynamicExpressions: @declare_expression_operator
+
+
 
 struct OptimizationHistory{T<:Union{AbstractFloat,Tuple}}
     train_loss::Vector{T}
@@ -417,24 +421,24 @@ result = compile_djl_datatype(rek_string, arity_map, callbacks, nodes)
 
 See also: [`DynamicExpressions.Node`](@ref)
 """
-function compile_djl_datatype(rek_string::Vector, arity_map::OrderedDict, callbacks::Dict, nodes::OrderedDict)
-    #just let it fail when it becomes invalid, because then the equation is not that use ful
+function compile_djl_datatype(rek_string::Vector, arity_map::OrderedDict, callbacks::Dict, nodes::OrderedDict, pre_len::Int)
+    #just let it fail when it becomes invalid, because then the equation is not that use full
     stack = []
-    for elem in reverse(rek_string)
+    for elem in reverse(rek_string[pre_len:end])
         if get(arity_map, elem, 0) == 2
-            op1 = (temp = pop!(stack); temp isa Int8 ? nodes[temp] : temp)
-            op2 = (temp = pop!(stack); temp isa Int8 ? nodes[temp] : temp)
+            op1 = pop!(stack)
+            op2 = pop!(stack)
             ops = callbacks[elem]
             push!(stack, ops(op1, op2))
         elseif get(arity_map, elem, 0) == 1
-            op1 = (temp = pop!(stack); temp isa Int8 ? nodes[temp] : temp)
+            op1 = pop!(stack)
             ops = callbacks[elem]
             push!(stack, ops(op1))
         else
-            push!(stack, elem)
+            push!(stack, elem isa Int8 ? nodes[elem] : elem)
         end
     end
-    return last(stack)
+    return pre_len==1 ? last(stack) : stack
 end
 
 @inline function retrieve_constants_from_node(node::Node)

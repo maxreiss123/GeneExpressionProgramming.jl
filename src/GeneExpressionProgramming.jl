@@ -133,6 +133,6 @@ export GepRegressor, fit!
 export list_all_functions, list_all_arity, list_all_forward_handlers, 
        list_all_backward_handlers, list_all_genetic_params,
        set_function!, set_arity!, set_forward_handler!, set_backward_handler!,
-       update_function!
+       update_function!, vec_add, vec_mul
 
 end

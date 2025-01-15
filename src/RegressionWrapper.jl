@@ -140,7 +140,7 @@ export fit!
 export list_all_functions, list_all_arity, list_all_forward_handlers,
     list_all_backward_handlers, list_all_genetic_params,
     set_function!, set_arity!, set_forward_handler!, set_backward_handler!,
-    update_function!
+    update_function!, vec_add, vec_mul
 
 include("Entities.jl")
 include("Gep.jl")
@@ -162,9 +162,13 @@ using .GepUtils
 using DynamicExpressions
 using OrderedCollections
 
+
 const Toolbox = GepRegression.GepEntities.Toolbox
 const TokenDto = SBPUtils.TokenDto
 const Chromosome = GepRegression.GepEntities.Chromosome
+
+
+
 
 function sqr(x::Vector{T}) where {T<:AbstractFloat}
     return x .* x
@@ -173,7 +177,6 @@ end
 function sqr(x::T) where {T<:Union{AbstractFloat,Node{<:AbstractFloat}}}
     return x * x
 end
-
 
 """
     FUNCTION_LIB_COMMON::Dict{Symbol,Function}
@@ -236,7 +239,8 @@ const ARITY_LIB_COMMON = Dict{Symbol,Int8}(
     :/ => 2,
     :^ => 2,
     :min => 2,
-    :max => 2, :abs => 1,
+    :max => 2,
+    :abs => 1,
     :floor => 1,
     :ceil => 1,
     :round => 1,
@@ -486,7 +490,7 @@ function create_constants_entries(
 
     for elem in entered_terminal_nums
         utilized_symbols[cur_idx] = 0
-        nodes[cur_idx] = parse(node_type, string(elem))
+        nodes[cur_idx] = Node{node_type}(;val=parse(node_type, string(elem)))
         dimension_information[cur_idx] = get(dimensions_to_consider, elem, ZERO_DIM)
         cur_idx += 1
     end
@@ -494,7 +498,7 @@ function create_constants_entries(
 
     for _ in 1:rnd_count
         utilized_symbols[cur_idx] = 0
-        nodes[cur_idx] = rand()
+        nodes[cur_idx] = Node{node_type}(;val=rand())
         dimension_information[cur_idx] = ZERO_DIM
         cur_idx += 1
     end
@@ -503,6 +507,7 @@ function create_constants_entries(
 end
 
 
+#preamble syms are just dummies
 function create_preamble_entries(
     preamble_syms_raw::Vector{Symbol},
     dimensions_to_consider::Dict{Symbol,Vector{Float16}},
@@ -518,7 +523,7 @@ function create_preamble_entries(
 
     for elem in preamble_syms_raw
         utilized_symbols[cur_idx] = 0
-        nodes[cur_idx] = Node{AbstractArray}(feature=cur_idx)
+        nodes[cur_idx] = Node{node_type}(feature=cur_idx)
         dimension_information[cur_idx] = get(dimensions_to_consider, elem, ZERO_DIM)
         push!(preamble_syms, cur_idx)
         cur_idx += 1
@@ -565,7 +570,7 @@ Create a Gene Expression Programming regressor for symbolic regression.
 """
 mutable struct GepRegressor
     toolbox_::Toolbox
-    operators_::OperatorEnum
+    operators_::GenericOperatorEnum
     dimension_information_::OrderedDict{Int8,Vector{Float16}}
     best_models_::Union{Nothing,Vector{Chromosome}}
     fitness_history_::Any
@@ -580,8 +585,8 @@ mutable struct GepRegressor
         considered_dimensions::Dict{Symbol,Vector{Float16}}=Dict{Symbol,Vector{Float16}}(),
         rnd_count::Int=1,
         node_type::Type=Float64,
-        gene_count::Int=2,
-        head_len::Int=10,
+        gene_count::Int=3,
+        head_len::Int=6,
         preamble_syms::Vector{Symbol}=Symbol[],
         max_permutations_lib::Int=10000, rounds::Int=4,
         number_of_objectives::Int=1
@@ -613,7 +618,7 @@ mutable struct GepRegressor
         dimension_information = merge!(DimensionDict(), feat_dims, const_dims, pre_dims)
 
 
-        operators = OperatorEnum(binary_operators=binary_ops, unary_operators=unary_ops)
+        operators = GenericOperatorEnum(binary_operators=binary_ops, unary_operators=unary_ops)
 
         if !isempty(considered_dimensions)
             forward_funs, backward_funs, point_ops = create_physical_operations(entered_non_terminals)
@@ -637,7 +642,8 @@ mutable struct GepRegressor
         end
 
         toolbox = GepRegression.GepEntities.Toolbox(gene_count, head_len, utilized_symbols, gene_connections_,
-            callbacks, nodes, GENE_COMMON_PROBS; preamble_syms=preamble_syms, number_of_objectives=number_of_objectives)
+            callbacks, nodes, GENE_COMMON_PROBS; preamble_syms=preamble_syms_, number_of_objectives=number_of_objectives,
+            operators_=operators)
 
         obj = new()
         obj.toolbox_ = toolbox

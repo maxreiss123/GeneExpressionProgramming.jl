@@ -51,8 +51,8 @@ Random.seed!(1)
         @test length(syms) == 4  # 2 constants + 2 random
         @test all(v -> v == 0, values(syms))
         @test length(nodes) == 4
-        @test nodes[1] == 1.0
-        @test nodes[2] == 2.5
+        @test nodes[1] == Node{Float64}(;val=1.0)
+        @test nodes[2] == Node{Float64}(;val=2.5)
     end
 
     @testset "Physical Operations" begin

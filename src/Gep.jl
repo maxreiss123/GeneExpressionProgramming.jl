@@ -32,7 +32,7 @@ using GepRegression
 
 # Setup parameters
 toolbox = Toolbox(...)
-operators = OperatorEnum(...)
+operators = GenericOperatorEnum(...)
 
 # Run GEP regression
 best_solutions, history = runGep(
@@ -92,7 +92,7 @@ const Toolbox = GepEntities.Toolbox
 abstract type EvaluationStrategy end
 
 struct StandardRegressionStrategy{T<:AbstractFloat} <: EvaluationStrategy
-    operators::OperatorEnum
+    operators::GenericOperatorEnum
     number_of_objectives::Int
     x_data::AbstractArray{T}
     y_data::AbstractArray{T}
@@ -104,7 +104,7 @@ struct StandardRegressionStrategy{T<:AbstractFloat} <: EvaluationStrategy
     penalty::T
     crash_value::T
 
-    function StandardRegressionStrategy{T}(operators::OperatorEnum,
+    function StandardRegressionStrategy{T}(operators::GenericOperatorEnum,
         x_data::AbstractArray,
         y_data::AbstractArray,
         x_data_test::AbstractArray,
@@ -131,13 +131,13 @@ struct StandardRegressionStrategy{T<:AbstractFloat} <: EvaluationStrategy
 end
 
 struct GenericRegressionStrategy <: EvaluationStrategy
-    operators::OperatorEnum
+    operators::GenericOperatorEnum
     number_of_objectives::Int
     loss_function::Function
     secOptimizer::Union{Function,Nothing}
     break_condition::Union{Function,Nothing}
 
-    function GenericRegressionStrategy(operators::OperatorEnum, number_of_objectives::Int, loss_function::Function;
+    function GenericRegressionStrategy(operators::GenericOperatorEnum, number_of_objectives::Int, loss_function::Function;
         secOptimizer::Union{Function,Nothing}, break_condition::Union{Function,Nothing})
         new(operators, number_of_objectives, loss_function, secOptimizer, break_condition)
     end
@@ -146,7 +146,7 @@ end
 
 #redesign -> compute fitness should return fitness and crash, we just need to insert the chromosome
 """
-    compute_fitness(elem::Chromosome, operators::OperatorEnum, x_data::AbstractArray{T},
+    compute_fitness(elem::Chromosome, operators::GenericOperatorEnum, x_data::AbstractArray{T},
         y_data::AbstractArray{T}, loss_function::Function, crash_value::T; 
         validate::Bool=false) where {T<:AbstractFloat}
 
@@ -154,7 +154,7 @@ Computes the fitness score for a chromosome using the specified loss function.
 
 # Arguments
 - `elem::Chromosome`: The chromosome whose fitness needs to be computed
-- `operators::OperatorEnum`: The set of mathematical operators available for expression evaluation
+- `operators::GenericOperatorEnum`: The set of mathematical operators available for expression evaluation
 - `x_data::AbstractArray{T}`: Input features for fitness computation
 - `y_data::AbstractArray{T}`: Target values for fitness computation
 - `loss_function::Function`: The loss function used to compute fitness
