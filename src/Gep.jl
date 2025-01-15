@@ -317,7 +317,7 @@ The evolution process stops when either:
 - Maximum epochs is reached
 - Break condition specified in evaluation strategy is met => needs to be informed as break_condition(population, epoch)
 """
-function runGep(epochs::Int,
+@inline function runGep(epochs::Int,
     population_size::Int,
     toolbox::Toolbox,
     evalStrategy::EvaluationStrategy;

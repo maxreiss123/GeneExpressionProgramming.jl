@@ -685,7 +685,7 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, x_trai
     optimization_epochs::Int=100,
     hof::Int=3, loss_fun::Union{String,Function}="mse",
     correction_epochs::Int=1, correction_amount::Real=0.05,
-    tourni_size::Int=3, opt_method_const::Symbol=:cg,
+    opt_method_const::Symbol=:cg,
     target_dimension::Union{Vector{Float16},Nothing}=nothing,
     cycles::Int=10, max_iterations::Int=150, n_starts::Int=5
 )
@@ -737,7 +737,7 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, x_trai
         correction_callback=correction_callback,
         correction_epochs=correction_epochs,
         correction_amount=correction_amount,
-        tourni_size=tourni_size,
+        tourni_size=max(Int(ceil(population_size*0.03)),3),
         optimization_epochs=optimization_epochs
     )
 
@@ -751,7 +751,6 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, loss_f
     hof::Int=3,
     correction_epochs::Int=1, 
     correction_amount::Real=0.05,
-    tourni_size::Int=3, 
     opt_method_const::Symbol=:cg,
     target_dimension::Union{Vector{Float16},Nothing}=nothing,
     cycles::Int=10, max_iterations::Int=150, n_starts::Int=5,
@@ -799,7 +798,7 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, loss_f
         correction_callback=correction_callback,
         correction_epochs=correction_epochs,
         correction_amount=correction_amount,
-        tourni_size=tourni_size,
+        tourni_size=max(Int(ceil(population_size*0.03)),3),
         optimization_epochs=optimization_epochs
     )
 
