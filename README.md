@@ -106,3 +106,4 @@ The repository contains an implementation of the Gene Expression Programming [1]
 - [x] Naming conventions!
 - [x] Improve usability for user interaction
 - [ ] Next operations: Tail flip, Connection symbol flip, wrapper class for easy usage, config class for predefinition, staggered exploration
+- [ ] latest enhancements are provided in the branch 'feature/modular_error'
