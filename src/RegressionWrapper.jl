@@ -168,8 +168,6 @@ const TokenDto = SBPUtils.TokenDto
 const Chromosome = GepRegression.GepEntities.Chromosome
 
 
-
-
 function sqr(x::Vector{T}) where {T<:AbstractFloat}
     return x .* x
 end
@@ -687,7 +685,8 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, x_trai
     correction_epochs::Int=1, correction_amount::Real=0.05,
     opt_method_const::Symbol=:cg,
     target_dimension::Union{Vector{Float16},Nothing}=nothing,
-    cycles::Int=10, max_iterations::Int=150, n_starts::Int=5
+    cycles::Int=10, max_iterations::Int=150, n_starts::Int=5,
+    break_condition::Union{Function,Nothing}=nothing
 )
 
     correction_callback = if !isnothing(target_dimension)
@@ -726,7 +725,8 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, x_trai
         !isnothing(x_test) ? x_test : x_train,
         !isnothing(y_test) ? y_test : y_train,
         get_loss_function(loss_fun);
-        secOptimizer=optimizer_wrapper
+        secOptimizer=optimizer_wrapper,
+        break_condition=break_condition
     )
 
     best, history = runGep(epochs,

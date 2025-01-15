@@ -12,7 +12,11 @@ using JSON
 using Statistics
 
 
-function loss_new(eqn::Node, operators::OperatorEnum, x_data::AbstractArray, y_data::AbstractArray)
+function break_condition(population, epoch)
+    return isclose(mean(population[1].fitness), 0.0)
+end
+
+function loss_new(eqn::Node, operators::GenericOperatorEnum, x_data::AbstractArray, y_data::AbstractArray)
     try
         y_pred = eqn(x_data, operators)
         return get_loss_function("r2_score")(y_data, y_pred)
@@ -84,7 +88,7 @@ function main()
             if case_name in keys(case_data)
                 @show ("Current case: ", case_name)
                 #gep_params
-                epochs = 100
+                epochs = 1000
                 population_size = 1500
 
                 results = DataFrame(Seed=[],
@@ -118,25 +122,28 @@ function main()
                 regressor = GepRegressor(num_cols - 1;
                     considered_dimensions=phy_dims,
                     entered_non_terminals=[:+, :-, :*, :/, :sqrt, :sin, :cos, :exp, :log],
-                    max_permutations_lib=10000, rounds=7,number_of_objectives=2)
+                    max_permutations_lib=10000, rounds=7, number_of_objectives=1)
 
-                """next test scenario
+
                 @inline function loss_new_(elem, validate::Bool)
                     try
                         if isnan(mean(elem.fitness)) || validate
                             y_pred = elem.compiled_function(x_train', regressor.operators_)
-                            return (get_loss_function("mse")(y_train, y_pred), length(elem.expression_raw) * 0.01)
+                            return (get_loss_function("mse")(y_train, y_pred),)
                         else
-                            return (elem.fitness, length(elem.expression_raw) * elem.fitness)
+                            #return (elem.fitness, length(elem.expression_raw) * elem.fitness)
+                            return (elem.fitness,)
                         end
                     catch e
-                        return (typemax(Float64), typemax(Float64))
+                        return (typemax(Float64),)
                     end
                 end
-                """
+
 
                 #perform the regression by entering epochs, population_size, the feature cols, the target col and the loss function
-                fit!(regressor, epochs, population_size; target_dimension=target_dim)
+                fit!(regressor, epochs, population_size, x_train', y_train;
+                    x_test=x_test', y_test=y_test',
+                    loss_fun="mse", break_condition=break_condition)
 
                 end_time = (time_ns() - start_time) / 1e9
                 elem = regressor.best_models_[1]

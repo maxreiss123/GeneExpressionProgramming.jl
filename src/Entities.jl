@@ -91,6 +91,51 @@ using .GepUtils
 using OrderedCollections
 using DynamicExpressions
 
+
+"""
+    Memory Buffer for reducing allocation during runtime! 
+"""
+struct GeneticBuffers
+    alpha_operator::Vector{Int8}
+    beta_operator::Vector{Int8}
+    child_1_genes::Vector{Int8}
+    child_2_genes::Vector{Int8}
+    rolled_indices::Vector{Any}
+    arity_gene::Vector{Int8}
+end
+
+
+const THREAD_BUFFERS = let
+    default_size = 1000
+    [GeneticBuffers(
+        zeros(Int8, default_size),
+        zeros(Int8, default_size),
+        Vector{Int8}(undef, default_size),
+        Vector{Int8}(undef, default_size),
+        Vector{Any}(undef, default_size),
+        Vector{Int8}(undef, default_size)
+    ) for _ in 1:Threads.nthreads()]
+end
+
+
+function ensure_buffer_size!(head_len::Int, gene_count::Int)
+    gene_len = head_len * 2 + 1
+    total_gene_length = gene_count - 1 + gene_count * gene_len
+
+    for buffer in THREAD_BUFFERS
+        if length(buffer.alpha_operator) < total_gene_length
+            resize!(buffer.alpha_operator, total_gene_length)
+            resize!(buffer.beta_operator, total_gene_length)
+            resize!(buffer.child_1_genes, total_gene_length)
+            resize!(buffer.child_2_genes, total_gene_length)
+            resize!(buffer.rolled_indices, gene_count + 1)
+            resize!(buffer.arity_gene, gene_count * gene_len)
+        end
+    end
+end
+
+
+
 """
     Toolbox
 
@@ -153,7 +198,8 @@ struct Toolbox
         unary_syms = [key for (key, arity) in symbols if arity == 1]
         tailsyms = [key for (key, arity) in symbols if arity < 1 && !(key in preamble_syms)]
         len_preamble = length(preamble_syms) 
-        gen_start_indices = [gene_count + (gene_len * (i - 1)) for i in 1:gene_count] #depending on the usage should shift everthing 
+        gen_start_indices = [gene_count + (gene_len * (i - 1)) for i in 1:gene_count]
+        ensure_buffer_size!(head_len, gene_count)
         new(gene_count, head_len, symbols, gene_connections, headsyms, unary_syms, tailsyms, symbols,
             callbacks, nodes, gen_start_indices, gep_probs, unary_prob, fitness_reset, preamble_syms, len_preamble, operators_)
     end
@@ -227,7 +273,7 @@ Get chromosome's fitness value.
 # Returns
 Fitness value or tuple
 """
-function compile_expression!(chromosome::Chromosome; force_compile::Bool=false)
+@inline function compile_expression!(chromosome::Chromosome; force_compile::Bool=false)
     if !chromosome.compiled || force_compile
         try
             expression = _karva_raw(chromosome)
@@ -315,7 +361,8 @@ Vector{Int8} representing the K-expression of the chromosome
 ```
 
 """
-function _karva_raw(chromosome::Chromosome)
+
+@inline function _karva_raw(chromosome::Chromosome)
     gene_len = chromosome.toolbox.head_len * 2 + 1
     gene_count = chromosome.toolbox.gene_count
 
@@ -335,6 +382,7 @@ function _karva_raw(chromosome::Chromosome)
 
     return vcat(rolled_indices...)
 end
+
 
 """
     generate_gene(headsyms::Vector{Int8}, tailsyms::Vector{Int8}, headlen::Int; 
@@ -381,7 +429,7 @@ Generate a new chromosome using toolbox configuration.
 # Returns
 New Chromosome instance
 """
-function generate_chromosome(toolbox::Toolbox)
+@inline function generate_chromosome(toolbox::Toolbox)
     connectors = rand(toolbox.gene_connections, toolbox.gene_count - 1)
     genes = vcat([generate_gene(toolbox.headsyms, toolbox.tailsyms, toolbox.head_len; unarys=toolbox.unary_syms,
         unary_prob=toolbox.unary_prob) for _ in 1:toolbox.gene_count]...)
@@ -402,13 +450,38 @@ Generate initial population of chromosomes.
 # Returns
 Vector of Chromosomes
 """
-function generate_population(number::Int, toolbox::Toolbox)
+@inline function generate_population(number::Int, toolbox::Toolbox)
     population = Vector{Chromosome}(undef, number)
-     for i in 1:number
+     
+    Threads.@threads for i in 1:number
         @inbounds population[i] = generate_chromosome(toolbox)
     end
+
     return population
 end
+
+"""
+@inline function create_operator_masks(gene_seq_alpha::Vector{Int8}, gene_seq_beta::Vector{Int8}, pb::Real=0.2)
+    buffer = THREAD_BUFFERS[Threads.threadid()]
+    
+    fill!(buffer.alpha_operator, 0)
+    fill!(buffer.beta_operator, 0)
+    
+    indices_alpha = rand(1:length(gene_seq_alpha), 
+                        min(round(Int, (pb * length(gene_seq_alpha))), 
+                        length(gene_seq_alpha)))
+    indices_beta = rand(1:length(gene_seq_beta), 
+                        min(round(Int, (pb * length(gene_seq_beta))), 
+                        length(gene_seq_beta)))
+    
+    buffer.alpha_operator[indices_alpha] .= Int8(1)
+    buffer.beta_operator[indices_beta] .= Int8(1)
+    
+    return view(buffer.alpha_operator, 1:length(gene_seq_alpha)),
+        view(buffer.beta_operator, 1:length(gene_seq_beta))
+end
+
+"""
 
 @inline function create_operator_masks(gene_seq_alpha::Vector{Int8}, gene_seq_beta::Vector{Int8}, pb::Real=0.2)
     alpha_operator = zeros(Int8, length(gene_seq_alpha))
@@ -419,6 +492,7 @@ end
     beta_operator[indices_beta] .= Int8(1)
     return alpha_operator, beta_operator
 end
+
 
 @inline function create_operator_point_one_masks(gene_seq_alpha::Vector{Int8}, gene_seq_beta::Vector{Int8}, toolbox::Toolbox)
     alpha_operator = zeros(Int8, length(gene_seq_alpha))
