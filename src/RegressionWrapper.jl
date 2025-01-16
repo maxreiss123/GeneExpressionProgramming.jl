@@ -153,7 +153,6 @@ include("Util.jl")
 
 using .GepEntities
 using .LossFunction
-using .GepEntities
 using .EvoSelection
 
 using .GepRegression
@@ -166,7 +165,9 @@ using OrderedCollections
 const Toolbox = GepRegression.GepEntities.Toolbox
 const TokenDto = SBPUtils.TokenDto
 const Chromosome = GepRegression.GepEntities.Chromosome
-
+const EvaluationStrategy = GepRegression.GepEntities.EvaluationStrategy
+const GenericRegressionStrategy = GepRegression.GepEntities.GenericRegressionStrategy
+const StandardRegressionStrategy = GepRegression.GepEntities.StandardRegressionStrategy
 
 function sqr(x::Vector{T}) where {T<:AbstractFloat}
     return x .* x

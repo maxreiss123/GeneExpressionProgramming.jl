@@ -4,12 +4,6 @@
 A module implementing core data structures and genetic operations for Gene Expression
 Programming (GEP).
 
-# Core Types
-## Symbol Types - depreacated
-- `AbstractSymbol`: Base type for GEP symbols
-- `BasicSymbol`: Terminal symbols (constants and variables)
-- `FunctionalSymbol`: Function symbols with arithmetic operations
-- `SymbolConfig`: Configuration container for all symbols
 
 ## Evolution Types
 - `Chromosome`: Individual solution representation
@@ -52,13 +46,12 @@ Programming (GEP).
 
 # Exports
 ## Types
-- `Chromosome`, `Toolbox`, `AbstractGepToolbox`
-- `AbstractSymbol`, `FunctionalSymbol`, `BasicSymbol`, `SymbolConfig`
+- `Chromosome`, `Toolbox`, `EvaluationStrategy``, `StandardRegressionStrategy`, `GenericRegressionStrategy`
 
 ## Functions
 ### Core Operations
 - `fitness`, `set_fitness!`
-- `generate_gene`, `generate_preamle!`, `compile_expression!`
+- `generate_gene`, `compile_expression!`
 - `generate_chromosome`, `generate_population`
 
 ### Genetic Operations
@@ -79,11 +72,10 @@ Programming (GEP).
 module GepEntities
 
 
-export Chromosome, Toolbox, AbstractGepToolbox
+export Chromosome, Toolbox, EvaluationStrategy, StandardRegressionStrategy, GenericRegressionStrategy
 export fitness, set_fitness!
-export generate_gene, generate_preamle!, compile_expression!, generate_chromosome, generate_population 
+export generate_gene, compile_expression!, generate_chromosome, generate_population 
 export genetic_operations!, replicate, gene_inversion!, gene_mutation!, gene_one_point_cross_over!, gene_two_point_cross_over!, gene_fussion!
-
 
 include("Util.jl")
 
@@ -135,6 +127,59 @@ function ensure_buffer_size!(head_len::Int, gene_count::Int)
 end
 
 
+abstract type EvaluationStrategy end
+
+struct StandardRegressionStrategy{T<:AbstractFloat} <: EvaluationStrategy
+    operators::GenericOperatorEnum
+    number_of_objectives::Int
+    x_data::AbstractArray{T}
+    y_data::AbstractArray{T}
+    x_data_test::AbstractArray{T}
+    y_data_test::AbstractArray{T}
+    loss_function::Function
+    secOptimizer::Union{Function,Nothing}
+    break_condition::Union{Function,Nothing}
+    penalty::T
+    crash_value::T
+
+    function StandardRegressionStrategy{T}(operators::GenericOperatorEnum,
+        x_data::AbstractArray,
+        y_data::AbstractArray,
+        x_data_test::AbstractArray,
+        y_data_test::AbstractArray,
+        loss_function::Function;
+        secOptimizer::Union{Function,Nothing}=nothing,
+        break_condition::Union{Function,Nothing}=nothing,
+        penalty::T=zero(T),
+        crash_value::T=typemax(T)) where {T<:AbstractFloat}
+        new(operators,
+            1,
+            x_data,
+            y_data,
+            x_data_test,
+            y_data_test,
+            loss_function,
+            secOptimizer,
+            break_condition,
+            penalty,
+            crash_value
+        )
+    end
+
+end
+
+struct GenericRegressionStrategy <: EvaluationStrategy
+    operators::GenericOperatorEnum
+    number_of_objectives::Int
+    loss_function::Function
+    secOptimizer::Union{Function,Nothing}
+    break_condition::Union{Function,Nothing}
+
+    function GenericRegressionStrategy(operators::GenericOperatorEnum, number_of_objectives::Int, loss_function::Function;
+        secOptimizer::Union{Function,Nothing}, break_condition::Union{Function,Nothing})
+        new(operators, number_of_objectives, loss_function, secOptimizer, break_condition)
+    end
+end
 
 """
     Toolbox
@@ -412,14 +457,6 @@ Vector{Int8} representing gene
     tail = rand(tailsyms, headlen + 1)
     return vcat(head, tail)
 end
-
-
-@inline function generate_preamle!(toolbox::Toolbox, preamble::Vector{Int8})
-    if !isempty(toolbox.preamble_syms)
-        append!(preamble, rand(toolbox.preamble_syms, toolbox.gene_count))
-    end
-end
-
 
 """
     generate_chromosome(toolbox::Toolbox)

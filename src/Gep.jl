@@ -69,8 +69,6 @@ include("Selection.jl")
 include("Entities.jl")
 
 using .LossFunction
-export runGep, EvaluationStrategy, StandardRegressionStrategy, GenericRegressionStrategy
-
 using .GepUtils
 using .EvoSelection
 using .GepEntities
@@ -86,63 +84,12 @@ using Printf
 using Base.Threads: SpinLock
 using .Threads
 
+export runGep
+
+
 const Chromosome = GepEntities.Chromosome
 const Toolbox = GepEntities.Toolbox
-
-abstract type EvaluationStrategy end
-
-struct StandardRegressionStrategy{T<:AbstractFloat} <: EvaluationStrategy
-    operators::GenericOperatorEnum
-    number_of_objectives::Int
-    x_data::AbstractArray{T}
-    y_data::AbstractArray{T}
-    x_data_test::AbstractArray{T}
-    y_data_test::AbstractArray{T}
-    loss_function::Function
-    secOptimizer::Union{Function,Nothing}
-    break_condition::Union{Function,Nothing}
-    penalty::T
-    crash_value::T
-
-    function StandardRegressionStrategy{T}(operators::GenericOperatorEnum,
-        x_data::AbstractArray,
-        y_data::AbstractArray,
-        x_data_test::AbstractArray,
-        y_data_test::AbstractArray,
-        loss_function::Function;
-        secOptimizer::Union{Function,Nothing}=nothing,
-        break_condition::Union{Function,Nothing}=nothing,
-        penalty::T=zero(T),
-        crash_value::T=typemax(T)) where {T<:AbstractFloat}
-        new(operators,
-            1,
-            x_data,
-            y_data,
-            x_data_test,
-            y_data_test,
-            loss_function,
-            secOptimizer,
-            break_condition,
-            penalty,
-            crash_value
-        )
-    end
-
-end
-
-struct GenericRegressionStrategy <: EvaluationStrategy
-    operators::GenericOperatorEnum
-    number_of_objectives::Int
-    loss_function::Function
-    secOptimizer::Union{Function,Nothing}
-    break_condition::Union{Function,Nothing}
-
-    function GenericRegressionStrategy(operators::GenericOperatorEnum, number_of_objectives::Int, loss_function::Function;
-        secOptimizer::Union{Function,Nothing}, break_condition::Union{Function,Nothing})
-        new(operators, number_of_objectives, loss_function, secOptimizer, break_condition)
-    end
-end
-
+const EvaluationStrategy = GepEntities.EvaluationStrategy
 
 #redesign -> compute fitness should return fitness and crash, we just need to insert the chromosome
 """

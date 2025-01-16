@@ -121,10 +121,9 @@ export get_feature_dims_json, get_target_dim_json, retrieve_coeffs_based_on_simi
 
 
 using .GepEntities
-export Chromosome, Toolbox
-export AbstractSymbol, FunctionalSymbol, BasicSymbol, SymbolConfig
+export Chromosome, Toolbox, EvaluationStrategy, StandardRegressionStrategy, GenericRegressionStrategy
 export fitness, set_fitness!
-export generate_gene, generate_preamle!, compile_expression!, generate_chromosome, generate_population 
+export generate_gene, compile_expression!, generate_chromosome, generate_population 
 export genetic_operations!
 
 
