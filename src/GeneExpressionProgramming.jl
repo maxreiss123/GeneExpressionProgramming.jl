@@ -88,50 +88,137 @@ include("Selection.jl")
 include("Util.jl")
 include("RegressionWrapper.jl")
 
-export GepEntities, LossFunction, PhysicalConstants, GepUtils, GepRegression, RegressionWrapper
+# First export the submodules themselves
+export GepEntities, LossFunction, PhysicalConstants, 
+       GepUtils, GepRegression, RegressionWrapper
 
-using .GepRegression
+# Import GEP core functionality
+import .GepRegression:
+    runGep,
+    EvaluationStrategy,
+    StandardRegressionStrategy,
+    GenericRegressionStrategy
+
+# Import loss functions
+import .LossFunction:
+    get_loss_function
+
+# Import utilities
+import .GepUtils:
+    find_indices_with_sum,
+    compile_djl_datatype,
+    optimize_constants!,
+    minmax_scale,
+    float16_scale,
+    isclose,
+    save_state,
+    load_state,
+    create_history_recorder,
+    record_history!,
+    record!,
+    close_recorder!,
+    HistoryRecorder,
+    OptimizationHistory,
+    get_history_arrays,
+    train_test_split
+
+# Import selection mechanisms
+import .EvoSelection:
+    tournament_selection,
+    nsga_selection,
+    dominates_,
+    fast_non_dominated_sort,
+    calculate_fronts,
+    determine_ranks,
+    assign_crowding_distance
+
+# Import physical constants functionality
+import .PhysicalConstants:
+    physical_constants,
+    physical_constants_all,
+    get_constant,
+    get_constant_value,
+    get_constant_dims
+
+# Import symbolic computation utilities
+import .SBPUtils:
+    TokenLib,
+    TokenDto,
+    LibEntry,
+    TempComputeTree,
+    create_lib,
+    create_compute_tree,
+    propagate_necessary_changes!,
+    calculate_vector_dimension!,
+    flush!,
+    flatten_dependents,
+    correct_genes!,
+    equal_unit_forward,
+    mul_unit_forward,
+    div_unit_forward,
+    zero_unit_backward,
+    zero_unit_forward,
+    sqr_unit_backward,
+    sqr_unit_forward,
+    mul_unit_backward,
+    div_unit_backward,
+    equal_unit_backward,
+    get_feature_dims_json,
+    get_target_dim_json,
+    retrieve_coeffs_based_on_similarity
+
+# Import core GEP entities
+import .GepEntities:
+    Chromosome,
+    Toolbox,
+    EvaluationStrategy,
+    StandardRegressionStrategy,
+    GenericRegressionStrategy,
+    fitness,
+    set_fitness!,
+    generate_gene,
+    compile_expression!,
+    generate_chromosome,
+    generate_population,
+    genetic_operations!
+
+# Import regression wrapper functionality
+import .RegressionWrapper:
+    GepRegressor,
+    fit!,
+    list_all_functions,
+    list_all_arity,
+    list_all_forward_handlers,
+    list_all_backward_handlers,
+    list_all_genetic_params,
+    set_function!,
+    set_arity!,
+    set_forward_handler!,
+    set_backward_handler!,
+    update_function!,
+    vec_add,
+    vec_mul
+
 export runGep, EvaluationStrategy, StandardRegressionStrategy, GenericRegressionStrategy
-
-using .LossFunction
 export get_loss_function
-
-
-using .GepUtils
 export find_indices_with_sum, compile_djl_datatype, optimize_constants!, minmax_scale, float16_scale, isclose
 export save_state, load_state, create_history_recorder, record_history!, record!, close_recorder!
 export HistoryRecorder, OptimizationHistory, get_history_arrays
 export train_test_split
-
-using .EvoSelection
 export tournament_selection, nsga_selection, dominates_, fast_non_dominated_sort, calculate_fronts, determine_ranks, assign_crowding_distance
-
-
-using .PhysicalConstants
-export physical_constants, physical_constants_all
-export get_constant, get_constant_value, get_constant_dims
-
-
-using .SBPUtils
+export physical_constants, physical_constants_all, get_constant, get_constant_value, get_constant_dims
 export TokenLib, TokenDto, LibEntry, TempComputeTree
-export create_lib, create_compute_tree, propagate_necessary_changes!, calculate_vector_dimension!, flush!, calculate_vector_dimension!, flatten_dependents
-export propagate_necessary_changes!, correct_genes!
-export equal_unit_forward, mul_unit_forward, div_unit_forward, zero_unit_backward, zero_unit_forward, sqr_unit_backward, sqr_unit_forward, mul_unit_backward, div_unit_backward, equal_unit_backward
+export create_lib, create_compute_tree, propagate_necessary_changes!, calculate_vector_dimension!, flush!, flatten_dependents
+export correct_genes!, equal_unit_forward, mul_unit_forward, div_unit_forward
+export zero_unit_backward, zero_unit_forward, sqr_unit_backward, sqr_unit_forward, mul_unit_backward, div_unit_backward, equal_unit_backward
 export get_feature_dims_json, get_target_dim_json, retrieve_coeffs_based_on_similarity
-
-
-using .GepEntities
-export Chromosome, Toolbox, EvaluationStrategy, StandardRegressionStrategy, GenericRegressionStrategy
-export fitness, set_fitness!
+export Chromosome, Toolbox, fitness, set_fitness!
 export generate_gene, compile_expression!, generate_chromosome, generate_population 
 export genetic_operations!
-
-
-using .RegressionWrapper
 export GepRegressor, fit!
-export list_all_functions, list_all_arity, list_all_forward_handlers, 
-       list_all_backward_handlers, list_all_genetic_params,
-       set_function!, set_arity!, set_forward_handler!, set_backward_handler!,
-       update_function!, vec_add, vec_mul
+export list_all_functions, list_all_arity, list_all_forward_handlers
+export list_all_backward_handlers, list_all_genetic_params
+export set_function!, set_arity!, set_forward_handler!, set_backward_handler!
+export update_function!, vec_add, vec_mul
 
 end
