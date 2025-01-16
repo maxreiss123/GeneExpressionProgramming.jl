@@ -85,11 +85,12 @@ include("PhyConstants.jl")
 include("Sbp.jl")
 include("Selection.jl")
 include("Util.jl")
+include("Surrogate.jl")
 include("RegressionWrapper.jl")
 
 # First export the submodules themselves
 export GepEntities, LossFunction, PhysicalConstants, 
-       GepUtils, GepRegression, RegressionWrapper
+       GepUtils, GepRegression, RegressionWrapper, GPSurrogate
 
 # Import GEP core functionality
 import .GepRegression:
@@ -191,6 +192,20 @@ import .RegressionWrapper:
     set_backward_handler!,
     update_function!
 
+import .GPSurrogate:
+  GPRegressionStrategy, 
+  ExpectedImprovement, 
+  PropabilityImrpovement, 
+  EntropySearch, 
+  GPState
+  update_surrogate!, 
+  predict_gp, 
+  compute_acquisition, 
+  add_point!
+  ExpectedImprovement, 
+  PropabilityImrpovement, 
+  EntropySearch
+
 export runGep, EvaluationStrategy, StandardRegressionStrategy, GenericRegressionStrategy
 export get_loss_function
 export find_indices_with_sum, compile_djl_datatype, optimize_constants!, minmax_scale, isclose
@@ -212,5 +227,9 @@ export list_all_functions, list_all_arity, list_all_forward_handlers
 export list_all_backward_handlers, list_all_genetic_params
 export set_function!, set_arity!, set_forward_handler!, set_backward_handler!
 export update_function!
+export GPRegressionStrategy, ExpectedImprovement, PropabilityImrpovement, EntropySearch, GPState
+export update_surrogate!, predict_gp, compute_acquisition, add_point!
+export ExpectedImprovement, PropabilityImrpovement, EntropySearch
+
 
 end

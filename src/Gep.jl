@@ -66,7 +66,6 @@ module GepRegression
 include("Losses.jl")
 include("Util.jl")
 include("Selection.jl")
-#include("Entities.jl")
 
 using .LossFunction
 using .GepUtils
@@ -133,6 +132,10 @@ end
     return evalArgs.loss_function(elem, validate)
 end
 
+@inline function compute_fitness(elem::Chromosome, evalArgs::GenericRegressionStrategy; validate::Bool=false)
+    return evalArgs.loss_function(elem, validate)
+end
+
 """
     perform_step!(population::Vector{Chromosome}, parents::Vector{Chromosome}, 
         next_gen::Vector{Chromosome}, toolbox::Toolbox, mating_size::Int)
@@ -177,6 +180,10 @@ Performs one evolutionary step in the GEP algorithm, creating and evaluating new
     end
 end
 
+
+function update_surrogate!(::EvaluationStrategy) 
+    nothing
+end
 
 """
     perform_correction_callback!(population::Vector{Chromosome}, epoch::Int, 
@@ -326,6 +333,8 @@ The evolution process stops when either:
             (:train_loss, @sprintf("%.6e", mean(fits_representation[1]))),
             (:validation_loss, @sprintf("%.6e", mean(val_loss)))
         ])
+
+        update_surrogate!(evalStrategy)
 
 
         if !isnothing(evalStrategy.break_condition) && evalStrategy.break_condition(population, epoch)

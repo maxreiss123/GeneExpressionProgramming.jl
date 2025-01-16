@@ -126,7 +126,6 @@ function ensure_buffer_size!(head_len::Int, gene_count::Int)
     end
 end
 
-
 abstract type EvaluationStrategy end
 
 struct StandardRegressionStrategy{T<:AbstractFloat} <: EvaluationStrategy
