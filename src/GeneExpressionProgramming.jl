@@ -197,13 +197,13 @@ import .GPSurrogate:
   ExpectedImprovement, 
   PropabilityImrpovement, 
   EntropySearch, 
-  GPState
+  GPState,
   update_surrogate!, 
   predict_gp, 
   compute_acquisition, 
-  add_point!
+  add_point!,
   ExpectedImprovement, 
-  PropabilityImrpovement, 
+  PropabilityImprovement, 
   EntropySearch
 
 export runGep, EvaluationStrategy, StandardRegressionStrategy, GenericRegressionStrategy

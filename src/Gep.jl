@@ -67,10 +67,15 @@ include("Losses.jl")
 include("Util.jl")
 include("Selection.jl")
 
+include("Surrogate.jl")
+
+
 using .LossFunction
 using .GepUtils
 using .EvoSelection
 using ..GepEntities
+using .GPSurrogate
+
 
 using Random
 using Statistics
@@ -132,7 +137,7 @@ end
     return evalArgs.loss_function(elem, validate)
 end
 
-@inline function compute_fitness(elem::Chromosome, evalArgs::GenericRegressionStrategy; validate::Bool=false)
+@inline function compute_fitness(elem::Chromosome, evalArgs::GPRegressionStrategy; validate::Bool=false)
     return evalArgs.loss_function(elem, validate)
 end
 
@@ -181,7 +186,7 @@ Performs one evolutionary step in the GEP algorithm, creating and evaluating new
 end
 
 
-function update_surrogate!(::EvaluationStrategy) 
+@inline function update_surrogate!(::EvaluationStrategy) 
     nothing
 end
 
