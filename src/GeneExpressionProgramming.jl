@@ -38,7 +38,6 @@ providing tools for symbolic regression and evolutionary computation.
 ## Utility Functions
 - `find_indices_with_sum`, `compile_djl_datatype`: Data processing utilities
 - `optimize_constants!`: Constants optimization
-- `minmax_scale`, `float16_scale`: Scaling functions
 - `isclose`: Numerical comparison
 - `save_state`, `load_state`: State persistence
 - `train_test_split`: Data splitting utility
@@ -53,7 +52,7 @@ providing tools for symbolic regression and evolutionary computation.
 
 ## History Recording
 - `HistoryRecorder`, `OptimizationHistory`: History tracking structures
-- `create_history_recorder`, `record_history!`, `record!`: Recording functions
+- `record_history!`, `record!`: Recording functions
 - `close_recorder!`, `get_history_arrays`: History management
 
 # Example Usage
@@ -94,10 +93,7 @@ export GepEntities, LossFunction, PhysicalConstants,
 
 # Import GEP core functionality
 import .GepRegression:
-    runGep,
-    EvaluationStrategy,
-    StandardRegressionStrategy,
-    GenericRegressionStrategy
+    runGep
 
 # Import loss functions
 import .LossFunction:
@@ -109,11 +105,9 @@ import .GepUtils:
     compile_djl_datatype,
     optimize_constants!,
     minmax_scale,
-    float16_scale,
     isclose,
     save_state,
     load_state,
-    create_history_recorder,
     record_history!,
     record!,
     close_recorder!,
@@ -195,14 +189,12 @@ import .RegressionWrapper:
     set_arity!,
     set_forward_handler!,
     set_backward_handler!,
-    update_function!,
-    vec_add,
-    vec_mul
+    update_function!
 
 export runGep, EvaluationStrategy, StandardRegressionStrategy, GenericRegressionStrategy
 export get_loss_function
-export find_indices_with_sum, compile_djl_datatype, optimize_constants!, minmax_scale, float16_scale, isclose
-export save_state, load_state, create_history_recorder, record_history!, record!, close_recorder!
+export find_indices_with_sum, compile_djl_datatype, optimize_constants!, minmax_scale, isclose
+export save_state, load_state, record_history!, record!, close_recorder!
 export HistoryRecorder, OptimizationHistory, get_history_arrays
 export train_test_split
 export tournament_selection, nsga_selection, dominates_, fast_non_dominated_sort, calculate_fronts, determine_ranks, assign_crowding_distance
@@ -219,6 +211,6 @@ export GepRegressor, fit!
 export list_all_functions, list_all_arity, list_all_forward_handlers
 export list_all_backward_handlers, list_all_genetic_params
 export set_function!, set_arity!, set_forward_handler!, set_backward_handler!
-export update_function!, vec_add, vec_mul
+export update_function!
 
 end

@@ -66,12 +66,12 @@ module GepRegression
 include("Losses.jl")
 include("Util.jl")
 include("Selection.jl")
-include("Entities.jl")
+#include("Entities.jl")
 
 using .LossFunction
 using .GepUtils
 using .EvoSelection
-using .GepEntities
+using ..GepEntities
 
 using Random
 using Statistics
@@ -87,9 +87,9 @@ using .Threads
 export runGep
 
 
-const Chromosome = GepEntities.Chromosome
-const Toolbox = GepEntities.Toolbox
-const EvaluationStrategy = GepEntities.EvaluationStrategy
+#const Chromosome = GepEntities.Chromosome
+#const Toolbox = GepEntities.Toolbox
+#const EvaluationStrategy = GepEntities.EvaluationStrategy
 
 #redesign -> compute fitness should return fitness and crash, we just need to insert the chromosome
 """
