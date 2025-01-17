@@ -107,9 +107,6 @@ using Statistics
 using Random
 using Base.Threads: @spawn
 
-import Base: +, *, ^
-using DynamicExpressions: @declare_expression_operator
-
 
 
 struct OptimizationHistory{T<:Union{AbstractFloat,Tuple}}
