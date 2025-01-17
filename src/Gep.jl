@@ -32,7 +32,7 @@ using GepRegression
 
 # Setup parameters
 toolbox = Toolbox(...)
-operators = GenericOperatorEnum(...)
+operators = OperatorEnum(...)
 
 # Run GEP regression
 best_solutions, history = runGep(
@@ -97,7 +97,7 @@ export runGep
 
 #redesign -> compute fitness should return fitness and crash, we just need to insert the chromosome
 """
-    compute_fitness(elem::Chromosome, operators::GenericOperatorEnum, x_data::AbstractArray{T},
+    compute_fitness(elem::Chromosome, operators::OperatorEnum, x_data::AbstractArray{T},
         y_data::AbstractArray{T}, loss_function::Function, crash_value::T; 
         validate::Bool=false) where {T<:AbstractFloat}
 
@@ -105,7 +105,7 @@ Computes the fitness score for a chromosome using the specified loss function.
 
 # Arguments
 - `elem::Chromosome`: The chromosome whose fitness needs to be computed
-- `operators::GenericOperatorEnum`: The set of mathematical operators available for expression evaluation
+- `operators::OperatorEnum`: The set of mathematical operators available for expression evaluation
 - `x_data::AbstractArray{T}`: Input features for fitness computation
 - `y_data::AbstractArray{T}`: Target values for fitness computation
 - `loss_function::Function`: The loss function used to compute fitness

@@ -569,7 +569,7 @@ Create a Gene Expression Programming regressor for symbolic regression.
 """
 mutable struct GepRegressor
     toolbox_::Toolbox
-    operators_::GenericOperatorEnum
+    operators_::OperatorEnum
     dimension_information_::OrderedDict{Int8,Vector{Float16}}
     best_models_::Union{Nothing,Vector{Chromosome}}
     fitness_history_::Any
@@ -617,7 +617,7 @@ mutable struct GepRegressor
         dimension_information = merge!(DimensionDict(), feat_dims, const_dims, pre_dims)
 
 
-        operators = GenericOperatorEnum(binary_operators=binary_ops, unary_operators=unary_ops)
+        operators = OperatorEnum(binary_operators=binary_ops, unary_operators=unary_ops)
 
         if !isempty(considered_dimensions)
             forward_funs, backward_funs, point_ops = create_physical_operations(entered_non_terminals)

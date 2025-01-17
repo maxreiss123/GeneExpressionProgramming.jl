@@ -227,9 +227,9 @@ export list_all_functions, list_all_arity, list_all_forward_handlers
 export list_all_backward_handlers, list_all_genetic_params
 export set_function!, set_arity!, set_forward_handler!, set_backward_handler!
 export update_function!
-export GPRegressionStrategy, ExpectedImprovement, PropabilityImrpovement, EntropySearch, GPState
+export GPRegressionStrategy, ExpectedImprovement, PropabilityImprovement, EntropySearch, GPState
 export update_surrogate!, predict_gp, compute_acquisition, add_point!
-export ExpectedImprovement, PropabilityImrpovement, EntropySearch
+
 
 
 end

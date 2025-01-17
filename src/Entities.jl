@@ -129,7 +129,7 @@ end
 abstract type EvaluationStrategy end
 
 struct StandardRegressionStrategy{T<:AbstractFloat} <: EvaluationStrategy
-    operators::GenericOperatorEnum
+    operators::OperatorEnum
     number_of_objectives::Int
     x_data::AbstractArray{T}
     y_data::AbstractArray{T}
@@ -141,7 +141,7 @@ struct StandardRegressionStrategy{T<:AbstractFloat} <: EvaluationStrategy
     penalty::T
     crash_value::T
 
-    function StandardRegressionStrategy{T}(operators::GenericOperatorEnum,
+    function StandardRegressionStrategy{T}(operators::OperatorEnum,
         x_data::AbstractArray,
         y_data::AbstractArray,
         x_data_test::AbstractArray,
@@ -168,13 +168,13 @@ struct StandardRegressionStrategy{T<:AbstractFloat} <: EvaluationStrategy
 end
 
 struct GenericRegressionStrategy <: EvaluationStrategy
-    operators::GenericOperatorEnum
+    operators::OperatorEnum
     number_of_objectives::Int
     loss_function::Function
     secOptimizer::Union{Function,Nothing}
     break_condition::Union{Function,Nothing}
 
-    function GenericRegressionStrategy(operators::GenericOperatorEnum, number_of_objectives::Int, loss_function::Function;
+    function GenericRegressionStrategy(operators::OperatorEnum, number_of_objectives::Int, loss_function::Function;
         secOptimizer::Union{Function,Nothing}, break_condition::Union{Function,Nothing})
         new(operators, number_of_objectives, loss_function, secOptimizer, break_condition)
     end
@@ -226,12 +226,12 @@ struct Toolbox
     fitness_reset::Tuple
     preamble_syms::Vector{Int8}
     len_preamble::Int8
-    operators_::Union{GenericOperatorEnum,Nothing}
+    operators_::Union{OperatorEnum,Nothing}
 
 
     function Toolbox(gene_count::Int, head_len::Int, symbols::OrderedDict{Int8,Int8}, gene_connections::Vector{Int8},
         callbacks::Dict, nodes::OrderedDict, gep_probs::Dict{String,AbstractFloat};
-        unary_prob::Real=0.1, preamble_syms=Int8[], number_of_objectives::Int=1, operators_::Union{GenericOperatorEnum,Nothing}=nothing)
+        unary_prob::Real=0.1, preamble_syms=Int8[], number_of_objectives::Int=1, operators_::Union{OperatorEnum,Nothing}=nothing)
         
         fitness_reset= (
             ntuple(_ -> Inf, number_of_objectives),
