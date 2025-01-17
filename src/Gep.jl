@@ -67,14 +67,11 @@ include("Losses.jl")
 include("Util.jl")
 include("Selection.jl")
 
-include("Surrogate.jl")
-
 
 using .LossFunction
 using .GepUtils
 using .EvoSelection
 using ..GepEntities
-using .GPSurrogate
 
 
 using Random
@@ -137,9 +134,6 @@ end
     return evalArgs.loss_function(elem, validate)
 end
 
-@inline function compute_fitness(elem::Chromosome, evalArgs::GPRegressionStrategy; validate::Bool=false)
-    return evalArgs.loss_function(elem, validate)
-end
 
 """
     perform_step!(population::Vector{Chromosome}, parents::Vector{Chromosome}, 
