@@ -316,7 +316,7 @@ The evolution process stops when either:
             fits_representation[index] = population[index].fitness
         end
 
-        if !isnothing(evalStrategy.secOptimizer) && epochs % optimization_epochs == 0 && population[1].fitness < prev_best
+        if !isnothing(evalStrategy.secOptimizer) && epoch % optimization_epochs == 0 && population[1].fitness < prev_best
             evalStrategy.secOptimizer(population)
             fits_representation[1] = population[1].fitness
             prev_best = fits_representation[1]
