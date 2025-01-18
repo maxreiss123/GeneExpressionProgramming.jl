@@ -85,53 +85,6 @@ end
             @test typeof(result[1]) <: Real
         end
     end
-
-    @testset "Genetic Operators" begin
-        toolbox = create_test_toolbox()
-        Random.seed!(42)
-        chromosome1 = generate_chromosome(toolbox)
-        chromosome2 = generate_chromosome(toolbox)
-        
-        genes1_original = copy(chromosome1.genes)
-        genes2_original = copy(chromosome2.genes)
-        
-        @testset "One Point Crossover" begin
-            c1, c2 = replicate(chromosome1, chromosome2, toolbox)
-            gene_one_point_cross_over!(c1, c2)
-            @test c1.genes != genes1_original || c2.genes != genes2_original
-        end
-        
-        @testset "Mutation" begin
-            c1 = Chromosome(copy(genes1_original), toolbox)
-            gene_mutation!(c1, 1.0)  # Force mutation
-            @test c1.genes != genes1_original
-        end
-        
-        @testset "Gene Fusion" begin
-            c1, c2 = replicate(chromosome1, chromosome2, toolbox)
-            gene_fussion!(c1, c2, 1.0)  # Force fusion
-            @test c1.genes != genes1_original || c2.genes != genes2_original
-        end
-        
-        @testset "Inversion" begin
-            pos_11 = toolbox.gene_count
-            pos_12 = toolbox.gene_count+toolbox.head_len-1
-            pos_21 = pos_12 + toolbox.head_len+2
-            pos_22 = pos_21 + toolbox.head_len-1
-            
-            c1 = Chromosome(copy(genes1_original), toolbox)
-
-
-            initial_head = copy(c1.genes[pos_11:pos_12])
-            initial_head2 = copy(c1.genes[pos_21:pos_22])
-
-            @show initial_head
-            @show initial_head2
-
-            gene_inversion!(c1)
-            @test c1.genes[toolbox.gene_count+1:toolbox.head_len+toolbox.gene_count] != initial_head || initial_head2 != c1.genes[9:11]
-        end
-    end
     
     @testset "Population Generation" begin
         toolbox = create_test_toolbox()

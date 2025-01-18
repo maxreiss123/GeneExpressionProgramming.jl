@@ -16,7 +16,7 @@ function break_condition(population, epoch)
     return isclose(mean(population[1].fitness), 0.0)
 end
 
-function loss_new(eqn::Node, operators::GenericOperatorEnum, x_data::AbstractArray, y_data::AbstractArray)
+function loss_new(eqn::Node, operators::OperatorEnum, x_data::AbstractArray, y_data::AbstractArray)
     try
         y_pred = eqn(x_data, operators)
         return get_loss_function("r2_score")(y_data, y_pred)
@@ -131,11 +131,11 @@ function main()
                             y_pred = elem.compiled_function(x_train', regressor.operators_)
                             return (get_loss_function("mse")(y_train, y_pred),)
                         else
-                            #return (elem.fitness, length(elem.expression_raw) * elem.fitness)
-                            return (elem.fitness,)
+                            return (elem.fitness, length(elem.expression_raw) * elem.fitness)
+                            #return (elem.fitness,)
                         end
                     catch e
-                        return (typemax(Float64),)
+                        return (typemax(Float64),typemax(Float64))
                     end
                 end
 

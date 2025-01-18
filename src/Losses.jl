@@ -72,6 +72,7 @@ module LossFunction
 
 export get_loss_function
 using Statistics
+using LoopVectorization
 
 function floor_to_n10p(x::T) where T<:AbstractFloat
     abs_x = abs(x)
@@ -159,15 +160,48 @@ function r2_score_floor(y_true::AbstractArray{T}, y_pred::AbstractArray{T}) wher
     return r2_score(y_true_scaled, y_pred_scaled)
 end
       
-function mean_squared_error(y_true::AbstractArray{T}, y_pred::AbstractArray{T}) where T<:AbstractFloat
-        d::T = zero(T)
-        @assert length(y_true) == length(y_pred)
-        @fastmath @inbounds @simd for i in eachindex(y_true, y_pred)
-              temp = (y_true[i]-y_pred[i])
-              d += temp*temp
+
+@inline function mean_squared_error_(y_true::AbstractArray{T},
+    y_pred::AbstractArray{T}) where {T<:AbstractFloat}
+    sum = zero(T)
+    len = length(y_true)
+
+    @fastmath @turbo for i in eachindex(y_true, y_pred)
+        diff = y_true[i] - y_pred[i]
+        sum += diff * diff
+    end
+
+    return sum / len
+end
+
+
+@inline function mean_squared_error(y_true::AbstractArray{T},
+    y_pred::AbstractArray{T}) where {T<:AbstractFloat}
+    len = length(y_true)
+    if len < 100_000
+        return mean_squared_error_(y_true, y_pred)
+    end
+
+    n_chunks = Threads.nthreads()
+    chunk_size = div(len, n_chunks)
+
+
+    partial_sums = zeros(T, n_chunks)
+
+    Threads.@threads for chunk in 1:n_chunks
+        start_idx = (chunk - 1) * chunk_size + 1
+        end_idx = chunk == n_chunks ? len : chunk * chunk_size
+
+        sum = zero(T)
+        @fastmath @turbo for i in start_idx:end_idx
+            diff = y_true[i] - y_pred[i]
+            sum += diff * diff
         end
-        return d/length(y_true)
-end      
+        partial_sums[chunk] = sum
+    end
+
+    return sum(partial_sums) / len
+end 
 
 function root_mean_squared_error(y_true::AbstractArray{T}, y_pred::AbstractArray{T}) where T<:AbstractFloat
     d::T = zero(T)
