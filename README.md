@@ -107,4 +107,4 @@ The repository contains an implementation of the Gene Expression Programming [1]
 - [x] Improve usability for user interaction
 - [ ] Next operations: Tail flip, Connection symbol flip, wrapper class for easy usage, config class for predefinition, staggered exploration
 - [ ] latest enhancements are provided in the branch 'feature/modular_error'
-- [ ] Flexible underlying engine to evaluate the expressions -> Currently DynamicExprresions, Flux in the future for GPU support
+- [ ] Flexible underlying engine to evaluate the expressions -> Currently DynamicExpressions.jl, Flux in the future for GPU support
