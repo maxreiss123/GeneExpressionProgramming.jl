@@ -92,6 +92,10 @@ The repository contains an implementation of the Gene Expression Programming [1]
 - Remark: Template for rerunning the test from the paper is located in the paper directory
 - Remark: the tutorial folder contains notebook, that can be run with google-colab, while showing a step-by-step introduction
 
+# Supported `Engines' for Symbolic Evaluation
+- DynamicExpressions.jl
+- Flux.jl --> in development
+
 
 # References
 - [1] Ferreira, C. (2001). Gene Expression Programming: a New Adaptive Algorithm for Solving Problems. Complex Systems, 13.
@@ -107,3 +111,4 @@ The repository contains an implementation of the Gene Expression Programming [1]
 - [x] Improve usability for user interaction
 - [x] Next operations: Tail flip, Connection symbol flip, staggered exploration
 - [ ] Mitigate exception handling in hot paths
+- [ ] Flexible underlying engine to evaluate the expressions -> Currently DynamicExpressions.jl, Flux in the future for GPU support
