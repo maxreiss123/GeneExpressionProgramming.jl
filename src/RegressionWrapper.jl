@@ -27,17 +27,6 @@ simplified interfaces and utilities for symbolic regression tasks with physical 
 - `GENE_COMMON_PROBS`: Default genetic operation probabilities
 - `FUNCTION_LIB_BACKWARD_COMMON`: Backward dimension propagation functions
 - `FUNCTION_LIB_FORWARD_COMMON`: Forward dimension propagation functions
-- `FUNCTION_LIB_COMMON`: Available mathematical functions
-
-# Function Library
-Includes extensive mathematical operations:
-- Basic arithmetic: +, -, *, /, ^
-- Comparisons: min, max
-- Rounding: floor, ceil, round
-- Exponential: exp, log, log10, log2
-- Trigonometric: sin, cos, tan, asin, acos, atan
-- Hyperbolic: sinh, cosh, tanh, asinh, acosh, atanh
-- Special: sqr, sqrt, sign, abs
 
 # Usage Example
 ```julia
@@ -134,7 +123,7 @@ module RegressionWrapper
 
 export GepRegressor
 export create_function_entries, create_feature_entries, create_constants_entries, create_physical_operations
-export GENE_COMMON_PROBS, FUNCTION_LIB_BACKWARD_COMMON, FUNCTION_LIB_FORWARD_COMMON, FUNCTION_LIB_COMMON
+export GENE_COMMON_PROBS, FUNCTION_LIB_BACKWARD_COMMON, FUNCTION_LIB_FORWARD_COMMON
 export fit!
 
 export list_all_functions, list_all_arity, list_all_forward_handlers,
@@ -160,108 +149,7 @@ using .SBPUtils
 using .GepUtils
 using DynamicExpressions
 using OrderedCollections
-
-#
-#const Toolbox = GepRegression.GepEntities.Toolbox
-#const TokenDto = SBPUtils.TokenDto
-#const Chromosome = GepRegression.GepEntities.Chromosome
-#const EvaluationStrategy = GepRegression.GepEntities.EvaluationStrategy
-#const GenericRegressionStrategy = GepRegression.GepEntities.GenericRegressionStrategy
-#const StandardRegressionStrategy = GepRegression.GepEntities.StandardRegressionStrategy
-
-function sqr(x::Vector{T}) where {T<:AbstractFloat}
-    return x .* x
-end
-
-function sqr(x::T) where {T<:Union{AbstractFloat,Node{<:AbstractFloat}}}
-    return x * x
-end
-
-"""
-    FUNCTION_LIB_COMMON::Dict{Symbol,Function}
-
-Dictionary mapping function symbols to their corresponding functions.
-Contains basic mathematical operations, trigonometric, and other common functions.
-
-# Available Functions
-- Basic arithmetic: `+`, `-`, `*`, `/`, `^`
-- Comparison: `min`, `max`
-- Rounding: `floor`, `ceil`, `round`
-- Exponential & Logarithmic: `exp`, `log`, `log10`, `log2`
-- Trigonometric: `sin`, `cos`, `tan`, `asin`, `acos`, `atan`
-- Hyperbolic: `sinh`, `cosh`, `tanh`, `asinh`, `acosh`, `atanh`
-- Other: `abs`, `sqr`, `sqrt`, `sign`
-
-To add a new function, ensure you also add corresponding entries in `ARITY_LIB_COMMON`,
-`FUNCTION_LIB_FORWARD_COMMON`, and `FUNCTION_LIB_BACKWARD_COMMON`.
-"""
-const FUNCTION_LIB_COMMON = Dict{Symbol,Function}(
-    :+ => +,
-    :- => -,
-    :* => *,
-    :/ => /,
-    :^ => ^,
-    :min => min,
-    :max => max, :abs => abs,
-    :floor => floor,
-    :ceil => ceil,
-    :round => round, :exp => exp,
-    :log => log,
-    :log10 => log10,
-    :log2 => log2, :sin => sin,
-    :cos => cos,
-    :tan => tan,
-    :asin => asin,
-    :acos => acos,
-    :atan => atan, :sinh => sinh,
-    :cosh => cosh,
-    :tanh => tanh,
-    :asinh => asinh,
-    :acosh => acosh,
-    :atanh => atanh, :sqr => sqr,
-    :sqrt => sqrt, :sign => sign
-)
-
-"""
-    ARITY_LIB_COMMON::Dict{Symbol,Int8}
-
-Dictionary specifying the number of arguments (arity) for each function in the library.
-- Value of 1 indicates unary functions (e.g., `sin`, `cos`, `abs`)
-- Value of 2 indicates binary functions (e.g., `+`, `-`, `*`, `/`)
-
-When adding new functions to `FUNCTION_LIB_COMMON`, ensure to specify their arity here.
-"""
-const ARITY_LIB_COMMON = Dict{Symbol,Int8}(
-    :+ => 2,
-    :- => 2,
-    :* => 2,
-    :/ => 2,
-    :^ => 2,
-    :min => 2,
-    :max => 2,
-    :abs => 1,
-    :floor => 1,
-    :ceil => 1,
-    :round => 1,
-    :exp => 1,
-    :log => 1,
-    :log10 => 1,
-    :log2 => 1,
-    :sin => 1,
-    :cos => 1,
-    :tan => 1,
-    :asin => 1,
-    :acos => 1,
-    :atan => 1,
-    :sinh => 1,
-    :cosh => 1,
-    :tanh => 1,
-    :asinh => 1,
-    :acosh => 1,
-    :atanh => 1,
-    :sqrt => 1,
-    :sqr => 1
-)
+using LinearAlgebra
 
 """
     FUNCTION_LIB_FORWARD_COMMON::Dict{Symbol,Function}
@@ -489,7 +377,7 @@ function create_constants_entries(
 
     for elem in entered_terminal_nums
         utilized_symbols[cur_idx] = 0
-        nodes[cur_idx] = Node{node_type}(;val=parse(node_type, string(elem)))
+        nodes[cur_idx] = Node{node_type}(; val=parse(node_type, string(elem)))
         dimension_information[cur_idx] = get(dimensions_to_consider, elem, ZERO_DIM)
         cur_idx += 1
     end
@@ -497,7 +385,7 @@ function create_constants_entries(
 
     for _ in 1:rnd_count
         utilized_symbols[cur_idx] = 0
-        nodes[cur_idx] = Node{node_type}(;val=rand())
+        nodes[cur_idx] = Node{node_type}(; val=rand())
         dimension_information[cur_idx] = ZERO_DIM
         cur_idx += 1
     end
@@ -738,7 +626,7 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, x_trai
         correction_callback=correction_callback,
         correction_epochs=correction_epochs,
         correction_amount=correction_amount,
-        tourni_size=max(Int(ceil(population_size*0.03)),3),
+        tourni_size=max(Int(ceil(population_size * 0.03)), 3),
         optimization_epochs=optimization_epochs
     )
 
@@ -750,7 +638,7 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, loss_f
     optimizer_function_::Union{Function,Nothing}=nothing,
     optimization_epochs::Int=100,
     hof::Int=3,
-    correction_epochs::Int=1, 
+    correction_epochs::Int=1,
     correction_amount::Real=0.05,
     opt_method_const::Symbol=:cg,
     target_dimension::Union{Vector{Float16},Nothing}=nothing,
@@ -799,7 +687,7 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, loss_f
         correction_callback=correction_callback,
         correction_epochs=correction_epochs,
         correction_amount=correction_amount,
-        tourni_size=max(Int(ceil(population_size*0.03)),3),
+        tourni_size=max(Int(ceil(population_size * 0.03)), 3),
         optimization_epochs=optimization_epochs
     )
 

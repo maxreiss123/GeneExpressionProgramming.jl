@@ -48,6 +48,20 @@ operations, including optimization, history tracking, data manipulation, and sta
 - `train_test_split`: Split dataset for training/testing
 - `save_state`, `load_state`: State persistence
 
+## Constants
+- `FUNCTION_LIB_COMMON`: Available mathematical functions
+
+# Function Library
+Includes extensive mathematical operations:
+- Basic arithmetic: +, -, *, /, ^
+- Comparisons: min, max
+- Rounding: floor, ceil, round
+- Exponential: exp, log, log10, log2
+- Trigonometric: sin, cos, tan, asin, acos, atan
+- Hyperbolic: sinh, cosh, tanh, asinh, acosh, atanh
+- Special: sqr, sqrt, sign, abs
+- Tensorfunctions: 
+
 # Usage Example
 ```julia
 # History recording
@@ -86,7 +100,10 @@ optimized_node, final_loss = optimize_constants!(
 - `Zygote`: Automatic differentiation
 - `Serialization`: State persistence
 - `Statistics`: Statistical computations
+- `Flux`: ML-Package
+- `Tensors`: mathematical objects of higher order
 - `Random`: Random number generation
+- `CUDA`: Extension to run on CUDA-cores
 """
 module GepUtils
 
@@ -95,6 +112,8 @@ export save_state, load_state
 export create_history_recorder, record_history!, record!, close_recorder!
 export HistoryRecorder, OptimizationHistory, get_history_arrays
 export train_test_split
+export FUNCTION_LIB_COMMON, ARITY_LIB_COMMON
+export TensorNode, compile_network
 
 using OrderedCollections
 using DynamicExpressions
@@ -105,9 +124,121 @@ using Zygote
 using Serialization
 using Statistics
 using Random
+using Tensors
+using Flux
 using Base.Threads: @spawn
 
 
+
+function sqr(x::Vector{T}) where {T<:AbstractFloat}
+    return x .* x
+end
+
+function sqr(x::T) where {T<:Union{AbstractFloat,Node{<:AbstractFloat}}}
+    return x * x
+end
+
+"""
+    FUNCTION_LIB_COMMON::Dict{Symbol,Function}
+
+Dictionary mapping function symbols to their corresponding functions.
+Contains basic mathematical operations, trigonometric, and other common functions.
+
+# Available Functions
+- Basic arithmetic: `+`, `-`, `*`, `/`, `^`
+- Comparison: `min`, `max`
+- Rounding: `floor`, `ceil`, `round`
+- Exponential & Logarithmic: `exp`, `log`, `log10`, `log2`
+- Trigonometric: `sin`, `cos`, `tan`, `asin`, `acos`, `atan`
+- Hyperbolic: `sinh`, `cosh`, `tanh`, `asinh`, `acosh`, `atanh`
+- Other: `abs`, `sqr`, `sqrt`, `sign`
+- Tensor Functions: 
+
+To add a new function, ensure you also add corresponding entries in `ARITY_LIB_COMMON`,
+`FUNCTION_LIB_FORWARD_COMMON`, and `FUNCTION_LIB_BACKWARD_COMMON`.
+"""
+const FUNCTION_LIB_COMMON = Dict{Symbol,Function}(
+    :+ => +,
+    :- => -,
+    :* => *,
+    :/ => /,
+    :^ => ^,
+    :min => min,
+    :max => max, :abs => abs,
+    :floor => floor,
+    :ceil => ceil,
+    :round => round, :exp => exp,
+    :log => log,
+    :log10 => log10,
+    :log2 => log2, :sin => sin,
+    :cos => cos,
+    :tan => tan,
+    :asin => asin,
+    :acos => acos,
+    :atan => atan, :sinh => sinh,
+    :cosh => cosh,
+    :tanh => tanh,
+    :asinh => asinh,
+    :acosh => acosh,
+    :atanh => atanh, :sqr => sqr,
+    :sqrt => sqrt, :sign => sign,
+
+
+    # Tensor specific operations -> never use in scalar regression tasks - documenation: https://ferrite-fem.github.io/Tensors.jl/stable/man/other_operators/
+    :inv => inv, :tr => tr, :det => det,
+    :symmetric => symmetric, :skew => skew,
+    :vol => vol, :dev => dev,
+    :dot => dot, :dcontract => dcontract,
+    :tdot => tdot, :dott => dott
+)
+
+"""
+    ARITY_LIB_COMMON::Dict{Symbol,Int8}
+
+Dictionary specifying the number of arguments (arity) for each function in the library.
+- Value of 1 indicates unary functions (e.g., `sin`, `cos`, `abs`)
+- Value of 2 indicates binary functions (e.g., `+`, `-`, `*`, `/`)
+
+When adding new functions to `FUNCTION_LIB_COMMON`, ensure to specify their arity here.
+"""
+const ARITY_LIB_COMMON = Dict{Symbol,Int8}(
+    :+ => 2,
+    :- => 2,
+    :* => 2,
+    :/ => 2,
+    :^ => 2,
+    :min => 2,
+    :max => 2,
+    :abs => 1,
+    :floor => 1,
+    :ceil => 1,
+    :round => 1,
+    :exp => 1,
+    :log => 1,
+    :log10 => 1,
+    :log2 => 1,
+    :sin => 1,
+    :cos => 1,
+    :tan => 1,
+    :asin => 1,
+    :acos => 1,
+    :atan => 1,
+    :sinh => 1,
+    :cosh => 1,
+    :tanh => 1,
+    :asinh => 1,
+    :acosh => 1,
+    :atanh => 1,
+    :sqrt => 1,
+    :sqr => 1,
+
+    # Tensor specific operations -> never use in scalar regression tasks - documenation: https://ferrite-fem.github.io/Tensors.jl/stable/man/other_operators/
+    :inv => 1, :tr => 1, :det => 1,
+    :symmetric => 1, :skew => 1,
+    :vol => 1, :dev => 1,
+    :dot => 2, :dcontract => 2,
+    :tdot => 1, :dott => 1
+)
 
 struct OptimizationHistory{T<:Union{AbstractFloat,Tuple}}
     train_loss::Vector{T}
@@ -258,12 +389,12 @@ end
 
 
 @inline function tuple_agg(entries::Vector{T}, fun::Function) where {T<:Tuple}
-    isempty(entries) && return entries[1] 
+    isempty(entries) && return entries[1]
     N = length(first(entries))
     L = length(entries)
-    
+
     vectors = ntuple(i -> Vector{Float64}(undef, L), N)
-    
+
     for (j, entry) in enumerate(entries)
         for i in 1:length(entry)
             vectors[i][j] = entry[i]
@@ -278,10 +409,10 @@ end
 ) where {T<:Union{AbstractFloat,Tuple}}
     for (epoch, train_loss, val_loss, fit_vector) in channel
         @inbounds begin
-           history.train_loss[epoch] = train_loss
-           history.val_loss[epoch] = val_loss
-           #history.train_mean[epoch] = tuple_agg(fit_vector,mean)
-           #history.train_std[epoch] = tuple_agg(fit_vector, std)
+            history.train_loss[epoch] = train_loss
+            history.val_loss[epoch] = val_loss
+            #history.train_mean[epoch] = tuple_agg(fit_vector,mean)
+            #history.train_std[epoch] = tuple_agg(fit_vector, std)
         end
     end
 end
@@ -435,7 +566,7 @@ function compile_djl_datatype(rek_string::Vector, arity_map::OrderedDict, callba
             push!(stack, elem isa Int8 ? nodes[elem] : elem)
         end
     end
-    return pre_len==1 ? last(stack) : stack
+    return pre_len == 1 ? last(stack) : stack
 end
 
 @inline function retrieve_constants_from_node(node::Node)
@@ -447,6 +578,53 @@ end
     end
     constants
 end
+
+
+"""
+Compile expression as Flux network
+"""
+
+function compile_to_flux_network(rek_string::Vector, arity_map::OrderedDict; use_cuda::Bool=false)
+    stack = Vector{Any}(undef, length(rek_string))
+    sp = 0
+    input_count = count(x -> x isa Int8, rek_string)
+    inputs = [InputSelector(i) for i in 1:input_count]
+    
+    @inbounds for elem in rek_string
+        if elem isa Int8
+            sp += 1
+            stack[sp] = inputs[elem]
+        else
+            arity = get(arity_map, elem, 0)
+            if arity == 2 && sp >= 2
+                op1 = stack[sp]
+                op2 = stack[sp-1]
+                sp -= 1
+                
+                if haskey(BINARY_OPS, elem)
+                    node = BINARY_OPS[elem](nothing, use_cuda=use_cuda)
+                    stack[sp] = x -> node(op2(x), op1(x))
+                elseif haskey(TENSOR_OPS, elem)
+                    node = TENSOR_OPS[elem](nothing, use_cuda=use_cuda)
+                    stack[sp] = x -> node(op2(x), op1(x))
+                end
+            elseif arity == 1 && sp >= 1
+                op = stack[sp]
+                if haskey(UNARY_OPS, elem)
+                    node = UnaryNode(UNARY_OPS[elem], nothing, use_cuda=use_cuda)
+                    stack[sp] = x -> node(op(x))
+                elseif haskey(TENSOR_OPS, elem)
+                    node = TENSOR_OPS[elem](nothing, use_cuda=use_cuda)
+                    stack[sp] = x -> node(op(x))
+                end
+            end
+        end
+    end
+    
+    @assert sp == 1 "Invalid expression: stack error"
+    return Chain(stack[1])
+end
+
 
 """
     optimize_constants!(
@@ -624,32 +802,32 @@ end
 
 
 function train_test_split(
-    X::AbstractMatrix{T}, 
-    y::AbstractVector{T}; 
-    train_ratio::T=0.9, 
+    X::AbstractMatrix{T},
+    y::AbstractVector{T};
+    train_ratio::T=0.9,
     consider::Int=1
 ) where {T<:AbstractFloat}
 
     data = hcat(X, y)
-    
+
 
     data = data[shuffle(1:size(data, 1)), :]
-    
+
 
     split_point = floor(Int, size(data, 1) * train_ratio)
-    
+
 
     data_train = data[1:split_point, :]
-    data_test = data[(split_point + 1):end, :]
-    
+    data_test = data[(split_point+1):end, :]
+
 
     x_train = T.(data_train[1:consider:end, 1:(end-1)])
     y_train = T.(data_train[1:consider:end, end])
-    
+
     x_test = T.(data_test[1:consider:end, 1:(end-1)])
     y_test = T.(data_test[1:consider:end, end])
-    
-    return x_train, y_train, x_test,  y_test
+
+    return x_train, y_train, x_test, y_test
 end
 
 
