@@ -797,7 +797,30 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, loss_f
     regressor.fitness_history_ = history
 end
 
+function fit!(regressor::GepTensorRegressor, epochs::Int, population_size::Int, loss_function::Function;
+    hof::Int=3,
+    break_condition::Union{Function,Nothing}=nothing
+)
 
+    evalStrat = GenericRegressionStrategy(
+        regressor.operators_,
+        length(regressor.toolbox_.fitness_reset[1]),
+        loss_function;
+        secOptimizer=nothing,
+        break_condition=break_condition
+    )
+
+    best, history = runGep(epochs,
+        population_size,
+        regressor.toolbox_,
+        evalStrat;
+        hof=hof,
+        tourni_size=max(Int(ceil(population_size * 0.03)), 3)
+    )
+
+    regressor.best_models_ = best
+    regressor.fitness_history_ = history
+end
 
 """
     (regressor::GepRegressor)(x_data::AbstractArray; ensemble::Bool=false)
