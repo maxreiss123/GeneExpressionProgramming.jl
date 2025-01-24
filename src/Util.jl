@@ -581,52 +581,6 @@ end
 
 
 """
-Compile expression as Flux network
-"""
-
-function compile_to_flux_network(rek_string::Vector, arity_map::OrderedDict; use_cuda::Bool=false)
-    stack = Vector{Any}(undef, length(rek_string))
-    sp = 0
-    input_count = count(x -> x isa Int8, rek_string)
-    inputs = [InputSelector(i) for i in 1:input_count]
-    
-    @inbounds for elem in rek_string
-        if elem isa Int8
-            sp += 1
-            stack[sp] = inputs[elem]
-        else
-            arity = get(arity_map, elem, 0)
-            if arity == 2 && sp >= 2
-                op1 = stack[sp]
-                op2 = stack[sp-1]
-                sp -= 1
-                
-                if haskey(BINARY_OPS, elem)
-                    node = BINARY_OPS[elem](nothing, use_cuda=use_cuda)
-                    stack[sp] = x -> node(op2(x), op1(x))
-                elseif haskey(TENSOR_OPS, elem)
-                    node = TENSOR_OPS[elem](nothing, use_cuda=use_cuda)
-                    stack[sp] = x -> node(op2(x), op1(x))
-                end
-            elseif arity == 1 && sp >= 1
-                op = stack[sp]
-                if haskey(UNARY_OPS, elem)
-                    node = UnaryNode(UNARY_OPS[elem], nothing, use_cuda=use_cuda)
-                    stack[sp] = x -> node(op(x))
-                elseif haskey(TENSOR_OPS, elem)
-                    node = TENSOR_OPS[elem](nothing, use_cuda=use_cuda)
-                    stack[sp] = x -> node(op(x))
-                end
-            end
-        end
-    end
-    
-    @assert sp == 1 "Invalid expression: stack error"
-    return Chain(stack[1])
-end
-
-
-"""
     optimize_constants!(
         node::Node,
         loss::Function;
