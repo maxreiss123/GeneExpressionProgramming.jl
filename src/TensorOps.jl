@@ -179,64 +179,64 @@ for T in NODES
    @eval Flux.Functors.@functor $T
 end
 
-@inline function (l::AdditionNode)(x::Tensor, y::Tensor)
-    result = x .+ y
+@inline function (l::AdditionNode)(x::Union{Tensor,SymmetricTensor}, y::Union{Tensor,SymmetricTensor})
+    result = x + y
     return result
 end
 
 @inline function (l::AdditionNode)(x::Vector, y::Vector)
-    result = x .+ y
+    result = x + y
     return result
 end
 
 @inline function (l::AdditionNode)(x::Number, y::Number)
-    result = x .+ y
+    result = x + y
     return result
 end
 
-@inline function (l::SubtractionNode)(x::Tensor, y::Tensor)
-    result = x .- y
+@inline function (l::SubtractionNode)(x::Union{Tensor,SymmetricTensor}, y::Union{Tensor,SymmetricTensor})
+    result = x - y
     return result
 end
 
 
 @inline function (l::SubtractionNode)(x::Vector, y::Vector)
-    result = x .- y
+    result = x - y
     return result
 end
 
 @inline function (l::SubtractionNode)(x::Number, y::Number)
-    result = x .- y
+    result = x - y
     return result
 end
 
 @inline function (l::MultiplicationNode)(x::Number, y::Number)
-    result =  y .* x
-    return result
-end
-
-@inline function (l::MultiplicationNode)(x::Tensor, y::Number)
     result =  y * x
     return result
 end
 
-@inline function (l::MultiplicationNode)(x::Number, y::Tensor)
+@inline function (l::MultiplicationNode)(x::Union{Tensor,SymmetricTensor}, y::Number)
     result =  y * x
     return result
 end
 
-@inline function (l::MultiplicationNode)(x::Tensor, y::Tensor)
+@inline function (l::MultiplicationNode)(x::Number, y::Union{Tensor,SymmetricTensor})
+    result =  y * x
+    return result
+end
+
+@inline function (l::MultiplicationNode)(x::Union{Tensor,SymmetricTensor}, y::Union{Tensor,SymmetricTensor})
     result =  dot(x,y)
     return result
 end
 
-@inline function (l::DivisionNode)(x::Tensor, y::Vector)
-    result = x ./ y
+@inline function (l::DivisionNode)(x::Union{Tensor,SymmetricTensor}, y::Vector)
+    result = x / y
     return result
 end
 
 
-@inline function (l::PowerNode)(x::Union{Tensor,Number}, y::Number)
+@inline function (l::PowerNode)(x::Union{Tensor,SymmetricTensor,Number}, y::Number)
     result = x ^ y
     return result
 end
@@ -253,12 +253,12 @@ end
 
 
 @inline function (l::MinNode)(x, y)
-    result = min.(x, y)
+    result = min(x, y)
     return result
 end
 
 @inline function (l::MaxNode)(x, y)
-    result = max.(x, y)
+    result = max(x, y)
     return result
 end
 
@@ -327,7 +327,6 @@ function compile_to_flux_network(rek_string::Vector, arity_map::OrderedDict, cal
             op2 = pop!(stack)
             node = callbacks[elem]()
             push!(stack, (inputs) -> node(op1(inputs), op2(inputs)))
-            @show elem
         elseif get(arity_map, elem, 0) == 1
             op = pop!(stack)
             node = callbacks[elem]()
@@ -339,7 +338,6 @@ function compile_to_flux_network(rek_string::Vector, arity_map::OrderedDict, cal
             end
             if nodes[elem] isa Number
                 push!(stack, _ -> nodes[elem])
-                #push!(stack, (inputs) -> ConstantNode(inputs_idx[elem])(inputs))
             else
                 push!(stack, (inputs) -> InputSelector(inputs_idx[elem])(inputs))
             end
