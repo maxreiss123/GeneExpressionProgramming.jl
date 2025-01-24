@@ -114,7 +114,9 @@ import .GepUtils:
     HistoryRecorder,
     OptimizationHistory,
     get_history_arrays,
-    train_test_split
+    train_test_split,
+    ARITY_LIB_COMMON,
+    FUNCTION_LIB_COMMON
 
 # Import selection mechanisms
 import .EvoSelection:
@@ -179,6 +181,7 @@ import .GepEntities:
 # Import regression wrapper functionality
 import .RegressionWrapper:
     GepRegressor,
+    GepTensorRegressor,
     fit!,
     list_all_functions,
     list_all_arity,
@@ -209,12 +212,12 @@ export get_feature_dims_json, get_target_dim_json, retrieve_coeffs_based_on_simi
 export Chromosome, Toolbox, fitness, set_fitness!
 export generate_gene, compile_expression!, generate_chromosome, generate_population 
 export genetic_operations!
-export GepRegressor, fit!
+export GepRegressor,GepTensorRegressor, fit!
 export list_all_functions, list_all_arity, list_all_forward_handlers
 export list_all_backward_handlers, list_all_genetic_params
 export set_function!, set_arity!, set_forward_handler!, set_backward_handler!
 export update_function!
-
+export ARITY_LIB_COMMON, FUNCTION_LIB_COMMON
 
 
 end

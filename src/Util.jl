@@ -181,15 +181,7 @@ const FUNCTION_LIB_COMMON = Dict{Symbol,Function}(
     :asinh => asinh,
     :acosh => acosh,
     :atanh => atanh, :sqr => sqr,
-    :sqrt => sqrt, :sign => sign,
-
-
-    # Tensor specific operations -> never use in scalar regression tasks - documenation: https://ferrite-fem.github.io/Tensors.jl/stable/man/other_operators/
-    :inv => inv, :tr => tr, :det => det,
-    :symmetric => symmetric, :skew => skew,
-    :vol => vol, :dev => dev,
-    :dot => dot, :dcontract => dcontract,
-    :tdot => tdot, :dott => dott
+    :sqrt => sqrt, :sign => sign
 )
 
 """
@@ -230,14 +222,7 @@ const ARITY_LIB_COMMON = Dict{Symbol,Int8}(
     :acosh => 1,
     :atanh => 1,
     :sqrt => 1,
-    :sqr => 1,
-
-    # Tensor specific operations -> never use in scalar regression tasks - documenation: https://ferrite-fem.github.io/Tensors.jl/stable/man/other_operators/
-    :inv => 1, :tr => 1, :det => 1,
-    :symmetric => 1, :skew => 1,
-    :vol => 1, :dev => 1,
-    :dot => 2, :dcontract => 2,
-    :tdot => 1, :dott => 1
+    :sqr => 1
 )
 
 struct OptimizationHistory{T<:Union{AbstractFloat,Tuple}}
@@ -550,7 +535,6 @@ result = compile_djl_datatype(rek_string, arity_map, callbacks, nodes)
 See also: [`DynamicExpressions.Node`](@ref)
 """
 function compile_djl_datatype(rek_string::Vector, arity_map::OrderedDict, callbacks::Dict, nodes::OrderedDict, pre_len::Int)
-    #just let it fail when it becomes invalid, because then the equation is not that use full
     stack = []
     for elem in reverse(rek_string[pre_len:end])
         if get(arity_map, elem, 0) == 2

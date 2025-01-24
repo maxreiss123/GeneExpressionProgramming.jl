@@ -78,8 +78,11 @@ export generate_gene, compile_expression!, generate_chromosome, generate_populat
 export genetic_operations!, replicate, gene_inversion!, gene_mutation!, gene_one_point_cross_over!, gene_two_point_cross_over!, gene_fussion!
 
 include("Util.jl")
+include("TensorOps.jl")
+
 
 using .GepUtils
+using .TensorRegUtils
 using OrderedCollections
 using DynamicExpressions
 
@@ -227,11 +230,13 @@ struct Toolbox
     preamble_syms::Vector{Int8}
     len_preamble::Int8
     operators_::Union{OperatorEnum,Nothing}
+    compile_function_::Function
 
 
     function Toolbox(gene_count::Int, head_len::Int, symbols::OrderedDict{Int8,Int8}, gene_connections::Vector{Int8},
         callbacks::Dict, nodes::OrderedDict, gep_probs::Dict{String,AbstractFloat};
-        unary_prob::Real=0.1, preamble_syms=Int8[], number_of_objectives::Int=1, operators_::Union{OperatorEnum,Nothing}=nothing)
+        unary_prob::Real=0.1, preamble_syms=Int8[], 
+        number_of_objectives::Int=1, operators_::Union{OperatorEnum,Nothing}=nothing, function_complile::Function=compile_djl_datatype)
         
         fitness_reset= (
             ntuple(_ -> Inf, number_of_objectives),
@@ -245,7 +250,7 @@ struct Toolbox
         gen_start_indices = [gene_count + (gene_len * (i - 1)) for i in 1:gene_count]
         ensure_buffer_size!(head_len, gene_count)
         new(gene_count, head_len, symbols, gene_connections, headsyms, unary_syms, tailsyms, symbols,
-            callbacks, nodes, gen_start_indices, gep_probs, unary_prob, fitness_reset, preamble_syms, len_preamble, operators_)
+            callbacks, nodes, gen_start_indices, gep_probs, unary_prob, fitness_reset, preamble_syms, len_preamble, operators_, compile_djl_datatype)
     end
 end
 
@@ -321,7 +326,7 @@ Fitness value or tuple
     if !chromosome.compiled || force_compile
         try
             expression = _karva_raw(chromosome)
-            expression_tree = compile_djl_datatype(expression, chromosome.toolbox.symbols, chromosome.toolbox.callbacks,
+            expression_tree = chromosome.toolbox.compile_function_(expression, chromosome.toolbox.symbols, chromosome.toolbox.callbacks,
                 chromosome.toolbox.nodes, max(chromosome.toolbox.len_preamble,1))
             chromosome.compiled_function = expression_tree
             chromosome.expression_raw = expression

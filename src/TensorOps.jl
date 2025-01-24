@@ -14,8 +14,10 @@ export VolumetricNode, DeviatricNode, TdotNode, DottNode
 export DoubleContractionNode, DeviatoricNode
 export ConstantNode, UnaryNode
 
-# Core functions
 export compile_to_flux_network
+
+export TENSOR_NODES, TENSOR_NODES_ARITY
+
 
 abstract type OperationNode end
 
@@ -154,7 +156,7 @@ end
 
 const NODES = [
     AdditionNode,
-    SubtractionNode, 
+    SubtractionNode,
     MultiplicationNode,
     DivisionNode,
     PowerNode,
@@ -176,7 +178,7 @@ const NODES = [
 ]
 
 for T in NODES
-   @eval Flux.Functors.@functor $T
+    @eval Flux.Functors.@functor $T
 end
 
 @inline function (l::AdditionNode)(x::Union{Tensor,SymmetricTensor}, y::Union{Tensor,SymmetricTensor})
@@ -211,22 +213,22 @@ end
 end
 
 @inline function (l::MultiplicationNode)(x::Number, y::Number)
-    result =  y * x
+    result = y * x
     return result
 end
 
 @inline function (l::MultiplicationNode)(x::Union{Tensor,SymmetricTensor}, y::Number)
-    result =  y * x
+    result = y * x
     return result
 end
 
 @inline function (l::MultiplicationNode)(x::Number, y::Union{Tensor,SymmetricTensor})
-    result =  y * x
+    result = y * x
     return result
 end
 
 @inline function (l::MultiplicationNode)(x::Union{Tensor,SymmetricTensor}, y::Union{Tensor,SymmetricTensor})
-    result =  dot(x,y)
+    result = dot(x, y)
     return result
 end
 
@@ -237,7 +239,7 @@ end
 
 
 @inline function (l::PowerNode)(x::Union{Tensor,SymmetricTensor,Number}, y::Number)
-    result = x ^ y
+    result = x^y
     return result
 end
 
@@ -317,9 +319,9 @@ end
     return result
 end
 
-function compile_to_flux_network(rek_string::Vector, arity_map::OrderedDict, callbacks::Dict, nodes::OrderedDict; use_cuda::Bool=false)
+function compile_to_flux_network(rek_string::Vector, arity_map::OrderedDict, callbacks::Dict, nodes::OrderedDict, pre_len::Int)
     stack = []
-    inputs_idx = Dict{Int8, Int8}()
+    inputs_idx = Dict{Int8,Int8}()
     idx = 1
     for elem in reverse(rek_string)
         if get(arity_map, elem, 0) == 2
@@ -333,8 +335,8 @@ function compile_to_flux_network(rek_string::Vector, arity_map::OrderedDict, cal
             push!(stack, (inputs) -> node(op(inputs)))
         else
             if get(inputs_idx, elem, 0) == 0
-                inputs_idx[elem] = idx    
-                idx +=1
+                inputs_idx[elem] = idx
+                idx += 1
             end
             if nodes[elem] isa Number
                 push!(stack, _ -> nodes[elem])
@@ -342,10 +344,54 @@ function compile_to_flux_network(rek_string::Vector, arity_map::OrderedDict, cal
                 push!(stack, (inputs) -> InputSelector(inputs_idx[elem])(inputs))
             end
         end
-        
+
     end
     return Chain(pop!(stack)), inputs_idx
 end
+
+
+const TENSOR_NODES = Dict{Symbol,Type}(
+    :+ => AdditionNode,
+    :- => SubtractionNode,
+    :* => MultiplicationNode,
+    :/ => DivisionNode,
+    :^ => PowerNode,
+    :min => MinNode,
+    :max => MaxNode,
+    :inv => InversionNode,
+    :tr => TraceNode,
+    :det => DeterminantNode,
+    :symmetric => SymmetricNode,
+    :skew => SkewNode,
+    :vol => VolumetricNode,
+    :dev => DeviatricNode,
+    :tdot => TdotNode,
+    :dott => DottNode,
+    :dcontract => DoubleContractionNode,
+    :deviator => DeviatoricNode
+)
+
+const TENSOR_NODES_ARITY = Dict{Symbol,Int8}(
+    :+ => 2,
+    :- => 2,
+    :* => 2,
+    :/ => 2,
+    :^ => 2,
+    :min => 2,
+    :max => 2,
+    :inv => 1,
+    :tr => 1,
+    :det => 1,
+    :symmetric => 1,
+    :skew => 1,
+    :vol => 1,
+    :dev => 1,
+    :tdot => 1,
+    :dott => 1,
+    :dcontract => 2,
+    :deviator => 1
+)
+
 
 """
 

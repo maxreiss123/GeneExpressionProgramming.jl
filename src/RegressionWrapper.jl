@@ -121,7 +121,7 @@ See also:
 module RegressionWrapper
 
 
-export GepRegressor
+export GepRegressor, GepTensorRegressor
 export create_function_entries, create_feature_entries, create_constants_entries, create_physical_operations
 export GENE_COMMON_PROBS, FUNCTION_LIB_BACKWARD_COMMON, FUNCTION_LIB_FORWARD_COMMON
 export fit!
@@ -138,6 +138,7 @@ include("PhyConstants.jl")
 include("Sbp.jl")
 include("Selection.jl")
 include("Util.jl")
+include("TensorOps.jl")
 
 
 using .GepEntities
@@ -147,6 +148,7 @@ using .EvoSelection
 using .GepRegression
 using .SBPUtils
 using .GepUtils
+using .TensorRegUtils
 using DynamicExpressions
 using OrderedCollections
 using LinearAlgebra
@@ -454,6 +456,7 @@ Create a Gene Expression Programming regressor for symbolic regression.
 - `preamble_syms::Vector{Symbol}=Symbol[]`: Preamble symbols
 - `max_permutations_lib::Int=10000`: Maximum permutations for dimension library
 - `rounds::Int=4`: Rounds for dimension library creation
+- `number_of_objectives::Int=1`: Defines the number of objectives considered by the search
 """
 mutable struct GepRegressor
     toolbox_::Toolbox
@@ -537,6 +540,105 @@ mutable struct GepRegressor
         obj.operators_ = operators
         obj.dimension_information_ = dimension_information
         obj.token_dto_ = token_dto
+        return obj
+    end
+end
+
+"""
+    GepTensorRegressor
+
+A Gene Expression Programming (GEP) regressor that evolves higher order mathematical expressions (e.g tensor-based). 
+
+# Fields
+- `toolbox_::Toolbox`: Contains configuration and operators for GEP evolution
+- `best_models_::Union{Nothing,Vector{Chromosome}}`: Best models found during evolution
+- `fitness_history_::Any`: History of fitness values during training
+
+# Constructor
+    GepTensorRegressor(feature_amount::Int; kwargs...)
+
+Create a new GEP tensor regressor with specified number of input features.
+
+# Arguments
+- `feature_amount::Int`: Number of input features to use in the regression
+
+# Keyword Arguments 
+- `entered_non_terminals::Vector{Symbol}=[:+, :-, :*, :/]`: Available mathematical operators
+- `entered_terminal_nums::Vector{<:AbstractFloat}=[0.0, 0.5]`: Constants available as terminals
+- `gene_connections::Vector{Symbol}=[:+, :-, :*, :/]`: Operators for connecting genes
+- `rnd_count::Int=1`: Number of random constant terminals to generate
+- `gene_count::Int=3`: Number of genes in each chromosome 
+- `head_len::Int=6`: Length of the head section in each gene
+- `number_of_objectives::Int=1`: Number of optimization objectives
+
+The regressor uses GEP to evolve tensor-based mathematical expressions that map input features 
+to target values. It supports multiple genes connected by operators and can optimize for 
+multiple objectives.
+
+# Implementation Details
+- Uses InputSelector nodes for features
+- Combines fixed and random constant terminals
+- Maps operators to TENSOR_NODES callbacks
+- Uses TENSOR_NODES_ARITY for operator arity
+- Compiles expressions to Flux networks via compile_to_flux_network
+"""
+mutable struct GepTensorRegressor
+    toolbox_::Toolbox
+    best_models_::Union{Nothing,Vector{Chromosome}}
+    fitness_history_::Any
+
+
+    function GepTensorRegressor(feature_amount::Int;
+        entered_non_terminals::Vector{Symbol}=[:+, :-, :*, :/],
+        entered_terminal_nums::Vector{<:AbstractFloat}=[0.0, 0.5],
+        gene_connections::Vector{Symbol}=[:+, :-, :*, :/],
+        rnd_count::Int=1,
+        gene_count::Int=3,
+        head_len::Int=6,
+        number_of_objectives::Int=1
+    )
+        #Creating the feature Nodes -> asuming a data dict pointing to 
+        cur_idx = Int8(1)
+        nodes = OrderedDict{Int8,Any}()
+        utilized_symbols = SymbolDict()
+        callbacks = Dict{Int8,Any}()
+        gene_connections_ = Int8[]
+        for _ in 1:feature_amount
+            nodes[cur_idx] = InputSelector(cur_idx)
+            utilized_symbols[cur_idx] = Int8(0)
+            cur_idx += 1
+        end
+
+        #Creating the const_nodes
+        for elem in entered_terminal_nums
+            nodes[cur_idx] = elem
+            utilized_symbols[cur_idx] = Int8(0)
+            cur_idx += 1
+        end
+
+        for _ in 1:rnd_count
+            nodes[cur_idx] = rand()
+            utilized_symbols[cur_idx] = Int8(0)
+            cur_idx += 1
+        end
+
+        #callback - index => function
+        for elem in entered_non_terminals
+            callbacks[cur_idx] = TENSOR_NODES[elem]
+            utilized_symbols[cur_idx] = TENSOR_NODES_ARITY[elem]
+            if elem in gene_connections
+                push!(gene_connections_)
+            end
+            cur_idx += 1
+        end
+
+
+        toolbox = GepRegression.GepEntities.Toolbox(gene_count, head_len, utilized_symbols, gene_connections_,
+            callbacks, nodes, GENE_COMMON_PROBS; number_of_objectives=number_of_objectives,
+            operators_=nothing, function_complile=compile_to_flux_network)
+
+        obj = new()
+        obj.toolbox_ = toolbox
         return obj
     end
 end
@@ -709,7 +811,7 @@ Make predictions using the trained regressor.
 - `ensemble::Bool=false`: Whether to use ensemble predictions
 
 # Returns
-- Predicted values for the input features
+- Predicted values for the input features -> only employable when using compile_djl_datatype
 """
 function (regressor::GepRegressor)(x_data::AbstractArray; ensemble::Bool=false)
     return regressor.best_models_[1].compiled_function(x_data, regressor.operators_)
@@ -738,11 +840,11 @@ println(sin_info.arity)  # 1
 """
 function list_all_functions()
     return Dict(sym => (
-        function_=_FUNCTION_LIB_COMMON[sym],
-        arity=_ARITY_LIB_COMMON[sym],
-        forward_handler=_FUNCTION_LIB_FORWARD_COMMON[sym],
-        backward_handler=_FUNCTION_LIB_BACKWARD_COMMON[sym]
-    ) for sym in keys(_FUNCTION_LIB_COMMON))
+        function_=FUNCTION_LIB_COMMON[sym],
+        arity=ARITY_LIB_COMMON[sym],
+        forward_handler=FUNCTION_LIB_FORWARD_COMMON[sym],
+        backward_handler=FUNCTION_LIB_BACKWARD_COMMON[sym]
+    ) for sym in keys(FUNCTION_LIB_COMMON))
 end
 
 """
@@ -837,8 +939,8 @@ set_function!(:sin, new_sin_implementation)
 - ArgumentError if the function symbol doesn't exist in the library
 """
 function set_function!(sym::Symbol, func::Function)
-    haskey(_FUNCTION_LIB_COMMON, sym) || throw(ArgumentError("Function $sym not found in library"))
-    _FUNCTION_LIB_COMMON[sym] = func
+    haskey(_UNCTION_LIB_COMMON, sym) || throw(ArgumentError("Function $sym not found in library"))
+    FUNCTION_LIB_COMMON[sym] = func
     return nothing
 end
 
@@ -860,9 +962,9 @@ set_arity!(:custom_func, 2)
 - ArgumentError if the function symbol doesn't exist or arity is invalid
 """
 function set_arity!(sym::Symbol, arity::Int8)
-    haskey(_ARITY_LIB_COMMON, sym) || throw(ArgumentError("Function $sym not found in library"))
+    haskey(ARITY_LIB_COMMON, sym) || throw(ArgumentError("Function $sym not found in library"))
     arity in (1, 2) || throw(ArgumentError("Arity must be 1 or 2"))
-    _ARITY_LIB_COMMON[sym] = arity
+    ARITY_LIB_COMMON[sym] = arity
     return nothing
 end
 
@@ -884,8 +986,8 @@ set_forward_handler!(:custom_func, zero_unit_forward)
 - ArgumentError if the function symbol doesn't exist
 """
 function set_forward_handler!(sym::Symbol, handler::Function)
-    haskey(_FUNCTION_LIB_FORWARD_COMMON, sym) || throw(ArgumentError("Function $sym not found in library"))
-    _FUNCTION_LIB_FORWARD_COMMON[sym] = handler
+    haskey(FUNCTION_LIB_FORWARD_COMMON, sym) || throw(ArgumentError("Function $sym not found in library"))
+    FUNCTION_LIB_FORWARD_COMMON[sym] = handler
     return nothing
 end
 
@@ -907,8 +1009,8 @@ set_backward_handler!(:custom_func, zero_unit_backward)
 - ArgumentError if the function symbol doesn't exist
 """
 function set_backward_handler!(sym::Symbol, handler::Function)
-    haskey(_FUNCTION_LIB_BACKWARD_COMMON, sym) || throw(ArgumentError("Function $sym not found in library"))
-    _FUNCTION_LIB_BACKWARD_COMMON[sym] = handler
+    haskey(FUNCTION_LIB_BACKWARD_COMMON, sym) || throw(ArgumentError("Function $sym not found in library"))
+    FUNCTION_LIB_BACKWARD_COMMON[sym] = handler
     return nothing
 end
 
