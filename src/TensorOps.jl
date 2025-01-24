@@ -321,8 +321,6 @@ end
 
 function compile_to_flux_network(rek_string::Vector, arity_map::OrderedDict, callbacks::Dict, nodes::OrderedDict, pre_len::Int)
     stack = []
-    inputs_idx = Dict{Int8,Int8}()
-    idx = 1
     for elem in reverse(rek_string)
         if get(arity_map, elem, 0) == 2
             op1 = pop!(stack)
@@ -334,19 +332,17 @@ function compile_to_flux_network(rek_string::Vector, arity_map::OrderedDict, cal
             node = callbacks[elem]()
             push!(stack, (inputs) -> node(op(inputs)))
         else
-            if get(inputs_idx, elem, 0) == 0
-                inputs_idx[elem] = idx
-                idx += 1
-            end
             if nodes[elem] isa Number
-                push!(stack, _ -> nodes[elem])
+                num = nodes[elem]
+                push!(stack, _ -> num)
             else
-                push!(stack, (inputs) -> InputSelector(inputs_idx[elem])(inputs))
+                idx = nodes[elem].idx
+                push!(stack, (inputs) -> InputSelector(idx)(inputs))
             end
         end
 
     end
-    return Chain(pop!(stack)), inputs_idx
+    return Chain(pop!(stack))
 end
 
 
