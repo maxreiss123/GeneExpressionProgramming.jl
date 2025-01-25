@@ -171,13 +171,13 @@ struct StandardRegressionStrategy{T<:AbstractFloat} <: EvaluationStrategy
 end
 
 struct GenericRegressionStrategy <: EvaluationStrategy
-    operators::OperatorEnum
+    operators::Union{OperatorEnum,Nothing}
     number_of_objectives::Int
     loss_function::Function
     secOptimizer::Union{Function,Nothing}
     break_condition::Union{Function,Nothing}
 
-    function GenericRegressionStrategy(operators::OperatorEnum, number_of_objectives::Int, loss_function::Function;
+    function GenericRegressionStrategy(operators::Union{OperatorEnum,Nothing}, number_of_objectives::Int, loss_function::Function;
         secOptimizer::Union{Function,Nothing}, break_condition::Union{Function,Nothing})
         new(operators, number_of_objectives, loss_function, secOptimizer, break_condition)
     end
@@ -250,7 +250,7 @@ struct Toolbox
         gen_start_indices = [gene_count + (gene_len * (i - 1)) for i in 1:gene_count]
         ensure_buffer_size!(head_len, gene_count)
         new(gene_count, head_len, symbols, gene_connections, headsyms, unary_syms, tailsyms, symbols,
-            callbacks, nodes, gen_start_indices, gep_probs, unary_prob, fitness_reset, preamble_syms, len_preamble, operators_, compile_djl_datatype)
+            callbacks, nodes, gen_start_indices, gep_probs, unary_prob, fitness_reset, preamble_syms, len_preamble, operators_, function_complile)
     end
 end
 

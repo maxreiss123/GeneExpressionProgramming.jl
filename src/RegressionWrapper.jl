@@ -153,6 +153,8 @@ using DynamicExpressions
 using OrderedCollections
 using LinearAlgebra
 
+const InputSelector = TensorRegUtils.InputSelector
+
 """
     FUNCTION_LIB_FORWARD_COMMON::Dict{Symbol,Function}
 
@@ -593,8 +595,8 @@ mutable struct GepTensorRegressor
         entered_terminal_nums::Vector{<:AbstractFloat}=[0.0, 0.5],
         gene_connections::Vector{Symbol}=[:+, :-, :*, :/],
         rnd_count::Int=1,
-        gene_count::Int=3,
-        head_len::Int=6,
+        gene_count::Int=2,
+        head_len::Int=3,
         number_of_objectives::Int=1
     )
         #Creating the feature Nodes -> asuming a data dict pointing to 
@@ -627,11 +629,10 @@ mutable struct GepTensorRegressor
             callbacks[cur_idx] = TENSOR_NODES[elem]
             utilized_symbols[cur_idx] = TENSOR_NODES_ARITY[elem]
             if elem in gene_connections
-                push!(gene_connections_)
+                push!(gene_connections_,cur_idx)
             end
             cur_idx += 1
         end
-
 
         toolbox = GepRegression.GepEntities.Toolbox(gene_count, head_len, utilized_symbols, gene_connections_,
             callbacks, nodes, GENE_COMMON_PROBS; number_of_objectives=number_of_objectives,
@@ -803,7 +804,7 @@ function fit!(regressor::GepTensorRegressor, epochs::Int, population_size::Int, 
 )
 
     evalStrat = GenericRegressionStrategy(
-        regressor.operators_,
+        nothing,
         length(regressor.toolbox_.fitness_reset[1]),
         loss_function;
         secOptimizer=nothing,

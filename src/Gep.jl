@@ -297,7 +297,8 @@ The evolution process stops when either:
         same = Atomic{Int}(0)
         perform_correction_callback!(population, epoch, correction_epochs, correction_amount, correction_callback)
 
-        Threads.@threads for i in eachindex(population)
+        #Threads.@threads 
+        for i in eachindex(population)
             if isnan(mean(population[i].fitness)) 
                 cache_value = get(fit_cache, population[i].expression_raw, nothing)
                 if isnothing(cache_value)

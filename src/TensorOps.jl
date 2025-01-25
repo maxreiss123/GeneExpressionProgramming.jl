@@ -193,10 +193,25 @@ end
     @fastmath return x + y
 end
 
+@inline function (l::AdditionNode)(x::Union{Tensor,SymmetricTensor}, y::Number)
+    @fastmath return NaN
+end
+
+@inline function (l::AdditionNode)(x::Number, y::Union{Tensor,SymmetricTensor})
+    @fastmath return NaN
+end
+
 @inline function (l::SubtractionNode)(x::Union{Tensor,SymmetricTensor}, y::Union{Tensor,SymmetricTensor})
     @fastmath return x - y
 end
 
+@inline function (l::SubtractionNode)(x::Union{Tensor,SymmetricTensor}, y::Number)
+    @fastmath return NaN
+end
+
+@inline function (l::SubtractionNode)(x::Number, y::Union{Tensor,SymmetricTensor})
+    @fastmath return NaN
+end
 
 @inline function (l::SubtractionNode)(x::Vector, y::Vector)
     @fastmath return x - y
@@ -222,10 +237,17 @@ end
     @fastmath return dot(x, y)
 end
 
-@inline function (l::DivisionNode)(x::Union{Tensor,SymmetricTensor}, y::Vector)
+@inline function (l::DivisionNode)(x::Union{Tensor,SymmetricTensor,Number}, y::Number)
     @fastmath return x / y
 end
 
+@inline function (l::DivisionNode)(x::Number, y::Union{Tensor,SymmetricTensor})
+    @fastmath return NaN
+end
+
+@inline function (l::DivisionNode)(x::Union{Tensor,SymmetricTensor}, y::Union{Tensor,SymmetricTensor})
+    @fastmath return NaN
+end
 
 @inline function (l::PowerNode)(x::Union{Tensor,SymmetricTensor,Number}, y::Number)
     @fastmath return x^y
