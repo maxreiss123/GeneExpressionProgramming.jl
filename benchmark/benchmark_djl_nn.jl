@@ -78,4 +78,4 @@ end
 #11.703 ms (998979 allocations: 59.49 MiB)
 
 
-#Conclusion -> 4 times faster than DynamicExpressions.jl for such structures
+#Conclusion ≈ 7 times faster than DynamicExpressions.jl for such structures
