@@ -182,131 +182,106 @@ for T in NODES
 end
 
 @inline function (l::AdditionNode)(x::Union{Tensor,SymmetricTensor}, y::Union{Tensor,SymmetricTensor})
-    result = x + y
-    return result
+    @fastmath return x + y
 end
 
 @inline function (l::AdditionNode)(x::Vector, y::Vector)
-    result = x + y
-    return result
+    @fastmath return x + y
 end
 
 @inline function (l::AdditionNode)(x::Number, y::Number)
-    result = x + y
-    return result
+    @fastmath return x + y
 end
 
 @inline function (l::SubtractionNode)(x::Union{Tensor,SymmetricTensor}, y::Union{Tensor,SymmetricTensor})
-    result = x - y
-    return result
+    @fastmath return x - y
 end
 
 
 @inline function (l::SubtractionNode)(x::Vector, y::Vector)
-    result = x - y
-    return result
+    @fastmath return x - y
 end
 
 @inline function (l::SubtractionNode)(x::Number, y::Number)
-    result = x - y
-    return result
+    @fastmath return x - y
 end
 
 @inline function (l::MultiplicationNode)(x::Number, y::Number)
-    result = y * x
-    return result
+    @fastmath return y * x
 end
 
 @inline function (l::MultiplicationNode)(x::Union{Tensor,SymmetricTensor}, y::Number)
-    result = y * x
-    return result
+    @fastmath return y * x
 end
 
 @inline function (l::MultiplicationNode)(x::Number, y::Union{Tensor,SymmetricTensor})
-    result = y * x
-    return result
+    @fastmath return y * x
 end
 
 @inline function (l::MultiplicationNode)(x::Union{Tensor,SymmetricTensor}, y::Union{Tensor,SymmetricTensor})
-    result = dot(x, y)
-    return result
+    @fastmath return dot(x, y)
 end
 
 @inline function (l::DivisionNode)(x::Union{Tensor,SymmetricTensor}, y::Vector)
-    result = x / y
-    return result
+    @fastmath return x / y
 end
 
 
 @inline function (l::PowerNode)(x::Union{Tensor,SymmetricTensor,Number}, y::Number)
-    result = x^y
-    return result
+    @fastmath return x^y
 end
 
 @inline function (l::DoubleContractionNode)(x, y)
-    result = dcontract(x, y)
-    return result
+    @fastmath return dcontract(x, y)
 end
 
 @inline function (l::DeviatoricNode)(x)
-    result = dev(x)
-    return result
+    @fastmath return dev(x)
 end
 
 
 @inline function (l::MinNode)(x, y)
-    result = min(x, y)
-    return result
+    @fastmath return min(x, y)
 end
 
 @inline function (l::MaxNode)(x, y)
-    result = max(x, y)
-    return result
+    @fastmath return max(x, y)
 end
 
 @inline function (l::InversionNode)(x)
-    result = inv(x)
-    return result
+    @fastmath return inv(x)
 end
 
 @inline function (l::TraceNode)(x)
-    result = tr(x)
-    return result
+    @fastmath return tr(x)
 end
 
 @inline function (l::DeterminantNode)(x)
-    result = det(x)
-    return result
+    @fastmath return det(x)
 end
 
 @inline function (l::SymmetricNode)(x)
-    result = symmetric(x)
-    return result
+    @fastmath return symmetric(x)
 end
 
 @inline function (l::SkewNode)(x)
-    result = skew(x)
-    return result
+    @fastmath return skew(x)
 end
 
 @inline function (l::VolumetricNode)(x)
-    result = vol(x)
-    return result
+    @fastmath return vol(x)
 end
 
 @inline function (l::DeviatricNode)(x)
-    result = dev(x)
-    return result
+    @fastmath return dev(x)
 end
 
 @inline function (l::TdotNode)(x)
-    result = tdot(x)
-    return result
+    @fastmath return tdot(x)
 end
 
 @inline function (l::DottNode)(x)
-    result = dott(x)
-    return result
+    @fastmath return dott(x)
 end
 
 @inline function (l::ConstantNode)(x)
@@ -315,8 +290,7 @@ end
 
 
 @inline function (l::UnaryNode)(x)
-    result = l.operation.(x)
-    return result
+    @fastmath return l.operation.(x)
 end
 
 function compile_to_flux_network(rek_string::Vector, arity_map::OrderedDict, callbacks::Dict, nodes::OrderedDict, pre_len::Int)
