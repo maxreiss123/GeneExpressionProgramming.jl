@@ -74,7 +74,7 @@ module GepEntities
 
 export Chromosome, Toolbox, EvaluationStrategy, StandardRegressionStrategy, GenericRegressionStrategy
 export fitness, set_fitness!
-export generate_gene, compile_expression!, generate_chromosome, generate_population 
+export generate_gene, compile_expression!, generate_chromosome, generate_population
 export genetic_operations!, replicate, gene_inversion!, gene_mutation!, gene_one_point_cross_over!, gene_two_point_cross_over!, gene_fussion!
 
 include("Util.jl")
@@ -235,10 +235,10 @@ struct Toolbox
 
     function Toolbox(gene_count::Int, head_len::Int, symbols::OrderedDict{Int8,Int8}, gene_connections::Vector{Int8},
         callbacks::Dict, nodes::OrderedDict, gep_probs::Dict{String,AbstractFloat};
-        unary_prob::Real=0.1, preamble_syms=Int8[], 
+        unary_prob::Real=0.1, preamble_syms=Int8[],
         number_of_objectives::Int=1, operators_::Union{OperatorEnum,Nothing}=nothing, function_complile::Function=compile_djl_datatype)
-        
-        fitness_reset= (
+
+        fitness_reset = (
             ntuple(_ -> Inf, number_of_objectives),
             ntuple(_ -> NaN, number_of_objectives)
         )
@@ -246,7 +246,7 @@ struct Toolbox
         headsyms = [key for (key, arity) in symbols if arity == 2]
         unary_syms = [key for (key, arity) in symbols if arity == 1]
         tailsyms = [key for (key, arity) in symbols if arity < 1 && !(key in preamble_syms)]
-        len_preamble = length(preamble_syms) 
+        len_preamble = length(preamble_syms)
         gen_start_indices = [gene_count + (gene_len * (i - 1)) for i in 1:gene_count]
         ensure_buffer_size!(head_len, gene_count)
         new(gene_count, head_len, symbols, gene_connections, headsyms, unary_syms, tailsyms, symbols,
@@ -327,13 +327,13 @@ Fitness value or tuple
         try
             expression = _karva_raw(chromosome)
             expression_tree = chromosome.toolbox.compile_function_(expression, chromosome.toolbox.symbols, chromosome.toolbox.callbacks,
-                chromosome.toolbox.nodes, max(chromosome.toolbox.len_preamble,1))
+                chromosome.toolbox.nodes, max(chromosome.toolbox.len_preamble, 1))
             chromosome.compiled_function = expression_tree
             chromosome.expression_raw = expression
             chromosome.fitness = chromosome.toolbox.fitness_reset[2]
             chromosome.compiled = true
         catch e
-            @error "something went wrong" exception=(e,catch_backtrace())
+            @error "something went wrong" exception = (e, catch_backtrace())
             chromosome.fitness = chromosome.toolbox.fitness_reset[1]
         end
     end
@@ -416,7 +416,7 @@ Vector{Int8} representing the K-expression of the chromosome
     gene_count = chromosome.toolbox.gene_count
 
     connectionsym = @view chromosome.genes[1:gene_count-1]
-    genes = chromosome.genes[gene_count:end] 
+    genes = chromosome.genes[gene_count:end]
 
     arity_gene_ = map(x -> chromosome.toolbox.arrity_by_id[x], genes)
     rolled_indices = Vector{Any}(undef, div(length(arity_gene_), gene_len) + 1)
@@ -449,9 +449,10 @@ Generate a single gene for GEP.
 # Returns
 Vector{Int8} representing gene
 """
-@inline function generate_gene(headsyms::Vector{Int8}, tailsyms::Vector{Int8}, headlen::Int; unarys::Vector{Int8}=[], unary_prob::Real=0.2)
+@inline function generate_gene(headsyms::Vector{Int8}, tailsyms::Vector{Int8}, headlen::Int;
+    unarys::Vector{Int8}=[], unary_prob::Real=0.2, tensor_prob::Real=0.2)
     if !isempty(unarys) && rand() < unary_prob
-        heads = vcat(headsyms,tailsyms)
+        heads = vcat(headsyms, tailsyms)
         push!(heads, rand(unarys))
     else
         heads = headsyms
@@ -461,6 +462,8 @@ Vector{Int8} representing gene
     tail = rand(tailsyms, headlen + 1)
     return vcat(head, tail)
 end
+
+
 
 """
     generate_chromosome(toolbox::Toolbox)
@@ -493,7 +496,7 @@ Vector of Chromosomes
 """
 @inline function generate_population(number::Int, toolbox::Toolbox)
     population = Vector{Chromosome}(undef, number)
-     
+
     Threads.@threads for i in 1:number
         @inbounds population[i] = generate_chromosome(toolbox)
     end
@@ -523,7 +526,7 @@ end
 
     buffer.alpha_operator[1:len_a] .= zeros(Int8)
     buffer.beta_operator[1:len_a] .= zeros(Int8)
-    
+
     head_len = toolbox.head_len
     gene_len = head_len * 2 + 1
 
@@ -581,7 +584,7 @@ end
 
 @inline function gene_dominant_fusion!(chromosome1::Chromosome, chromosome2::Chromosome, pb::Real=0.2)
     buffer = THREAD_BUFFERS[Threads.threadid()]
-    len_a =length(chromosome1.genes)
+    len_a = length(chromosome1.genes)
     create_operator_masks(chromosome1.genes, chromosome2.genes, pb)
 
     @inbounds @simd for i in eachindex(chromosome1.genes)
@@ -590,12 +593,12 @@ end
     end
 
     chromosome1.genes .= @view buffer.child_1_genes[1:len_a]
-    chromosome2.genes .= @view buffer.child_2_genes[1:len_a]  
+    chromosome2.genes .= @view buffer.child_2_genes[1:len_a]
 end
 
 @inline function gen_rezessiv!(chromosome1::Chromosome, chromosome2::Chromosome, pb::Real=0.2)
     buffer = THREAD_BUFFERS[Threads.threadid()]
-    len_a =length(chromosome1.genes)
+    len_a = length(chromosome1.genes)
     create_operator_masks(chromosome1.genes, chromosome2.genes, pb)
 
     @inbounds @simd for i in eachindex(chromosome1.genes)
@@ -604,7 +607,7 @@ end
     end
 
     chromosome1.genes .= @view buffer.child_1_genes[1:len_a]
-    chromosome2.genes .= @view buffer.child_2_genes[1:len_a]  
+    chromosome2.genes .= @view buffer.child_2_genes[1:len_a]
 end
 
 @inline function gene_fussion!(chromosome1::Chromosome, chromosome2::Chromosome, pb::Real=0.2)
@@ -618,7 +621,7 @@ end
     end
 
     chromosome1.genes .= @view buffer.child_1_genes[1:len_a]
-    chromosome2.genes .= @view buffer.child_2_genes[1:len_a]  
+    chromosome2.genes .= @view buffer.child_2_genes[1:len_a]
 end
 
 @inline function gene_one_point_cross_over!(chromosome1::Chromosome, chromosome2::Chromosome)
@@ -632,7 +635,7 @@ end
     end
 
     chromosome1.genes .= @view buffer.child_1_genes[1:len_a]
-    chromosome2.genes .= @view buffer.child_2_genes[1:len_a]  
+    chromosome2.genes .= @view buffer.child_2_genes[1:len_a]
 end
 
 @inline function gene_two_point_cross_over!(chromosome1::Chromosome, chromosome2::Chromosome)
@@ -646,7 +649,7 @@ end
     end
 
     chromosome1.genes .= @view buffer.child_1_genes[1:len_a]
-    chromosome2.genes .= @view buffer.child_2_genes[1:len_a]  
+    chromosome2.genes .= @view buffer.child_2_genes[1:len_a]
 end
 
 @inline function gene_mutation!(chromosome1::Chromosome, pb::Real=0.25)
@@ -656,7 +659,7 @@ end
 
     @inbounds @simd for i in eachindex(chromosome1.genes)
         chromosome1.genes[i] = buffer.alpha_operator[i] == 1 ? buffer.child_1_genes[i] : chromosome1.genes[i]
-    end  
+    end
 end
 
 @inline function gene_inversion!(chromosome1::Chromosome)
@@ -678,7 +681,7 @@ end
 end
 
 @inline function reverse_insertion_tail!(chromosome::Chromosome)
-    start_1 = rand(chromosome.toolbox.gen_start_indices)+chromosome.toolbox.head_len+1
+    start_1 = rand(chromosome.toolbox.gen_start_indices) + chromosome.toolbox.head_len + 1
     rolled_array = circshift(chromosome.genes[start_1:start_1+chromosome.toolbox.head_len-1], rand(1:chromosome.toolbox.head_len-1))
     chromosome.genes[start_1:start_1+chromosome.toolbox.head_len-1] = rolled_array
 end

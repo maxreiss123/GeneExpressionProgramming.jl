@@ -562,7 +562,8 @@ A Gene Expression Programming (GEP) regressor that evolves higher order mathemat
 Create a new GEP tensor regressor with specified number of input features.
 
 # Arguments
-- `feature_amount::Int`: Number of input features to use in the regression
+- `scalar_feature_amount::Int`: Number of input features representing scalar quantities
+- `higher_dim_feature_amount::Int`: Number of input features representing hihger quantities
 
 # Keyword Arguments 
 - `entered_non_terminals::Vector{Symbol}=[:+, :-, :*, :/]`: Available mathematical operators
@@ -584,13 +585,15 @@ multiple objectives.
 - Uses TENSOR_NODES_ARITY for operator arity
 - Compiles expressions to Flux networks via compile_to_flux_network
 """
+#TODO => adapt probs for occurance of !
 mutable struct GepTensorRegressor
     toolbox_::Toolbox
     best_models_::Union{Nothing,Vector{Chromosome}}
     fitness_history_::Any
 
 
-    function GepTensorRegressor(feature_amount::Int;
+    function GepTensorRegressor(scalar_feature_amount::Int; 
+        higher_dim_feature_amount::Int=0,
         entered_non_terminals::Vector{Symbol}=[:+, :-, :*, :/],
         entered_terminal_nums::Vector{<:AbstractFloat}=[0.0, 0.5],
         gene_connections::Vector{Symbol}=[:+, :-, :*, :/],
@@ -605,7 +608,15 @@ mutable struct GepTensorRegressor
         utilized_symbols = SymbolDict()
         callbacks = Dict{Int8,Any}()
         gene_connections_ = Int8[]
-        for _ in 1:feature_amount
+        tensor_syms_idx = Int8[]
+        tensor_function_idx = Int8[]
+        for _ in 1:scalar_feature_amount
+            nodes[cur_idx] = InputSelector(cur_idx)
+            utilized_symbols[cur_idx] = Int8(0)
+            cur_idx += 1
+        end
+
+        for _ in 1:higher_dim_feature_amount
             nodes[cur_idx] = InputSelector(cur_idx)
             utilized_symbols[cur_idx] = Int8(0)
             cur_idx += 1
