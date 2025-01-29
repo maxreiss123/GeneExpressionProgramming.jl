@@ -8,8 +8,8 @@ using BenchmarkTools
 Random.seed!(1)
 
 #Define the iterations for the algorithm and the population size
-epochs = 1000
-population_size = 1500
+epochs = 10
+population_size = 20
 
 #Number of features which needs to be inserted
 number_features = 2

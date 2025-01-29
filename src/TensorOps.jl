@@ -1,319 +1,295 @@
 module TensorRegUtils
 
-using Flux, LinearAlgebra, OrderedCollections, ChainRulesCore
-
-using Tensors
-
-# Types
-export OperationNode
-export InputSelector
-export AdditionNode, SubtractionNode, MultiplicationNode, DivisionNode, PowerNode
-export MinNode, MaxNode, InversionNode
-export TraceNode, DeterminantNode, SymmetricNode, SkewNode
-export VolumetricNode, DeviatricNode, TdotNode, DottNode
-export DoubleContractionNode, DeviatoricNode
-export ConstantNode, UnaryNode
-
-export compile_to_flux_network
-
-export TENSOR_NODES, TENSOR_NODES_ARITY
+using Flux, LinearAlgebra, OrderedCollections, ChainRulesCore, Tensors, PrecompileTools
 
 
-abstract type OperationNode end
-
-struct InputSelector
-    idx::Int
+struct ThreadBuffer
+    vector::Vector{Union{Number,Tensor,SymmetricTensor}}
 end
 
-@inline function (l::InputSelector)(x::Tuple)
-    x[l.idx]
+const THREAD_BUFFERS = Vector{ThreadBuffer}(undef, Threads.nthreads())
+
+function __init__()
+    for i in 1:Threads.nthreads()
+        THREAD_BUFFERS[i] = ThreadBuffer(Vector{Union{Number,Tensor,SymmetricTensor}}(undef, 0))
+    end
 end
 
-struct AdditionNode <: OperationNode
-    chain::Union{Nothing,Chain}
-    use_cuda::Bool
-    AdditionNode(chain=Chain(); use_cuda::Bool=false) = new(chain, use_cuda)
-end
-
-struct SubtractionNode <: OperationNode
-    chain::Union{Nothing,Chain}
-    use_cuda::Bool
-    SubtractionNode(chain=Chain(); use_cuda::Bool=false) = new(chain, use_cuda)
-end
-
-struct MultiplicationNode <: OperationNode
-    chain::Union{Nothing,Chain}
-    use_cuda::Bool
-    MultiplicationNode(chain=Chain(); use_cuda::Bool=false) = new(chain, use_cuda)
-end
-
-struct DivisionNode <: OperationNode
-    chain::Union{Nothing,Chain}
-    use_cuda::Bool
-    DivisionNode(chain=Chain(); use_cuda::Bool=false) = new(chain, use_cuda)
-end
-
-struct PowerNode <: OperationNode
-    chain::Union{Nothing,Chain}
-    use_cuda::Bool
-    PowerNode(chain=Chain(); use_cuda::Bool=false) = new(chain, use_cuda)
-end
-
-struct MinNode <: OperationNode
-    chain::Union{Nothing,Chain}
-    use_cuda::Bool
-    MinNode(chain=Chain(); use_cuda::Bool=false) = new(chain, use_cuda)
-end
-
-struct MaxNode <: OperationNode
-    chain::Union{Nothing,Chain}
-    use_cuda::Bool
-    MaxNode(chain=Chain(); use_cuda::Bool=false) = new(chain, use_cuda)
-end
-
-struct InversionNode <: OperationNode
-    chain::Union{Nothing,Chain}
-    use_cuda::Bool
-    InversionNode(chain=Chain(); use_cuda::Bool=false) = new(chain, use_cuda)
-end
-
-struct TraceNode <: OperationNode
-    chain::Union{Nothing,Chain}
-    use_cuda::Bool
-    TraceNode(chain=Chain(); use_cuda::Bool=false) = new(chain, use_cuda)
-end
-
-struct DeterminantNode <: OperationNode
-    chain::Union{Nothing,Chain}
-    use_cuda::Bool
-    DeterminantNode(chain=Chain(); use_cuda::Bool=false) = new(chain, use_cuda)
-end
-
-struct SymmetricNode <: OperationNode
-    chain::Union{Nothing,Chain}
-    use_cuda::Bool
-    SymmetricNode(chain=Chain(); use_cuda::Bool=false) = new(chain, use_cuda)
-end
-
-struct SkewNode <: OperationNode
-    chain::Union{Nothing,Chain}
-    use_cuda::Bool
-    SkewNode(chain=Chain(); use_cuda::Bool=false) = new(chain, use_cuda)
-end
-
-struct VolumetricNode <: OperationNode
-    chain::Union{Nothing,Chain}
-    use_cuda::Bool
-    VolumetricNode(chain=Chain(); use_cuda::Bool=false) = new(chain, use_cuda)
-end
-
-struct DeviatricNode <: OperationNode
-    chain::Union{Nothing,Chain}
-    use_cuda::Bool
-    DeviatricNode(chain=Chain(); use_cuda::Bool=false) = new(chain, use_cuda)
-end
-
-struct TdotNode <: OperationNode
-    chain::Union{Nothing,Chain}
-    use_cuda::Bool
-    TdotNode(chain=Chain(); use_cuda::Bool=false) = new(chain, use_cuda)
-end
-
-struct DottNode <: OperationNode
-    chain::Union{Nothing,Chain}
-    use_cuda::Bool
-    DottNode(chain=Chain(); use_cuda::Bool=false) = new(chain, use_cuda)
-end
-
-struct DoubleContractionNode <: OperationNode
-    chain::Union{Nothing,Chain}
-    use_cuda::Bool
-    DoubleContractionNode(chain=Chain(); use_cuda::Bool=false) = new(chain, use_cuda)
-end
-
-struct DeviatoricNode <: OperationNode
-    chain::Union{Nothing,Chain}
-    use_cuda::Bool
-    DeviatoricNode(chain=Chain(); use_cuda::Bool=false) = new(chain, use_cuda)
-end
-
-struct ConstantNode <: OperationNode
-    value::Number
-    chain::Union{Nothing,Chain}
-    use_cuda::Bool
-    ConstantNode(value::Number, chain=Chain(); use_cuda::Bool=false) = new(value, chain, use_cuda)
+@inline function get_thread_buffer(n::Integer)
+    buffer = THREAD_BUFFERS[Threads.threadid()].vector
+    if length(buffer) < n
+        resize!(buffer, n)
+    end
+    buffer
 end
 
 
-struct UnaryNode <: OperationNode
-    operation::Function
-    chain::Union{Nothing,Chain}
-    use_cuda::Bool
-    UnaryNode(operation::Function, chain=Chain(); use_cuda::Bool=false) =
-        new(operation, chain, use_cuda)
+# Abstract base type with parametric types for improved type stability
+abstract type AbstractOperationNode{T} end
+
+# Input selector with strict typing
+struct InputSelector{T<:Integer}
+    idx::T
+end
+
+@inline function (l::InputSelector{T})(x::Tuple) where T
+    @inbounds x[l.idx]
+end
+
+@inline function (l::InputSelector{T})(x::Any) where T
+    @inbounds x
+end
+
+# Macro to generate specialized operation nodes with functors
+macro generate_operation_node(name)
+    return quote
+        struct $(esc(name)){T<:Union{Nothing,Chain}} <: AbstractOperationNode{T}
+            chain::T
+            $(esc(name))(chain=nothing) = new{typeof(chain)}(chain)
+        end
+        Flux.Functors.@functor $(esc(name))
+    end
+end
+
+# Generate concrete operation nodes
+@generate_operation_node AdditionNode
+@generate_operation_node SubtractionNode
+@generate_operation_node MultiplicationNode
+@generate_operation_node DivisionNode
+@generate_operation_node PowerNode
+@generate_operation_node MinNode
+@generate_operation_node MaxNode
+@generate_operation_node InversionNode
+@generate_operation_node TraceNode
+@generate_operation_node DeterminantNode
+@generate_operation_node SymmetricNode
+@generate_operation_node SkewNode
+@generate_operation_node VolumetricNode
+@generate_operation_node DeviatricNode
+@generate_operation_node TdotNode
+@generate_operation_node DottNode
+@generate_operation_node DoubleContractionNode
+@generate_operation_node DeviatoricNode
+
+# Specialized nodes with their functors
+struct ConstantNode{T<:Number, C<:Union{Nothing,Chain}} <: AbstractOperationNode{C}
+    value::T
+    chain::C
+    ConstantNode(value::T, chain=nothing) where T<:Number = new{T,typeof(chain)}(value, chain)
+end
+Flux.Functors.@functor ConstantNode
+
+struct UnaryNode{F<:Function, C<:Union{Nothing,Chain}} <: AbstractOperationNode{C}
+    operation::F
+    chain::C
+    UnaryNode(operation::F, chain=nothing) where F<:Function = new{F,typeof(chain)}(operation, chain)
+end
+Flux.Functors.@functor UnaryNode
+
+# Operation implementations
+@inline function (l::AdditionNode{T})(x::Union{Tensor,SymmetricTensor}, 
+                                    y::Union{Tensor,SymmetricTensor}) where {T}
+    @fastmath (x + y)::Union{Tensor,SymmetricTensor}
+end
+
+@inline function (l::AdditionNode{T})(x::Number, y::Number) where T
+    @fastmath (x + y)::Number
 end
 
 
-const NODES = [
-    AdditionNode,
-    SubtractionNode,
-    MultiplicationNode,
-    DivisionNode,
-    PowerNode,
-    MinNode,
-    MaxNode,
-    InversionNode,
-    TraceNode,
-    DeterminantNode,
-    SymmetricNode,
-    SkewNode,
-    VolumetricNode,
-    DeviatricNode,
-    TdotNode,
-    DottNode,
-    DoubleContractionNode,
-    DeviatoricNode,
-    ConstantNode,
-    UnaryNode
-]
-
-for T in NODES
-    @eval Flux.Functors.@functor $T
+@inline function (l::AdditionNode{T})(x::Any, y::Any) where T
+    Inf::Number
 end
 
-@inline function (l::AdditionNode)(x::Union{Tensor,SymmetricTensor}, y::Union{Tensor,SymmetricTensor})
-    @fastmath return x + y
+@inline function (l::MultiplicationNode{T})(x::Any, y::Any) where T
+    Inf::Number
 end
 
-@inline function (l::AdditionNode)(x::Vector, y::Vector)
-    @fastmath return x + y
-end
-
-@inline function (l::AdditionNode)(x::Number, y::Number)
-    @fastmath return x + y
-end
-
-@inline function (l::AdditionNode)(x::Union{Tensor,SymmetricTensor}, y::Number)
-    @fastmath return NaN
-end
-
-@inline function (l::AdditionNode)(x::Number, y::Union{Tensor,SymmetricTensor})
-    @fastmath return NaN
-end
-
-@inline function (l::SubtractionNode)(x::Union{Tensor,SymmetricTensor}, y::Union{Tensor,SymmetricTensor})
-    @fastmath return x - y
-end
-
-@inline function (l::SubtractionNode)(x::Union{Tensor,SymmetricTensor}, y::Number)
-    @fastmath return NaN
-end
-
-@inline function (l::SubtractionNode)(x::Number, y::Union{Tensor,SymmetricTensor})
-    @fastmath return NaN
-end
-
-@inline function (l::SubtractionNode)(x::Vector, y::Vector)
-    @fastmath return x - y
-end
-
-@inline function (l::SubtractionNode)(x::Number, y::Number)
-    @fastmath return x - y
-end
-
-@inline function (l::MultiplicationNode)(x::Number, y::Number)
-    @fastmath return y * x
-end
-
-@inline function (l::MultiplicationNode)(x::Union{Tensor,SymmetricTensor}, y::Number)
-    @fastmath return y * x
-end
-
-@inline function (l::MultiplicationNode)(x::Number, y::Union{Tensor,SymmetricTensor})
-    @fastmath return y * x
-end
-
-@inline function (l::MultiplicationNode)(x::Union{Tensor,SymmetricTensor}, y::Union{Tensor,SymmetricTensor})
-    @fastmath return dot(x, y)
-end
-
-@inline function (l::DivisionNode)(x::Union{Tensor,SymmetricTensor,Number}, y::Number)
-    @fastmath return x / y
-end
-
-@inline function (l::DivisionNode)(x::Number, y::Union{Tensor,SymmetricTensor})
-    @fastmath return NaN
-end
-
-@inline function (l::DivisionNode)(x::Union{Tensor,SymmetricTensor}, y::Union{Tensor,SymmetricTensor})
-    @fastmath return NaN
-end
-
-@inline function (l::PowerNode)(x::Union{Tensor,SymmetricTensor,Number}, y::Number)
-    @fastmath return x^y
-end
-
-@inline function (l::DoubleContractionNode)(x, y)
-    @fastmath return dcontract(x, y)
-end
-
-@inline function (l::DeviatoricNode)(x)
-    @fastmath return dev(x)
+@inline function (l::SubtractionNode{T})(x::Union{Tensor,SymmetricTensor}, y::Union{Tensor,SymmetricTensor}) where T
+    @fastmath (x - y)::Union{Tensor,SymmetricTensor}
 end
 
 
-@inline function (l::MinNode)(x, y)
-    @fastmath return min(x, y)
+@inline function (l::SubtractionNode{T})(x::Number, y::Number) where T
+    @fastmath (x - y)::Number
 end
 
-@inline function (l::MaxNode)(x, y)
-    @fastmath return max(x, y)
+@inline function (l::SubtractionNode{T})(x::Any, y::Any) where T
+    Inf::Number
 end
 
-@inline function (l::InversionNode)(x)
-    @fastmath return inv(x)
+@inline function (l::MultiplicationNode{T})(x::Number, y::Number) where T
+    @fastmath (x * y)::Number
 end
 
-@inline function (l::TraceNode)(x)
-    @fastmath return tr(x)
+@inline function (l::MultiplicationNode{T})(x::Union{Tensor,SymmetricTensor}, y::Number) where T
+    @fastmath (x * y)::Union{Tensor,SymmetricTensor}
 end
 
-@inline function (l::DeterminantNode)(x)
-    @fastmath return det(x)
-end
-
-@inline function (l::SymmetricNode)(x)
-    @fastmath return symmetric(x)
-end
-
-@inline function (l::SkewNode)(x)
-    @fastmath return skew(x)
-end
-
-@inline function (l::VolumetricNode)(x)
-    @fastmath return vol(x)
-end
-
-@inline function (l::DeviatricNode)(x)
-    @fastmath return dev(x)
-end
-
-@inline function (l::TdotNode)(x)
-    @fastmath return tdot(x)
-end
-
-@inline function (l::DottNode)(x)
-    @fastmath return dott(x)
-end
-
-@inline function (l::ConstantNode)(x)
-    return l.value
+@inline function (l::MultiplicationNode{T})(x::Number, y::Union{Tensor,SymmetricTensor}) where T
+    @fastmath (x * y)::Union{Tensor,SymmetricTensor}
 end
 
 
-@inline function (l::UnaryNode)(x)
-    @fastmath return l.operation.(x)
+
+@inline function (l::MultiplicationNode{T})(x::Union{Tensor,SymmetricTensor}, y::Union{Tensor,SymmetricTensor}) where T
+    @fastmath dot(x, y)::Union{Tensor,SymmetricTensor}
 end
+
+@inline function (l::DivisionNode{T})(x::Union{Tensor,SymmetricTensor,Number}, y::Number) where T
+    @fastmath (x / y)::Union{Tensor,SymmetricTensor,Number}
+end
+
+@inline function (l::DivisionNode{T})(x::Any, y::Any) where T
+    Inf::Number
+end
+
+@inline function (l::PowerNode{T})(x::Union{Tensor,SymmetricTensor,Number}, y::Number) where T
+    @fastmath (x^y)::Union{Tensor,SymmetricTensor}
+end
+
+@inline function (l::DoubleContractionNode{T})(x, y) where T
+    @fastmath dcontract(x, y)
+end
+
+@inline function (l::DeviatoricNode{T})(x) where T
+    @fastmath dev(x)
+end
+
+@inline function (l::MinNode{T})(x, y) where T
+    @fastmath min(x, y)
+end
+
+@inline function (l::MaxNode{T})(x, y) where T
+    @fastmath max(x, y)
+end
+
+@inline function (l::InversionNode{T})(x) where T
+    @fastmath inv(x)
+end
+
+@inline function (l::TraceNode{T})(x) where T
+    @fastmath tr(x)
+end
+
+@inline function (l::DeterminantNode{T})(x) where T
+    @fastmath det(x)::Number
+end
+
+@inline function (l::SymmetricNode{T})(x::Union{Tensor,SymmetricTensor}) where T
+    @fastmath symmetric(x)::Union{Tensor,SymmetricTensor}
+end
+
+@inline function (l::SkewNode{T})(x::Union{Tensor,SymmetricTensor}) where T
+    @fastmath skew(x)::Union{Tensor,SymmetricTensor}
+end
+
+@inline function (l::VolumetricNode{T})(x) where T
+    @fastmath vol(x)
+end
+
+@inline function (l::DeviatricNode{T})(x) where T
+    @fastmath dev(x)
+end
+
+@inline function (l::TdotNode{T})(x) where T
+    @fastmath tdot(x)
+end
+
+@inline function (l::DottNode{T})(x) where T
+    @fastmath dott(x)
+end
+
+@inline function (l::ConstantNode{V,T})(x) where {V,T}
+    l.value
+end
+
+@inline function (l::UnaryNode{F,T})(x) where {F,T}
+    @fastmath l.operation.(x)
+end
+
+
+@inline function (l::AdditionNode{T})(x::AbstractVector, y::AbstractVector) where T
+    map((a, b) -> l(a, b), x, y)::AbstractVector
+end
+
+@inline function (l::AdditionNode{T})(x::AbstractVector{Number}, y::AbstractVector{Number}) where T
+    (x .+ y)::AbstractVector{Number}
+end
+
+@inline function (l::SubtractionNode{T})(x::AbstractVector, y::AbstractVector) where T
+    map((a, b) -> l(a, b), x, y)::AbstractVector
+end
+
+@inline function (l::MultiplicationNode{T})(x::AbstractVector, y::AbstractVector) where T
+    map((a, b) -> l(a, b), x, y)::AbstractVector
+end
+
+@inline function (l::DivisionNode{T})(x::AbstractVector, y::Number) where T
+    map(a -> l(a, y), x)::AbstractVector
+end
+
+@inline function (l::DivisionNode{T})(x::AbstractVector, y::AbstractVector) where T
+    map((a, b) -> l(a, b), x, y)::AbstractVector
+end
+
+@inline function (l::PowerNode{T})(x::AbstractVector, y::Number) where T
+    map(a -> l(a, y), x)::AbstractVector
+end
+
+@inline function (l::PowerNode{T})(x::AbstractVector, y::AbstractVector) where T
+    map((a, b) -> l(a, b), x, y)::AbstractVector
+end
+
+@inline function (l::MinNode{T})(x::AbstractVector, y::AbstractVector) where T
+    map((a, b) -> l(a, b), x, y)::AbstractVector
+end
+
+@inline function (l::MaxNode{T})(x::AbstractVector, y::AbstractVector) where T
+    map((a, b) -> l(a, b), x, y)::AbstractVector
+end
+
+@inline function (l::TraceNode{T})(x::AbstractVector) where T
+    map(l, x)::AbstractVector
+end
+
+@inline function (l::DeterminantNode{T})(x::AbstractVector) where T
+    map(l, x)::AbstractVector
+end
+
+@inline function (l::SymmetricNode{T})(x::AbstractVector) where T
+    map(l, x)::AbstractVector
+end
+
+@inline function (l::SkewNode{T})(x::AbstractVector) where T
+    map(l, x)::AbstractVector
+end
+
+@inline function (l::VolumetricNode{T})(x::AbstractVector) where T
+    map(l, x)::AbstractVector
+end
+
+@inline function (l::DeviatricNode{T})(x::AbstractVector) where T
+    map(l, x)::AbstractVector
+end
+
+@inline function (l::InversionNode{T})(x::AbstractVector) where T
+    map(l, x)::AbstractVector
+end
+
+@inline function (l::TdotNode{T})(x::AbstractVector) where T
+    map(l, x)::AbstractVector
+end
+
+@inline function (l::DottNode{T})(x::AbstractVector) where T
+    map(l, x)::AbstractVector
+end
+
+@inline function (l::DeviatoricNode{T})(x::AbstractVector) where T
+    map(l, x)::AbstractVector
+end
+
+
 
 function compile_to_flux_network(rek_string::Vector, arity_map::OrderedDict, callbacks::Dict, nodes::OrderedDict, pre_len::Int)
     stack = []
@@ -341,7 +317,7 @@ function compile_to_flux_network(rek_string::Vector, arity_map::OrderedDict, cal
     return Chain(pop!(stack))
 end
 
-
+# Constant mappings
 const TENSOR_NODES = Dict{Symbol,Type}(
     :+ => AdditionNode,
     :- => SubtractionNode,
@@ -364,57 +340,23 @@ const TENSOR_NODES = Dict{Symbol,Type}(
 )
 
 const TENSOR_NODES_ARITY = Dict{Symbol,Int8}(
-    :+ => 2,
-    :- => 2,
-    :* => 2,
-    :/ => 2,
-    :^ => 2,
-    :min => 2,
-    :max => 2,
-    :inv => 1,
-    :tr => 1,
-    :det => 1,
-    :symmetric => 1,
-    :skew => 1,
-    :vol => 1,
-    :dev => 1,
-    :tdot => 1,
-    :dott => 1,
-    :dcontract => 2,
-    :deviator => 1
+    :+ => 2, :- => 2, :* => 2, :/ => 2, :^ => 2,
+    :min => 2, :max => 2,
+    :inv => 1, :tr => 1, :det => 1,
+    :symmetric => 1, :skew => 1, :vol => 1, :dev => 1,
+    :tdot => 1, :dott => 1, :dcontract => 2, :deviator => 1
 )
 
+# Exports
+export OperationNode, InputSelector
+export AdditionNode, SubtractionNode, MultiplicationNode, DivisionNode, PowerNode
+export MinNode, MaxNode, InversionNode
+export TraceNode, DeterminantNode, SymmetricNode, SkewNode
+export VolumetricNode, DeviatricNode, TdotNode, DottNode
+export DoubleContractionNode, DeviatoricNode
+export ConstantNode, UnaryNode
+export compile_to_flux_network
+export TENSOR_NODES, TENSOR_NODES_ARITY
 
-"""
-
-Later on cuda Module
-
-@inline function ensure_cuda(x, use_cuda::Bool)
-    if use_cuda && !isa(x, CuArray)
-        cu(x)
-    elseif !use_cuda && isa(x, CuArray)
-        cpu(x)
-    else
-        return x
-    end
-end
-
-Example Method usage:
-
-struct DottNode <: OperationNode
-    chain::Union{Nothing,Chain}
-    use_cuda::Bool
-    DottNode(chain=nothing; use_cuda::Bool=false) = new(chain, use_cuda)
-end
-
-notes:
-if rek comes to a constant: ConstantNode(elem, nothing, use_cuda=use_cuda)
-if rek comes to an x -> InputSelector(i)
-if unary -> initializes Arity1Node(nothing, use_cuda=use_cuda) 
-if binary -> initaliszed Arity2Node(nothing, use_cuda=use_cuda) 
-
-@assert sp == 1 "Invalid expression: stack error"
-
-"""
 
 end

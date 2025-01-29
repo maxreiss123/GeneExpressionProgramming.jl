@@ -594,10 +594,10 @@ mutable struct GepTensorRegressor
 
     function GepTensorRegressor(scalar_feature_amount::Int; 
         higher_dim_feature_amount::Int=0,
-        entered_non_terminals::Vector{Symbol}=[:+, :-, :*, :/],
-        entered_terminal_nums::Vector{<:AbstractFloat}=[0.0, 0.5],
-        gene_connections::Vector{Symbol}=[:+, :-, :*, :/],
-        rnd_count::Int=1,
+        entered_non_terminals::Vector{Symbol}=[:+, :-, :*],
+        entered_terminal_nums::Vector{<:AbstractFloat}=Float64[],
+        gene_connections::Vector{Symbol}=[:+, :*],
+        rnd_count::Int=0,
         gene_count::Int=2,
         head_len::Int=3,
         number_of_objectives::Int=1
