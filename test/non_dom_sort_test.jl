@@ -55,7 +55,6 @@ end
     ])
     fronts3 = calculate_fronts(pop3)
     
-    @show fronts3
     @test length(fronts3) == 3
     @test Set(fronts3[1]) == Set([1])
     @test Set(fronts3[2]) == Set([2, 4, 5, 6, 7, 8, 9])
@@ -90,10 +89,10 @@ end
         (1, 2), (2, 1),
         (1, 1)
     ])
-    selected2, fronts2 = selection_NSGA(pop2, 10)
-    @test length(selected2) == 10
-    @test 15 in selected2  # Preserve the best!! alllllways 
-    @test length(fronts2) == 4
+    selected2 = nsga_selection(pop2)
+    @test length(selected2.indices) == 15
+    @test 15 in selected2.indices  # Preserve the best!! alllllways 
+    @test length(selected2.fronts) == 5
 
     # 3 objectives
     pop3 = create_population([
@@ -101,8 +100,8 @@ end
         (1, 2, 3), (2, 3, 1), (3, 1, 2),
         (1, 3, 2), (2, 1, 3), (3, 2, 1)
     ])
-    selected3, fronts3 = selection_NSGA(pop3, 5)
-    @test length(selected3) == 5
-    @test 1 in selected3  # The best individual should always be selected
-    @test length(fronts3) == 2
+    selected3 = nsga_selection(pop3)
+    @test length(selected3.indices) == 9
+    @test 1 in selected3.indices  # The best individual should always be selected
+    @test length(selected3.fronts) == 3
 end

@@ -7,18 +7,19 @@ using Plots
 Random.seed!(1)
 
 #Define the iterations for the algorithm and the population size
-epochs = 1000
-population_size = 1000
+epochs = 100
+population_size = 100
 
 #Number of features which needs to be inserted
 number_features = 2
 
 x_data = randn(Float64, 100, number_features)
-y_data = @. x_data[:,1] * x_data[:,1] + x_data[:,1] * x_data[:,2] - 2 * x_data[:,1] * x_data[:,2]
+y_data = @. x_data[:,1] * x_data[:,1] + x_data[:,1] * x_data[:,2] - 2 * x_data[:,2] * x_data[:,2]
 
 #define the 
 regressor = GepRegressor(number_features)
 fit!(regressor, epochs, population_size, x_data', y_data; loss_fun="mse")
+
 
 pred = regressor(x_data')
 
@@ -40,7 +41,7 @@ color=:red)
 
 #train loss vs validation loss
 train_validation = plot(
-    regressor.fitness_history_.train_loss,
+    [x[1] for x in regressor.fitness_history_.train_loss],
     label="Training Loss",
     ylabel="Loss",
     xlabel="Epoch",
@@ -49,7 +50,7 @@ train_validation = plot(
 
 plot!(
     train_validation,
-    regressor.fitness_history_.val_loss,
+    [x[1] for x in regressor.fitness_history_.val_loss],
     label="Validation Loss",
     linewidth=2
 )

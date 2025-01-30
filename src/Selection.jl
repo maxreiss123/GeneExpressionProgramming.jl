@@ -1,15 +1,18 @@
 module EvoSelection
 using LinearAlgebra
 
-export selection_NSGA, basic_tournament_selection, dominates_, fast_non_dominated_sort, calculate_fronts, determine_ranks, assign_crowding_distance
+export tournament_selection, nsga_selection, dominates_, fast_non_dominated_sort, calculate_fronts, determine_ranks, assign_crowding_distance
 
 
+struct SelectedMembers
+    indices::Vector{Int}
+    fronts::Dict{Int,Vector{Int}}
+end
 
 #Note: selection is constructed to allways return a list of indices => {just care about the data not the objects}
-
-@inline function basic_tournament_selection(population::AbstractArray{T}, tournament_size::Int, number_of_winners::Int) where {T<:Number}
+@inline function tournament_selection(population::AbstractArray{Tuple}, number_of_winners::Int, tournament_size::Int) 
     selected_indices = Vector{Int}(undef, number_of_winners)
-    valid_indices_ = findall(isfinite, population)
+    valid_indices_ = findall(x -> isfinite(x[1]), population)
     valid_indices = []
     doubles = Set()
     for elem in valid_indices_
@@ -25,7 +28,7 @@ export selection_NSGA, basic_tournament_selection, dominates_, fast_non_dominate
         selected_indices[index] = winner
     end
     selected_indices[end] = 1
-    return selected_indices
+    return SelectedMembers(selected_indices,Dict{Int,Vector{Int}}())
 end
 
 
@@ -161,38 +164,35 @@ end
     return distances
 end
 
-@inline function selection_NSGA(population::Vector{T}, num_to_select::Int) where {T<:Tuple}
+
+@inline function nsga_selection(population::Vector{T}) where {T<:Tuple}
     fronts = calculate_fronts(population)
     n_fronts = length(fronts)
 
     selected_indices = Int[]
     pareto_fronts = Dict{Int,Vector{Int}}()
 
-    for front_idx in 1:n_fronts
+    estimated_size = length(population)
+    selected_indices = Vector{Int}(undef, estimated_size)
+    current_idx = 1
+
+
+    @inbounds for front_idx in 1:n_fronts
         front = fronts[front_idx]
-        pareto_fronts[front_idx] = front
+        crowding_distances = assign_crowding_distance(front, population)
 
-        if length(selected_indices) + length(front) <= num_to_select
-            append!(selected_indices, front)
-        else
-            remaining_slots = num_to_select - length(selected_indices)
-            crowding_distances = assign_crowding_distance(front, population)
-
-            sorted_front = sort(front, by=i -> crowding_distances[i], rev=true)
-
-            append!(selected_indices, sorted_front[1:remaining_slots])
-            break
-        end
-
-        if length(selected_indices) >= num_to_select
-            break
-        end
+        sorted_front = sort(front, by=i -> crowding_distances[i], rev=true)
+        front_size = length(sorted_front)
+        copyto!(selected_indices, current_idx, sorted_front, 1, front_size)
+        
+        pareto_fronts[front_idx] = sorted_front
+        current_idx +=front_size
     end
+    resize!(selected_indices, current_idx - 1)
 
-    if length(selected_indices) < num_to_select
-        @warn "Not enough individuals in the population to select $(num_to_select). Returning $(length(selected_indices)) individuals."
-    end
+    return SelectedMembers(selected_indices, pareto_fronts)
 
-    return selected_indices, pareto_fronts
 end
+
+
 end

@@ -27,17 +27,6 @@ simplified interfaces and utilities for symbolic regression tasks with physical 
 - `GENE_COMMON_PROBS`: Default genetic operation probabilities
 - `FUNCTION_LIB_BACKWARD_COMMON`: Backward dimension propagation functions
 - `FUNCTION_LIB_FORWARD_COMMON`: Forward dimension propagation functions
-- `FUNCTION_LIB_COMMON`: Available mathematical functions
-
-# Function Library
-Includes extensive mathematical operations:
-- Basic arithmetic: +, -, *, /, ^
-- Comparisons: min, max
-- Rounding: floor, ceil, round
-- Exponential: exp, log, log10, log2
-- Trigonometric: sin, cos, tan, asin, acos, atan
-- Hyperbolic: sinh, cosh, tanh, asinh, acosh, atanh
-- Special: sqr, sqrt, sign, abs
 
 # Usage Example
 ```julia
@@ -132,15 +121,15 @@ See also:
 module RegressionWrapper
 
 
-export GepRegressor
+export GepRegressor, GepTensorRegressor
 export create_function_entries, create_feature_entries, create_constants_entries, create_physical_operations
-export GENE_COMMON_PROBS, FUNCTION_LIB_BACKWARD_COMMON, FUNCTION_LIB_FORWARD_COMMON, FUNCTION_LIB_COMMON
+export GENE_COMMON_PROBS, FUNCTION_LIB_BACKWARD_COMMON, FUNCTION_LIB_FORWARD_COMMON
 export fit!
 
-export list_all_functions, list_all_arity, list_all_forward_handlers, 
-       list_all_backward_handlers, list_all_genetic_params,
-       set_function!, set_arity!, set_forward_handler!, set_backward_handler!,
-       update_function!
+export list_all_functions, list_all_arity, list_all_forward_handlers,
+    list_all_backward_handlers, list_all_genetic_params,
+    set_function!, set_arity!, set_forward_handler!, set_backward_handler!,
+    update_function!, vec_add, vec_mul
 
 include("Entities.jl")
 include("Gep.jl")
@@ -149,115 +138,22 @@ include("PhyConstants.jl")
 include("Sbp.jl")
 include("Selection.jl")
 include("Util.jl")
+include("TensorOps.jl")
 
 
 using .GepEntities
 using .LossFunction
-using .GepEntities
 using .EvoSelection
 
 using .GepRegression
 using .SBPUtils
 using .GepUtils
+using .TensorRegUtils
 using DynamicExpressions
 using OrderedCollections
+using LinearAlgebra
 
-const Toolbox = GepRegression.GepEntities.Toolbox
-const TokenDto = SBPUtils.TokenDto
-
-function sqr(x::Vector{T}) where {T<:AbstractFloat}
-    return x .* x
-end
-
-function sqr(x::T) where {T<:Union{AbstractFloat,Node{<:AbstractFloat}}}
-    return x * x
-end
-
-
-"""
-    FUNCTION_LIB_COMMON::Dict{Symbol,Function}
-
-Dictionary mapping function symbols to their corresponding functions.
-Contains basic mathematical operations, trigonometric, and other common functions.
-
-# Available Functions
-- Basic arithmetic: `+`, `-`, `*`, `/`, `^`
-- Comparison: `min`, `max`
-- Rounding: `floor`, `ceil`, `round`
-- Exponential & Logarithmic: `exp`, `log`, `log10`, `log2`
-- Trigonometric: `sin`, `cos`, `tan`, `asin`, `acos`, `atan`
-- Hyperbolic: `sinh`, `cosh`, `tanh`, `asinh`, `acosh`, `atanh`
-- Other: `abs`, `sqr`, `sqrt`, `sign`
-
-To add a new function, ensure you also add corresponding entries in `ARITY_LIB_COMMON`,
-`FUNCTION_LIB_FORWARD_COMMON`, and `FUNCTION_LIB_BACKWARD_COMMON`.
-"""
-const FUNCTION_LIB_COMMON = Dict{Symbol,Function}(
-    :+ => +,
-    :- => -,
-    :* => *,
-    :/ => /,
-    :^ => ^,
-    :min => min,
-    :max => max, :abs => abs,
-    :floor => floor,
-    :ceil => ceil,
-    :round => round, :exp => exp,
-    :log => log,
-    :log10 => log10,
-    :log2 => log2, :sin => sin,
-    :cos => cos,
-    :tan => tan,
-    :asin => asin,
-    :acos => acos,
-    :atan => atan, :sinh => sinh,
-    :cosh => cosh,
-    :tanh => tanh,
-    :asinh => asinh,
-    :acosh => acosh,
-    :atanh => atanh, :sqr => sqr,
-    :sqrt => sqrt, :sign => sign
-)
-
-"""
-    ARITY_LIB_COMMON::Dict{Symbol,Int8}
-
-Dictionary specifying the number of arguments (arity) for each function in the library.
-- Value of 1 indicates unary functions (e.g., `sin`, `cos`, `abs`)
-- Value of 2 indicates binary functions (e.g., `+`, `-`, `*`, `/`)
-
-When adding new functions to `FUNCTION_LIB_COMMON`, ensure to specify their arity here.
-"""
-const ARITY_LIB_COMMON = Dict{Symbol,Int8}(
-    :+ => 2,
-    :- => 2,
-    :* => 2,
-    :/ => 2,
-    :^ => 2,
-    :min => 2,
-    :max => 2, :abs => 1,
-    :floor => 1,
-    :ceil => 1,
-    :round => 1,
-    :exp => 1,
-    :log => 1,
-    :log10 => 1,
-    :log2 => 1,
-    :sin => 1,
-    :cos => 1,
-    :tan => 1,
-    :asin => 1,
-    :acos => 1,
-    :atan => 1,
-    :sinh => 1,
-    :cosh => 1,
-    :tanh => 1,
-    :asinh => 1,
-    :acosh => 1,
-    :atanh => 1,
-    :sqrt => 1,
-    :sqr => 1
-)
+const InputSelector = TensorRegUtils.InputSelector
 
 """
     FUNCTION_LIB_FORWARD_COMMON::Dict{Symbol,Function}
@@ -363,7 +259,6 @@ Dictionary containing default probabilities and parameters for genetic algorithm
 - `fusion_rate`: Rate of general fusion (0.0)
 - `inversion_prob`: Probability of inversion (0.1)
 - `mating_size`: Relative size of mating pool (0.5)
-- `penalty_consideration`: Weight of penalty in fitness evaluation (0.2)
 
 These values can be adjusted to fine-tune the genetic algorithm's behavior.
 """
@@ -381,8 +276,7 @@ const GENE_COMMON_PROBS = Dict{String,AbstractFloat}(
     "inversion_prob" => 0.1,
     "reverse_insertion" => 0.05,
     "reverse_insertion_tail" => 0.05,
-    "mating_size" => 0.5,
-    "penalty_consideration" => 0.2)
+    "mating_size" => 0.5)
 
 const SymbolDict = OrderedDict{Int8,Int8}
 const CallbackDict = Dict{Int8,Function}
@@ -487,7 +381,7 @@ function create_constants_entries(
 
     for elem in entered_terminal_nums
         utilized_symbols[cur_idx] = 0
-        nodes[cur_idx] = parse(node_type, string(elem))
+        nodes[cur_idx] = Node{node_type}(; val=parse(node_type, string(elem)))
         dimension_information[cur_idx] = get(dimensions_to_consider, elem, ZERO_DIM)
         cur_idx += 1
     end
@@ -495,7 +389,7 @@ function create_constants_entries(
 
     for _ in 1:rnd_count
         utilized_symbols[cur_idx] = 0
-        nodes[cur_idx] = rand()
+        nodes[cur_idx] = Node{node_type}(; val=rand())
         dimension_information[cur_idx] = ZERO_DIM
         cur_idx += 1
     end
@@ -504,6 +398,7 @@ function create_constants_entries(
 end
 
 
+#preamble syms are just dummies
 function create_preamble_entries(
     preamble_syms_raw::Vector{Symbol},
     dimensions_to_consider::Dict{Symbol,Vector{Float16}},
@@ -519,7 +414,7 @@ function create_preamble_entries(
 
     for elem in preamble_syms_raw
         utilized_symbols[cur_idx] = 0
-        nodes[cur_idx] = Node{AbstractArray}(feature=cur_idx)
+        nodes[cur_idx] = Node{node_type}(feature=cur_idx)
         dimension_information[cur_idx] = get(dimensions_to_consider, elem, ZERO_DIM)
         push!(preamble_syms, cur_idx)
         cur_idx += 1
@@ -563,12 +458,13 @@ Create a Gene Expression Programming regressor for symbolic regression.
 - `preamble_syms::Vector{Symbol}=Symbol[]`: Preamble symbols
 - `max_permutations_lib::Int=10000`: Maximum permutations for dimension library
 - `rounds::Int=4`: Rounds for dimension library creation
+- `number_of_objectives::Int=1`: Defines the number of objectives considered by the search
 """
 mutable struct GepRegressor
     toolbox_::Toolbox
     operators_::OperatorEnum
     dimension_information_::OrderedDict{Int8,Vector{Float16}}
-    best_models_::Union{Nothing,Vector{GepRegression.GepEntities.Chromosome}}
+    best_models_::Union{Nothing,Vector{Chromosome}}
     fitness_history_::Any
     token_dto_::Union{TokenDto,Nothing}
 
@@ -581,10 +477,11 @@ mutable struct GepRegressor
         considered_dimensions::Dict{Symbol,Vector{Float16}}=Dict{Symbol,Vector{Float16}}(),
         rnd_count::Int=1,
         node_type::Type=Float64,
-        gene_count::Int=2,
-        head_len::Int=10,
+        gene_count::Int=3,
+        head_len::Int=6,
         preamble_syms::Vector{Symbol}=Symbol[],
-        max_permutations_lib::Int=10000, rounds::Int=4
+        max_permutations_lib::Int=10000, rounds::Int=4,
+        number_of_objectives::Int=1
     )
 
         entered_features_ = isempty(entered_features) ?
@@ -637,13 +534,123 @@ mutable struct GepRegressor
         end
 
         toolbox = GepRegression.GepEntities.Toolbox(gene_count, head_len, utilized_symbols, gene_connections_,
-            callbacks, nodes, GENE_COMMON_PROBS; preamble_syms=preamble_syms_)
+            callbacks, nodes, GENE_COMMON_PROBS; preamble_syms=preamble_syms_, number_of_objectives=number_of_objectives,
+            operators_=operators)
 
         obj = new()
         obj.toolbox_ = toolbox
         obj.operators_ = operators
         obj.dimension_information_ = dimension_information
         obj.token_dto_ = token_dto
+        return obj
+    end
+end
+
+"""
+    GepTensorRegressor
+
+A Gene Expression Programming (GEP) regressor that evolves higher order mathematical expressions (e.g tensor-based). 
+
+# Fields
+- `toolbox_::Toolbox`: Contains configuration and operators for GEP evolution
+- `best_models_::Union{Nothing,Vector{Chromosome}}`: Best models found during evolution
+- `fitness_history_::Any`: History of fitness values during training
+
+# Constructor
+    GepTensorRegressor(feature_amount::Int; kwargs...)
+
+Create a new GEP tensor regressor with specified number of input features.
+
+# Arguments
+- `scalar_feature_amount::Int`: Number of input features representing scalar quantities
+- `higher_dim_feature_amount::Int`: Number of input features representing hihger quantities
+
+# Keyword Arguments 
+- `entered_non_terminals::Vector{Symbol}=[:+, :-, :*, :/]`: Available mathematical operators
+- `entered_terminal_nums::Vector{<:AbstractFloat}=[0.0, 0.5]`: Constants available as terminals
+- `gene_connections::Vector{Symbol}=[:+, :-, :*, :/]`: Operators for connecting genes
+- `rnd_count::Int=1`: Number of random constant terminals to generate
+- `gene_count::Int=3`: Number of genes in each chromosome 
+- `head_len::Int=6`: Length of the head section in each gene
+- `number_of_objectives::Int=1`: Number of optimization objectives
+
+The regressor uses GEP to evolve tensor-based mathematical expressions that map input features 
+to target values. It supports multiple genes connected by operators and can optimize for 
+multiple objectives.
+
+# Implementation Details
+- Uses InputSelector nodes for features
+- Combines fixed and random constant terminals
+- Maps operators to TENSOR_NODES callbacks
+- Uses TENSOR_NODES_ARITY for operator arity
+- Compiles expressions to Flux networks via compile_to_flux_network
+"""
+#TODO => adapt probs for occurance of !
+mutable struct GepTensorRegressor
+    toolbox_::Toolbox
+    best_models_::Union{Nothing,Vector{Chromosome}}
+    fitness_history_::Any
+
+
+    function GepTensorRegressor(scalar_feature_amount::Int; 
+        higher_dim_feature_amount::Int=0,
+        entered_non_terminals::Vector{Symbol}=[:+, :-, :*],
+        entered_terminal_nums::Vector{<:AbstractFloat}=Float64[],
+        gene_connections::Vector{Symbol}=[:+, :*],
+        rnd_count::Int=0,
+        gene_count::Int=2,
+        head_len::Int=3,
+        number_of_objectives::Int=1
+    )
+        #Creating the feature Nodes -> asuming a data dict pointing to 
+        cur_idx = Int8(1)
+        nodes = OrderedDict{Int8,Any}()
+        utilized_symbols = SymbolDict()
+        callbacks = Dict{Int8,Any}()
+        gene_connections_ = Int8[]
+        tensor_syms_idx = Int8[]
+        tensor_function_idx = Int8[]
+        for _ in 1:scalar_feature_amount
+            nodes[cur_idx] = InputSelector(cur_idx)
+            utilized_symbols[cur_idx] = Int8(0)
+            cur_idx += 1
+        end
+
+        for _ in 1:higher_dim_feature_amount
+            nodes[cur_idx] = InputSelector(cur_idx)
+            utilized_symbols[cur_idx] = Int8(0)
+            cur_idx += 1
+        end
+
+        #Creating the const_nodes
+        for elem in entered_terminal_nums
+            nodes[cur_idx] = elem
+            utilized_symbols[cur_idx] = Int8(0)
+            cur_idx += 1
+        end
+
+        for _ in 1:rnd_count
+            nodes[cur_idx] = rand()
+            utilized_symbols[cur_idx] = Int8(0)
+            cur_idx += 1
+        end
+
+        #callback - index => function
+        for elem in entered_non_terminals
+            callbacks[cur_idx] = TENSOR_NODES[elem]
+            utilized_symbols[cur_idx] = TENSOR_NODES_ARITY[elem]
+            if elem in gene_connections
+                push!(gene_connections_,cur_idx)
+            end
+            cur_idx += 1
+        end
+
+        toolbox = GepRegression.GepEntities.Toolbox(gene_count, head_len, utilized_symbols, gene_connections_,
+            callbacks, nodes, GENE_COMMON_PROBS; number_of_objectives=number_of_objectives,
+            operators_=nothing, function_complile=compile_to_flux_network)
+
+        obj = new()
+        obj.toolbox_ = toolbox
         return obj
     end
 end
@@ -674,14 +681,15 @@ Train the GEP regressor model.
 - `opt_method_const::Symbol=:cg`: Optimization method for constants
 - `target_dimension::Union{Vector{Float16},Nothing}=nothing`: Target physical dimension
 """
-function fit!(regressor::GepRegressor, epochs::Int, population_size, x_train::AbstractArray,
+function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, x_train::AbstractArray,
     y_train::AbstractArray; x_test::Union{AbstractArray,Nothing}=nothing, y_test::Union{AbstractArray,Nothing}=nothing,
-    optimization_epochs::Int=500,
+    optimization_epochs::Int=100,
     hof::Int=3, loss_fun::Union{String,Function}="mse",
     correction_epochs::Int=1, correction_amount::Real=0.05,
-    tourni_size::Int=3, opt_method_const::Symbol=:cg,
+    opt_method_const::Symbol=:cg,
     target_dimension::Union{Vector{Float16},Nothing}=nothing,
-    cycles::Int=10
+    cycles::Int=10, max_iterations::Int=150, n_starts::Int=5,
+    break_condition::Union{Function,Nothing}=nothing
 )
 
     correction_callback = if !isnothing(target_dimension)
@@ -697,28 +705,134 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size, x_train::Ab
         nothing
     end
 
-    
-    best, history = runGep(epochs,
-        population_size,
+    @inline function optimizer_function_(sub_tree::Node)
+        y_pred, flag = eval_tree_array(sub_tree, x_train, regressor.operators_)
+        return get_loss_function("mse")(y_pred, y_train)
+    end
+
+    function optimizer_wrapper(population::Vector{Chromosome})
+        try
+            eqn, result = optimize_constants!(population[1].compiled_function, optimizer_function_;
+                opt_method=opt_method_const, max_iterations=max_iterations, n_restarts=n_starts)
+            population[1].fitness = (result,)
+            population[1].compiled_function = eqn
+        catch
+            @show "Ignored constant opt."
+        end
+    end
+
+    evalStrat = StandardRegressionStrategy{typeof(first(x_train))}(
         regressor.operators_,
         x_train,
         y_train,
-        regressor.toolbox_;
+        !isnothing(x_test) ? x_test : x_train,
+        !isnothing(y_test) ? y_test : y_train,
+        get_loss_function(loss_fun);
+        secOptimizer=optimizer_wrapper,
+        break_condition=break_condition
+    )
+
+    best, history = runGep(epochs,
+        population_size,
+        regressor.toolbox_,
+        evalStrat;
         hof=hof,
-        x_data_test=!isnothing(x_test) ? x_test : x_train,
-        y_data_test=!isnothing(y_test) ? y_test : y_train,
-        loss_fun_=loss_fun,
         correction_callback=correction_callback,
         correction_epochs=correction_epochs,
         correction_amount=correction_amount,
-        tourni_size=tourni_size,
-        opt_method_const=opt_method_const,
-        optimisation_epochs=optimization_epochs)
+        tourni_size=max(Int(ceil(population_size * 0.03)), 3),
+        optimization_epochs=optimization_epochs
+    )
 
     regressor.best_models_ = best
     regressor.fitness_history_ = history
 end
 
+function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, loss_function::Function;
+    optimizer_function_::Union{Function,Nothing}=nothing,
+    optimization_epochs::Int=100,
+    hof::Int=3,
+    correction_epochs::Int=1,
+    correction_amount::Real=0.05,
+    opt_method_const::Symbol=:cg,
+    target_dimension::Union{Vector{Float16},Nothing}=nothing,
+    cycles::Int=10, max_iterations::Int=150, n_starts::Int=5,
+    break_condition::Union{Function,Nothing}=nothing
+)
+
+    correction_callback = if !isnothing(target_dimension)
+        (genes, start_indices, expression) -> correct_genes!(
+            genes,
+            start_indices,
+            expression,
+            target_dimension,
+            regressor.token_dto_;
+            cycles=cycles
+        )
+    else
+        nothing
+    end
+
+
+    function optimizer_wrapper(population::Vector{Chromosome})
+        try
+            eqn, result = optimize_constants!(population[1].compiled_function, optimizer_function_;
+                opt_method=opt_method_const, max_iterations=max_iterations, n_restarts=n_starts)
+            population[1].fitness = result
+            population[1].compiled_function = eqn
+        catch e
+            @show "Ignored constant opt."
+        end
+    end
+
+    evalStrat = GenericRegressionStrategy(
+        regressor.operators_,
+        length(regressor.toolbox_.fitness_reset[1]),
+        loss_function;
+        secOptimizer=nothing,
+        break_condition=break_condition
+    )
+
+    best, history = runGep(epochs,
+        population_size,
+        regressor.toolbox_,
+        evalStrat;
+        hof=hof,
+        correction_callback=correction_callback,
+        correction_epochs=correction_epochs,
+        correction_amount=correction_amount,
+        tourni_size=max(Int(ceil(population_size * 0.03)), 3),
+        optimization_epochs=optimization_epochs
+    )
+
+    regressor.best_models_ = best
+    regressor.fitness_history_ = history
+end
+
+function fit!(regressor::GepTensorRegressor, epochs::Int, population_size::Int, loss_function::Function;
+    hof::Int=3,
+    break_condition::Union{Function,Nothing}=nothing
+)
+
+    evalStrat = GenericRegressionStrategy(
+        nothing,
+        length(regressor.toolbox_.fitness_reset[1]),
+        loss_function;
+        secOptimizer=nothing,
+        break_condition=break_condition
+    )
+
+    best, history = runGep(epochs,
+        population_size,
+        regressor.toolbox_,
+        evalStrat;
+        hof=hof,
+        tourni_size=max(Int(ceil(population_size * 0.03)), 3)
+    )
+
+    regressor.best_models_ = best
+    regressor.fitness_history_ = history
+end
 
 """
     (regressor::GepRegressor)(x_data::AbstractArray; ensemble::Bool=false)
@@ -732,7 +846,7 @@ Make predictions using the trained regressor.
 - `ensemble::Bool=false`: Whether to use ensemble predictions
 
 # Returns
-- Predicted values for the input features
+- Predicted values for the input features -> only employable when using compile_djl_datatype
 """
 function (regressor::GepRegressor)(x_data::AbstractArray; ensemble::Bool=false)
     return regressor.best_models_[1].compiled_function(x_data, regressor.operators_)
@@ -761,11 +875,11 @@ println(sin_info.arity)  # 1
 """
 function list_all_functions()
     return Dict(sym => (
-        function_ = _FUNCTION_LIB_COMMON[sym],
-        arity = _ARITY_LIB_COMMON[sym],
-        forward_handler = _FUNCTION_LIB_FORWARD_COMMON[sym],
-        backward_handler = _FUNCTION_LIB_BACKWARD_COMMON[sym]
-    ) for sym in keys(_FUNCTION_LIB_COMMON))
+        function_=FUNCTION_LIB_COMMON[sym],
+        arity=ARITY_LIB_COMMON[sym],
+        forward_handler=FUNCTION_LIB_FORWARD_COMMON[sym],
+        backward_handler=FUNCTION_LIB_BACKWARD_COMMON[sym]
+    ) for sym in keys(FUNCTION_LIB_COMMON))
 end
 
 """
@@ -860,8 +974,8 @@ set_function!(:sin, new_sin_implementation)
 - ArgumentError if the function symbol doesn't exist in the library
 """
 function set_function!(sym::Symbol, func::Function)
-    haskey(_FUNCTION_LIB_COMMON, sym) || throw(ArgumentError("Function $sym not found in library"))
-    _FUNCTION_LIB_COMMON[sym] = func
+    haskey(_UNCTION_LIB_COMMON, sym) || throw(ArgumentError("Function $sym not found in library"))
+    FUNCTION_LIB_COMMON[sym] = func
     return nothing
 end
 
@@ -883,9 +997,9 @@ set_arity!(:custom_func, 2)
 - ArgumentError if the function symbol doesn't exist or arity is invalid
 """
 function set_arity!(sym::Symbol, arity::Int8)
-    haskey(_ARITY_LIB_COMMON, sym) || throw(ArgumentError("Function $sym not found in library"))
+    haskey(ARITY_LIB_COMMON, sym) || throw(ArgumentError("Function $sym not found in library"))
     arity in (1, 2) || throw(ArgumentError("Arity must be 1 or 2"))
-    _ARITY_LIB_COMMON[sym] = arity
+    ARITY_LIB_COMMON[sym] = arity
     return nothing
 end
 
@@ -907,8 +1021,8 @@ set_forward_handler!(:custom_func, zero_unit_forward)
 - ArgumentError if the function symbol doesn't exist
 """
 function set_forward_handler!(sym::Symbol, handler::Function)
-    haskey(_FUNCTION_LIB_FORWARD_COMMON, sym) || throw(ArgumentError("Function $sym not found in library"))
-    _FUNCTION_LIB_FORWARD_COMMON[sym] = handler
+    haskey(FUNCTION_LIB_FORWARD_COMMON, sym) || throw(ArgumentError("Function $sym not found in library"))
+    FUNCTION_LIB_FORWARD_COMMON[sym] = handler
     return nothing
 end
 
@@ -930,8 +1044,8 @@ set_backward_handler!(:custom_func, zero_unit_backward)
 - ArgumentError if the function symbol doesn't exist
 """
 function set_backward_handler!(sym::Symbol, handler::Function)
-    haskey(_FUNCTION_LIB_BACKWARD_COMMON, sym) || throw(ArgumentError("Function $sym not found in library"))
-    _FUNCTION_LIB_BACKWARD_COMMON[sym] = handler
+    haskey(FUNCTION_LIB_BACKWARD_COMMON, sym) || throw(ArgumentError("Function $sym not found in library"))
+    FUNCTION_LIB_BACKWARD_COMMON[sym] = handler
     return nothing
 end
 
@@ -962,13 +1076,13 @@ update_function!(:custom_func,
 # Throws
 - ArgumentError if the function symbol doesn't exist or parameters are invalid
 """
-function update_function!(sym::Symbol; 
-                         func::Union{Function,Nothing}=nothing,
-                         arity::Union{Int8,Nothing}=nothing,
-                         forward_handler::Union{Function,Nothing}=nothing,
-                         backward_handler::Union{Function,Nothing}=nothing)
+function update_function!(sym::Symbol;
+    func::Union{Function,Nothing}=nothing,
+    arity::Union{Int8,Nothing}=nothing,
+    forward_handler::Union{Function,Nothing}=nothing,
+    backward_handler::Union{Function,Nothing}=nothing)
     haskey(_FUNCTION_LIB_COMMON, sym) || throw(ArgumentError("Function $sym not found in library"))
-    
+
     if !isnothing(func)
         set_function!(sym, func)
     end
@@ -981,7 +1095,7 @@ function update_function!(sym::Symbol;
     if !isnothing(backward_handler)
         set_backward_handler!(sym, backward_handler)
     end
-    
+
     return nothing
 end
 

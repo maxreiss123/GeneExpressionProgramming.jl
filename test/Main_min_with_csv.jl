@@ -53,7 +53,7 @@ plot!(pred_vs_actual, vec(y_test), vec(y_test),
 
 #train loss vs validation loss
 train_validation = plot(
-    regressor.fitness_history_.train_loss,
+    [x[1] for x in regressor.fitness_history_.train_loss],
     label="Training Loss",
     ylabel="Loss",
     xlabel="Epoch",
@@ -62,7 +62,7 @@ train_validation = plot(
 
 plot!(
     train_validation,
-    regressor.fitness_history_.val_loss,
+    [x[1] for x in regressor.fitness_history_.val_loss],
     label="Validation Loss",
     linewidth=2
 )

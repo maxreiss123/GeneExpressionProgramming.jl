@@ -48,6 +48,20 @@ operations, including optimization, history tracking, data manipulation, and sta
 - `train_test_split`: Split dataset for training/testing
 - `save_state`, `load_state`: State persistence
 
+## Constants
+- `FUNCTION_LIB_COMMON`: Available mathematical functions
+
+# Function Library
+Includes extensive mathematical operations:
+- Basic arithmetic: +, -, *, /, ^
+- Comparisons: min, max
+- Rounding: floor, ceil, round
+- Exponential: exp, log, log10, log2
+- Trigonometric: sin, cos, tan, asin, acos, atan
+- Hyperbolic: sinh, cosh, tanh, asinh, acosh, atanh
+- Special: sqr, sqrt, sign, abs
+- Tensorfunctions: 
+
 # Usage Example
 ```julia
 # History recording
@@ -86,7 +100,10 @@ optimized_node, final_loss = optimize_constants!(
 - `Zygote`: Automatic differentiation
 - `Serialization`: State persistence
 - `Statistics`: Statistical computations
+- `Flux`: ML-Package
+- `Tensors`: mathematical objects of higher order
 - `Random`: Random number generation
+- `CUDA`: Extension to run on CUDA-cores
 """
 module GepUtils
 
@@ -95,6 +112,8 @@ export save_state, load_state
 export create_history_recorder, record_history!, record!, close_recorder!
 export HistoryRecorder, OptimizationHistory, get_history_arrays
 export train_test_split
+export FUNCTION_LIB_COMMON, ARITY_LIB_COMMON
+export TensorNode, compile_network
 
 using OrderedCollections
 using DynamicExpressions
@@ -105,16 +124,114 @@ using Zygote
 using Serialization
 using Statistics
 using Random
+using Tensors
+using Flux
 using Base.Threads: @spawn
 
 
-struct OptimizationHistory{T<:AbstractFloat}
+
+function sqr(x::Vector{T}) where {T<:AbstractFloat}
+    return x .* x
+end
+
+function sqr(x::T) where {T<:Union{AbstractFloat,Node{<:AbstractFloat}}}
+    return x * x
+end
+
+"""
+    FUNCTION_LIB_COMMON::Dict{Symbol,Function}
+
+Dictionary mapping function symbols to their corresponding functions.
+Contains basic mathematical operations, trigonometric, and other common functions.
+
+# Available Functions
+- Basic arithmetic: `+`, `-`, `*`, `/`, `^`
+- Comparison: `min`, `max`
+- Rounding: `floor`, `ceil`, `round`
+- Exponential & Logarithmic: `exp`, `log`, `log10`, `log2`
+- Trigonometric: `sin`, `cos`, `tan`, `asin`, `acos`, `atan`
+- Hyperbolic: `sinh`, `cosh`, `tanh`, `asinh`, `acosh`, `atanh`
+- Other: `abs`, `sqr`, `sqrt`, `sign`
+- Tensor Functions: 
+
+To add a new function, ensure you also add corresponding entries in `ARITY_LIB_COMMON`,
+`FUNCTION_LIB_FORWARD_COMMON`, and `FUNCTION_LIB_BACKWARD_COMMON`.
+"""
+const FUNCTION_LIB_COMMON = Dict{Symbol,Function}(
+    :+ => +,
+    :- => -,
+    :* => *,
+    :/ => /,
+    :^ => ^,
+    :min => min,
+    :max => max, :abs => abs,
+    :floor => floor,
+    :ceil => ceil,
+    :round => round, :exp => exp,
+    :log => log,
+    :log10 => log10,
+    :log2 => log2, :sin => sin,
+    :cos => cos,
+    :tan => tan,
+    :asin => asin,
+    :acos => acos,
+    :atan => atan, :sinh => sinh,
+    :cosh => cosh,
+    :tanh => tanh,
+    :asinh => asinh,
+    :acosh => acosh,
+    :atanh => atanh, :sqr => sqr,
+    :sqrt => sqrt, :sign => sign
+)
+
+"""
+    ARITY_LIB_COMMON::Dict{Symbol,Int8}
+
+Dictionary specifying the number of arguments (arity) for each function in the library.
+- Value of 1 indicates unary functions (e.g., `sin`, `cos`, `abs`)
+- Value of 2 indicates binary functions (e.g., `+`, `-`, `*`, `/`)
+
+When adding new functions to `FUNCTION_LIB_COMMON`, ensure to specify their arity here.
+"""
+const ARITY_LIB_COMMON = Dict{Symbol,Int8}(
+    :+ => 2,
+    :- => 2,
+    :* => 2,
+    :/ => 2,
+    :^ => 2,
+    :min => 2,
+    :max => 2,
+    :abs => 1,
+    :floor => 1,
+    :ceil => 1,
+    :round => 1,
+    :exp => 1,
+    :log => 1,
+    :log10 => 1,
+    :log2 => 1,
+    :sin => 1,
+    :cos => 1,
+    :tan => 1,
+    :asin => 1,
+    :acos => 1,
+    :atan => 1,
+    :sinh => 1,
+    :cosh => 1,
+    :tanh => 1,
+    :asinh => 1,
+    :acosh => 1,
+    :atanh => 1,
+    :sqrt => 1,
+    :sqr => 1
+)
+
+struct OptimizationHistory{T<:Union{AbstractFloat,Tuple}}
     train_loss::Vector{T}
     val_loss::Vector{T}
     train_mean::Vector{T}
     train_std::Vector{T}
 
-    function OptimizationHistory(epochs::Int, ::Type{T}) where {T<:AbstractFloat}
+    function OptimizationHistory(epochs::Int, ::Type{T}) where {T<:Union{AbstractFloat,Tuple}}
         return new{T}(
             Vector{T}(undef, epochs),
             Vector{T}(undef, epochs),
@@ -242,12 +359,12 @@ final_history = recorder.history
 - Supports any AbstractFloat type
 - Channel depth can be adjusted for different recording patterns
 """
-struct HistoryRecorder{T<:AbstractFloat}
+struct HistoryRecorder{T<:Union{AbstractFloat,Tuple}}
     channel::Channel{Tuple{Int,T,T,Vector{T}}}
     task::Task
     history::OptimizationHistory{T}
 
-    function HistoryRecorder(epochs::Int, ::Type{T}; buffer_size::Int=32) where {T<:AbstractFloat}
+    function HistoryRecorder(epochs::Int, ::Type{T}; buffer_size::Int=32) where {T<:Union{AbstractFloat,Tuple}}
         history = OptimizationHistory(epochs, T)
         channel = Channel{Tuple{Int,T,T,Vector{T}}}(buffer_size)
         task = @spawn record_history!(channel, history)
@@ -255,17 +372,32 @@ struct HistoryRecorder{T<:AbstractFloat}
     end
 end
 
-# Usage in record_history!
+
+@inline function tuple_agg(entries::Vector{T}, fun::Function) where {T<:Tuple}
+    isempty(entries) && return entries[1]
+    N = length(first(entries))
+    L = length(entries)
+
+    vectors = ntuple(i -> Vector{Float64}(undef, L), N)
+
+    for (j, entry) in enumerate(entries)
+        for i in 1:length(entry)
+            vectors[i][j] = entry[i]
+        end
+    end
+    return tuple(i -> fun(vectors[i]), N)
+end
+
 @inline function record_history!(
     channel::Channel{Tuple{Int,T,T,Vector{T}}},
     history::OptimizationHistory{T}
-) where {T<:AbstractFloat}
+) where {T<:Union{AbstractFloat,Tuple}}
     for (epoch, train_loss, val_loss, fit_vector) in channel
         @inbounds begin
             history.train_loss[epoch] = train_loss
             history.val_loss[epoch] = val_loss
-            history.train_mean[epoch] = mean(fit_vector)
-            history.train_std[epoch] = std(fit_vector)
+            #history.train_mean[epoch] = tuple_agg(fit_vector,mean)
+            #history.train_std[epoch] = tuple_agg(fit_vector, std)
         end
     end
 end
@@ -276,10 +408,9 @@ end
     train_loss::T,
     val_loss::T,
     fit_vector::Vector{T}
-) where {T<:AbstractFloat}
+) where {T<:Union{AbstractFloat,Tuple}}
     put!(recorder.channel, (epoch, train_loss, val_loss, fit_vector))
 end
-
 
 @inline function close_recorder!(recorder::HistoryRecorder)
     close(recorder.channel)
@@ -403,27 +534,26 @@ result = compile_djl_datatype(rek_string, arity_map, callbacks, nodes)
 
 See also: [`DynamicExpressions.Node`](@ref)
 """
-function compile_djl_datatype(rek_string::Vector, arity_map::OrderedDict, callbacks::Dict, nodes::OrderedDict)
-    #just let it fail when it becomes invalid, because then the equation is not that use ful
+function compile_djl_datatype(rek_string::Vector, arity_map::OrderedDict, callbacks::Dict, nodes::OrderedDict, pre_len::Int)
     stack = []
-    for elem in reverse(rek_string)
+    for elem in reverse(rek_string[pre_len:end])
         if get(arity_map, elem, 0) == 2
-            op1 = (temp = pop!(stack); temp isa Int8 ? nodes[temp] : temp)
-            op2 = (temp = pop!(stack); temp isa Int8 ? nodes[temp] : temp)
+            op1 = pop!(stack)
+            op2 = pop!(stack)
             ops = callbacks[elem]
             push!(stack, ops(op1, op2))
         elseif get(arity_map, elem, 0) == 1
-            op1 = (temp = pop!(stack); temp isa Int8 ? nodes[temp] : temp)
+            op1 = pop!(stack)
             ops = callbacks[elem]
             push!(stack, ops(op1))
         else
-            push!(stack, elem)
+            push!(stack, elem isa Int8 ? nodes[elem] : elem)
         end
     end
-    return last(stack)
+    return pre_len == 1 ? last(stack) : stack
 end
 
-function retrieve_constants_from_node(node::Node)
+@inline function retrieve_constants_from_node(node::Node)
     constants = AbstractFloat[]
     for op in node
         if op isa AbstractNode && op.degree == 0 && op.constant
@@ -432,6 +562,7 @@ function retrieve_constants_from_node(node::Node)
     end
     constants
 end
+
 
 """
     optimize_constants!(
@@ -528,7 +659,7 @@ See also: [`DynamicExpressions.Node`](@ref), [`Optim.optimize`](@ref), [`LineSea
     n_restarts::Int=3
 )
 
-    nconst = count_constants(node)
+    nconst = count_constant_nodes(node)
 
     if nconst == 0
         return node, 0.0
@@ -609,32 +740,32 @@ end
 
 
 function train_test_split(
-    X::AbstractMatrix{T}, 
-    y::AbstractVector{T}; 
-    train_ratio::T=0.9, 
+    X::AbstractMatrix{T},
+    y::AbstractVector{T};
+    train_ratio::T=0.9,
     consider::Int=1
 ) where {T<:AbstractFloat}
 
     data = hcat(X, y)
-    
+
 
     data = data[shuffle(1:size(data, 1)), :]
-    
+
 
     split_point = floor(Int, size(data, 1) * train_ratio)
-    
+
 
     data_train = data[1:split_point, :]
-    data_test = data[(split_point + 1):end, :]
-    
+    data_test = data[(split_point+1):end, :]
+
 
     x_train = T.(data_train[1:consider:end, 1:(end-1)])
     y_train = T.(data_train[1:consider:end, end])
-    
+
     x_test = T.(data_test[1:consider:end, 1:(end-1)])
     y_test = T.(data_test[1:consider:end, end])
-    
-    return x_train, y_train, x_test,  y_test
+
+    return x_train, y_train, x_test, y_test
 end
 
 
