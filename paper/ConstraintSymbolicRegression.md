@@ -3,7 +3,8 @@ Evolutionary symbolic regression approaches are powerful tools that can approxim
 
 
 # Test Reproduction
-The file ConstrainViaSBP.jl contains the test setup. Please follow the steps outlined there.
+- The file ConstrainViaSBP.jl contains the test setup. Please follow the steps outlined there.
+- Utilize release 0.4
 
 # Source
 - [1] Reissmann, M., Fang, Y., Ooi, A., & Sandberg, R. (2024). Constraining genetic symbolic regression via semantic backpropagation. arXiv. https://arxiv.org/abs/2409.07369
