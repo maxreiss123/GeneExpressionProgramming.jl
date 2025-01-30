@@ -32,11 +32,11 @@ struct InputSelector{T<:Integer}
     idx::T
 end
 
-@inline function (l::InputSelector{T})(x::Tuple) where T
+@inline function (l::InputSelector{T})(x::Tuple) where {T}
     @inbounds x[l.idx]
 end
 
-@inline function (l::InputSelector{T})(x::Any) where T
+@inline function (l::InputSelector{T})(x::Any) where {T}
     @inbounds x
 end
 
@@ -72,131 +72,131 @@ end
 @generate_operation_node DeviatoricNode
 
 # Specialized nodes with their functors
-struct ConstantNode{T<:Number, C<:Union{Nothing,Chain}} <: AbstractOperationNode{C}
+struct ConstantNode{T<:Number,C<:Union{Nothing,Chain}} <: AbstractOperationNode{C}
     value::T
     chain::C
-    ConstantNode(value::T, chain=nothing) where T<:Number = new{T,typeof(chain)}(value, chain)
+    ConstantNode(value::T, chain=nothing) where {T<:Number} = new{T,typeof(chain)}(value, chain)
 end
 Flux.Functors.@functor ConstantNode
 
-struct UnaryNode{F<:Function, C<:Union{Nothing,Chain}} <: AbstractOperationNode{C}
+struct UnaryNode{F<:Function,C<:Union{Nothing,Chain}} <: AbstractOperationNode{C}
     operation::F
     chain::C
-    UnaryNode(operation::F, chain=nothing) where F<:Function = new{F,typeof(chain)}(operation, chain)
+    UnaryNode(operation::F, chain=nothing) where {F<:Function} = new{F,typeof(chain)}(operation, chain)
 end
 Flux.Functors.@functor UnaryNode
 
 # Operation implementations
-@inline function (l::AdditionNode{T})(x::Union{Tensor,SymmetricTensor}, 
-                                    y::Union{Tensor,SymmetricTensor}) where {T}
+@inline function (l::AdditionNode{T})(x::Union{Tensor,SymmetricTensor},
+    y::Union{Tensor,SymmetricTensor}) where {T}
     @fastmath (x + y)::Union{Tensor,SymmetricTensor}
 end
 
-@inline function (l::AdditionNode{T})(x::Number, y::Number) where T
+@inline function (l::AdditionNode{T})(x::Number, y::Number) where {T}
     @fastmath (x + y)::Number
 end
 
 
-@inline function (l::AdditionNode{T})(x::Any, y::Any) where T
+@inline function (l::AdditionNode{T})(x::Any, y::Any) where {T}
     Inf::Number
 end
 
-@inline function (l::MultiplicationNode{T})(x::Any, y::Any) where T
+@inline function (l::MultiplicationNode{T})(x::Any, y::Any) where {T}
     Inf::Number
 end
 
-@inline function (l::SubtractionNode{T})(x::Union{Tensor,SymmetricTensor}, y::Union{Tensor,SymmetricTensor}) where T
+@inline function (l::SubtractionNode{T})(x::Union{Tensor,SymmetricTensor}, y::Union{Tensor,SymmetricTensor}) where {T}
     @fastmath (x - y)::Union{Tensor,SymmetricTensor}
 end
 
 
-@inline function (l::SubtractionNode{T})(x::Number, y::Number) where T
+@inline function (l::SubtractionNode{T})(x::Number, y::Number) where {T}
     @fastmath (x - y)::Number
 end
 
-@inline function (l::SubtractionNode{T})(x::Any, y::Any) where T
+@inline function (l::SubtractionNode{T})(x::Any, y::Any) where {T}
     Inf::Number
 end
 
-@inline function (l::MultiplicationNode{T})(x::Number, y::Number) where T
+@inline function (l::MultiplicationNode{T})(x::Number, y::Number) where {T}
     @fastmath (x * y)::Number
 end
 
-@inline function (l::MultiplicationNode{T})(x::Union{Tensor,SymmetricTensor}, y::Number) where T
+@inline function (l::MultiplicationNode{T})(x::Union{Tensor,SymmetricTensor}, y::Number) where {T}
     @fastmath (x * y)::Union{Tensor,SymmetricTensor}
 end
 
-@inline function (l::MultiplicationNode{T})(x::Number, y::Union{Tensor,SymmetricTensor}) where T
+@inline function (l::MultiplicationNode{T})(x::Number, y::Union{Tensor,SymmetricTensor}) where {T}
     @fastmath (x * y)::Union{Tensor,SymmetricTensor}
 end
 
 
 
-@inline function (l::MultiplicationNode{T})(x::Union{Tensor,SymmetricTensor}, y::Union{Tensor,SymmetricTensor}) where T
+@inline function (l::MultiplicationNode{T})(x::Union{Tensor,SymmetricTensor}, y::Union{Tensor,SymmetricTensor}) where {T}
     @fastmath dot(x, y)::Union{Tensor,SymmetricTensor}
 end
 
-@inline function (l::DivisionNode{T})(x::Union{Tensor,SymmetricTensor,Number}, y::Number) where T
+@inline function (l::DivisionNode{T})(x::Union{Tensor,SymmetricTensor,Number}, y::Number) where {T}
     @fastmath (x / y)::Union{Tensor,SymmetricTensor,Number}
 end
 
-@inline function (l::DivisionNode{T})(x::Any, y::Any) where T
+@inline function (l::DivisionNode{T})(x::Any, y::Any) where {T}
     Inf::Number
 end
 
-@inline function (l::PowerNode{T})(x::Union{Tensor,SymmetricTensor,Number}, y::Number) where T
+@inline function (l::PowerNode{T})(x::Union{Tensor,SymmetricTensor,Number}, y::Number) where {T}
     @fastmath (x^y)::Union{Tensor,SymmetricTensor}
 end
 
-@inline function (l::DoubleContractionNode{T})(x, y) where T
+@inline function (l::DoubleContractionNode{T})(x, y) where {T}
     @fastmath dcontract(x, y)
 end
 
-@inline function (l::DeviatoricNode{T})(x) where T
+@inline function (l::DeviatoricNode{T})(x) where {T}
     @fastmath dev(x)
 end
 
-@inline function (l::MinNode{T})(x, y) where T
+@inline function (l::MinNode{T})(x, y) where {T}
     @fastmath min(x, y)
 end
 
-@inline function (l::MaxNode{T})(x, y) where T
+@inline function (l::MaxNode{T})(x, y) where {T}
     @fastmath max(x, y)
 end
 
-@inline function (l::InversionNode{T})(x) where T
+@inline function (l::InversionNode{T})(x) where {T}
     @fastmath inv(x)
 end
 
-@inline function (l::TraceNode{T})(x) where T
+@inline function (l::TraceNode{T})(x) where {T}
     @fastmath tr(x)
 end
 
-@inline function (l::DeterminantNode{T})(x) where T
+@inline function (l::DeterminantNode{T})(x) where {T}
     @fastmath det(x)::Number
 end
 
-@inline function (l::SymmetricNode{T})(x::Union{Tensor,SymmetricTensor}) where T
+@inline function (l::SymmetricNode{T})(x::Union{Tensor,SymmetricTensor}) where {T}
     @fastmath symmetric(x)::Union{Tensor,SymmetricTensor}
 end
 
-@inline function (l::SkewNode{T})(x::Union{Tensor,SymmetricTensor}) where T
+@inline function (l::SkewNode{T})(x::Union{Tensor,SymmetricTensor}) where {T}
     @fastmath skew(x)::Union{Tensor,SymmetricTensor}
 end
 
-@inline function (l::VolumetricNode{T})(x) where T
+@inline function (l::VolumetricNode{T})(x) where {T}
     @fastmath vol(x)
 end
 
-@inline function (l::DeviatricNode{T})(x) where T
+@inline function (l::DeviatricNode{T})(x) where {T}
     @fastmath dev(x)
 end
 
-@inline function (l::TdotNode{T})(x) where T
+@inline function (l::TdotNode{T})(x) where {T}
     @fastmath tdot(x)
 end
 
-@inline function (l::DottNode{T})(x) where T
+@inline function (l::DottNode{T})(x) where {T}
     @fastmath dott(x)
 end
 
@@ -209,83 +209,83 @@ end
 end
 
 
-@inline function (l::AdditionNode{T})(x::AbstractVector, y::AbstractVector) where T
+@inline function (l::AdditionNode{T})(x::AbstractVector, y::AbstractVector) where {T}
     map((a, b) -> l(a, b), x, y)::AbstractVector
 end
 
-@inline function (l::AdditionNode{T})(x::AbstractVector{Number}, y::AbstractVector{Number}) where T
+@inline function (l::AdditionNode{T})(x::AbstractVector{Number}, y::AbstractVector{Number}) where {T}
     (x .+ y)::AbstractVector{Number}
 end
 
-@inline function (l::SubtractionNode{T})(x::AbstractVector, y::AbstractVector) where T
+@inline function (l::SubtractionNode{T})(x::AbstractVector, y::AbstractVector) where {T}
     map((a, b) -> l(a, b), x, y)::AbstractVector
 end
 
-@inline function (l::MultiplicationNode{T})(x::AbstractVector, y::AbstractVector) where T
+@inline function (l::MultiplicationNode{T})(x::AbstractVector, y::AbstractVector) where {T}
     map((a, b) -> l(a, b), x, y)::AbstractVector
 end
 
-@inline function (l::DivisionNode{T})(x::AbstractVector, y::Number) where T
+@inline function (l::DivisionNode{T})(x::AbstractVector, y::Number) where {T}
     map(a -> l(a, y), x)::AbstractVector
 end
 
-@inline function (l::DivisionNode{T})(x::AbstractVector, y::AbstractVector) where T
+@inline function (l::DivisionNode{T})(x::AbstractVector, y::AbstractVector) where {T}
     map((a, b) -> l(a, b), x, y)::AbstractVector
 end
 
-@inline function (l::PowerNode{T})(x::AbstractVector, y::Number) where T
+@inline function (l::PowerNode{T})(x::AbstractVector, y::Number) where {T}
     map(a -> l(a, y), x)::AbstractVector
 end
 
-@inline function (l::PowerNode{T})(x::AbstractVector, y::AbstractVector) where T
+@inline function (l::PowerNode{T})(x::AbstractVector, y::AbstractVector) where {T}
     map((a, b) -> l(a, b), x, y)::AbstractVector
 end
 
-@inline function (l::MinNode{T})(x::AbstractVector, y::AbstractVector) where T
+@inline function (l::MinNode{T})(x::AbstractVector, y::AbstractVector) where {T}
     map((a, b) -> l(a, b), x, y)::AbstractVector
 end
 
-@inline function (l::MaxNode{T})(x::AbstractVector, y::AbstractVector) where T
+@inline function (l::MaxNode{T})(x::AbstractVector, y::AbstractVector) where {T}
     map((a, b) -> l(a, b), x, y)::AbstractVector
 end
 
-@inline function (l::TraceNode{T})(x::AbstractVector) where T
+@inline function (l::TraceNode{T})(x::AbstractVector) where {T}
     map(l, x)::AbstractVector
 end
 
-@inline function (l::DeterminantNode{T})(x::AbstractVector) where T
+@inline function (l::DeterminantNode{T})(x::AbstractVector) where {T}
     map(l, x)::AbstractVector
 end
 
-@inline function (l::SymmetricNode{T})(x::AbstractVector) where T
+@inline function (l::SymmetricNode{T})(x::AbstractVector) where {T}
     map(l, x)::AbstractVector
 end
 
-@inline function (l::SkewNode{T})(x::AbstractVector) where T
+@inline function (l::SkewNode{T})(x::AbstractVector) where {T}
     map(l, x)::AbstractVector
 end
 
-@inline function (l::VolumetricNode{T})(x::AbstractVector) where T
+@inline function (l::VolumetricNode{T})(x::AbstractVector) where {T}
     map(l, x)::AbstractVector
 end
 
-@inline function (l::DeviatricNode{T})(x::AbstractVector) where T
+@inline function (l::DeviatricNode{T})(x::AbstractVector) where {T}
     map(l, x)::AbstractVector
 end
 
-@inline function (l::InversionNode{T})(x::AbstractVector) where T
+@inline function (l::InversionNode{T})(x::AbstractVector) where {T}
     map(l, x)::AbstractVector
 end
 
-@inline function (l::TdotNode{T})(x::AbstractVector) where T
+@inline function (l::TdotNode{T})(x::AbstractVector) where {T}
     map(l, x)::AbstractVector
 end
 
-@inline function (l::DottNode{T})(x::AbstractVector) where T
+@inline function (l::DottNode{T})(x::AbstractVector) where {T}
     map(l, x)::AbstractVector
 end
 
-@inline function (l::DeviatoricNode{T})(x::AbstractVector) where T
+@inline function (l::DeviatoricNode{T})(x::AbstractVector) where {T}
     map(l, x)::AbstractVector
 end
 
@@ -358,5 +358,52 @@ export ConstantNode, UnaryNode
 export compile_to_flux_network
 export TENSOR_NODES, TENSOR_NODES_ARITY
 
+
+@setup_workload begin
+    dim = 3
+    t2 = rand(Tensor{2,dim})
+    vec3 = rand(Tensor{1,dim})
+    const_val = 2.0
+    nodes = OrderedDict{Int8,Any}(
+        5 => InputSelector(1),
+        6 => InputSelector(2),
+        7 => const_val
+    )
+    arity_map = OrderedDict{Int8,Int}(
+        1 => 2,  # + (AdditionNode)
+        2 => 2,  # * (MultiplicationNode)
+        3 => 2,  # dcontract
+        4 => 1   # tr
+    )
+    callbacks = Dict{Int8,Any}(
+        1 => AdditionNode,
+        2 => MultiplicationNode,
+        3 => DoubleContractionNode,
+        4 => TraceNode
+    )
+
+    expressions = [
+        Int8[2, 5, 5],
+        Int8[2, 5, 5],
+        Int8[1, 5, 5],
+        Int8[2, 6, 7],       
+        Int8[1, 5, 6],       
+        Int8[3, 5, 5],       
+        Int8[4, 5]           
+    ]
+    inputs = (t2, vec3, const_val)
+    inputs2 = ([t2 for _ in 1:10],[vec3 for _ in 1:10],[const_val for _ in 1:10])
+    @compile_workload begin
+        for expr in expressions
+            net = compile_to_flux_network(expr, arity_map, callbacks, nodes, 0)
+            try
+                net(inputs)
+                net(inputs2)
+            catch
+                # Ignore runtime dimension mismatch for precompile
+            end
+        end
+    end
+end
 
 end
