@@ -92,6 +92,62 @@ The repository contains an implementation of the Gene Expression Programming [1]
 - Remark: Template for rerunning the test from the paper is located in the paper directory
 - Remark: the tutorial folder contains notebook, that can be run with google-colab, while showing a step-by-step introduction
 
+
+# How can I approximate functions involving vectors or matricies?
+- To conduct a regression involving higher dimensional objects we swap the underlying evaluation from DynamicExpression.jl to Flux.jl
+- Hint: By involving such objects, the performance deteriorates significantly
+
+ ```julia
+using GeneExpressionProgramming
+using Random
+using Tensors
+
+Random.seed!(1)
+
+#Define the iterations for the algorithm and the population size
+epochs = 100
+population_size = 1000
+
+#Number of features which needs to be inserted
+number_features = 5
+
+#define the 
+regressor = GepTensorRegressor(number_features,
+    gene_count=2, #2 works quite reliable 
+    head_len=3) # 5 works quite reliable
+
+#create some testdata - testing simply on a few velocity vectors
+size_test = 1000
+u1 = [randn(Tensor{1,3}) for _ in 1:size_test]
+u2 = [randn(Tensor{1,3}) for _ in 1:size_test]
+u3 = [randn(Tensor{1,3}) for _ in 1:size_test]
+
+x1 = [2.0 for _ in 1:size_test]
+
+x2 = [0.0 for _ in 1:size_test]
+
+a = 0.5 * u1 .+ x2 .* u2 + 2* u3
+
+inputs = (x1,x2,u1,u2,u3)
+
+
+@inline function loss_new(elem, validate::Bool)
+    if isnan(mean(elem.fitness)) || validate
+        model = elem.compiled_function
+        a_pred = model(inputs)
+        !isfinite(norm(a_pred)) && return (typemax(Float64),)
+        size(a_pred) != size(a) && return (typemax(Float64),)
+        size(a_pred[1]) != size(a[1]) && return (typemax(Float64),)
+        
+        loss = norm(a_pred .- a)
+        return (loss,)
+    else
+        return (elem.fitness,)
+    end
+end
+fit!(regressor, epochs, population_size, loss_new)
+```
+
 # Supported `Engines' for Symbolic Evaluation
 - DynamicExpressions.jl
 - Flux.jl --> in development
@@ -109,6 +165,6 @@ The repository contains an implementation of the Gene Expression Programming [1]
 - [ ] Documentation
 - [x] Naming conventions!
 - [x] Improve usability for user interaction
-- [x] Next operations: Tail flip, Connection symbol flip, staggered exploration
-- [ ] Mitigate exception handling in hot paths
-- [ ] Flexible underlying engine to evaluate the expressions -> Currently DynamicExpressions.jl, Flux in the future for GPU support
+- [ ] Next operations: Tail flip, Connection symbol flip, wrapper class for easy usage, config class for predefinition, staggered exploration
+- [ ] nice print flux
+- [ ] constant node needs to be fixed

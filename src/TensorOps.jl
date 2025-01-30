@@ -133,7 +133,7 @@ end
 
 
 @inline function (l::MultiplicationNode{T})(x::Union{Tensor,SymmetricTensor}, y::Union{Tensor,SymmetricTensor}) where {T}
-    @fastmath dot(x, y)::Union{Tensor,SymmetricTensor}
+    @fastmath dot(x, y)::Union{Tensor,SymmetricTensor,Number}
 end
 
 @inline function (l::DivisionNode{T})(x::Union{Tensor,SymmetricTensor,Number}, y::Number) where {T}
@@ -200,7 +200,7 @@ end
     @fastmath dott(x)
 end
 
-@inline function (l::ConstantNode{V,T})(x) where {V,T}
+@inline function (l::ConstantNode{V,T})() where {V,T}
     l.value
 end
 
@@ -306,7 +306,7 @@ function compile_to_flux_network(rek_string::Vector, arity_map::OrderedDict, cal
         else
             if nodes[elem] isa Number
                 num = nodes[elem]
-                push!(stack, _ -> num)
+                push!(stack, (inputs) -> ConstantNode(num)())
             else
                 idx = nodes[elem].idx
                 push!(stack, (inputs) -> InputSelector(idx)(inputs))
