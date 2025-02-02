@@ -344,7 +344,7 @@ The evolution process stops when either:
 
         if epoch < epochs
             if length(fits_representation[1]) == 1
-                selectedMembers = tournament_selection(fits_representation, mating_size, tourni_size)
+                selectedMembers = tournament_selection(fits_representation[1:mating_size], mating_size, tourni_size)
             else
                 selectedMembers = nsga_selection(fits_representation)
             end
