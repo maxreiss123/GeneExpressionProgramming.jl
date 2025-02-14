@@ -396,8 +396,8 @@ end
         @inbounds begin
             history.train_loss[epoch] = train_loss
             history.val_loss[epoch] = val_loss
-            #history.train_mean[epoch] = tuple_agg(fit_vector,mean)
-            #history.train_std[epoch] = tuple_agg(fit_vector, std)
+            history.train_mean[epoch] = tuple_agg(fit_vector, mean)
+            history.train_std[epoch] = tuple_agg(fit_vector, std)
         end
     end
 end
@@ -660,12 +660,13 @@ See also: [`DynamicExpressions.Node`](@ref), [`Optim.optimize`](@ref), [`LineSea
 )
 
     nconst = count_constant_nodes(node)
+    baseline = loss(node)
 
     if nconst == 0
-        return node, 0.0
+        return node, baseline
     end
 
-    baseline = loss(node)
+    
     best_node = deepcopy(node)
     best_loss = baseline
 
@@ -689,8 +690,16 @@ See also: [`DynamicExpressions.Node`](@ref), [`Optim.optimize`](@ref), [`LineSea
                 end
             end
         end
+        #needs to be revised!
+        x0, refs = get_scalar_constants(current_node)
 
-        result = Optim.optimize(loss, current_node, algorithm, optimizer_options)
+
+        function opt_step(x::AbstractVector)
+            set_scalar_constants!(current_node,x, refs)
+            loss(current_node)
+        end
+
+        result = Optim.optimize(opt_step, x0, algorithm, optimizer_options)
 
         if result.minimum < best_loss
             best_node = result.minimizer

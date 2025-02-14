@@ -716,8 +716,8 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, x_trai
                 opt_method=opt_method_const, max_iterations=max_iterations, n_restarts=n_starts)
             population[1].fitness = (result,)
             population[1].compiled_function = eqn
-        catch
-            @show "Ignored constant opt."
+        catch e
+            @show "Ignored constant opt." e
         end
     end
 
