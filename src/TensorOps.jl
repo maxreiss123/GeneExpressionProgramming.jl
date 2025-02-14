@@ -2,28 +2,6 @@ module TensorRegUtils
 
 using Flux, LinearAlgebra, OrderedCollections, ChainRulesCore, Tensors, PrecompileTools
 
-
-struct ThreadBuffer
-    vector::Vector{Union{Number,Tensor,SymmetricTensor}}
-end
-
-const THREAD_BUFFERS = Vector{ThreadBuffer}(undef, Threads.nthreads())
-
-function __init__()
-    for i in 1:Threads.nthreads()
-        THREAD_BUFFERS[i] = ThreadBuffer(Vector{Union{Number,Tensor,SymmetricTensor}}(undef, 0))
-    end
-end
-
-@inline function get_thread_buffer(n::Integer)
-    buffer = THREAD_BUFFERS[Threads.threadid()].vector
-    if length(buffer) < n
-        resize!(buffer, n)
-    end
-    buffer
-end
-
-
 # Abstract base type with parametric types for improved type stability
 abstract type AbstractOperationNode{T} end
 

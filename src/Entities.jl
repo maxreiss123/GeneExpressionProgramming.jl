@@ -313,15 +313,6 @@ Compiles chromosome's genes into executable function - using the types from the 
 # Effects
 Updates chromosome's compiled_function and related fields
 """
-
-"""
-    fitness(chromosome::Chromosome)
-
-Get chromosome's fitness value.
-
-# Returns
-Fitness value or tuple
-"""
 @inline function compile_expression!(chromosome::Chromosome; force_compile::Bool=false)
     if !chromosome.compiled || force_compile
         try
