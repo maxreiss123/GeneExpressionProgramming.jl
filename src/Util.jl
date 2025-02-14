@@ -702,7 +702,7 @@ See also: [`DynamicExpressions.Node`](@ref), [`Optim.optimize`](@ref), [`LineSea
         result = Optim.optimize(opt_step, x0, algorithm, optimizer_options)
 
         if result.minimum < best_loss
-            best_node = result.minimizer
+            best_node = current_node
             best_loss = result.minimum
         end
     end
