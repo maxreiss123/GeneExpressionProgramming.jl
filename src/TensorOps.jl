@@ -2,7 +2,6 @@ module TensorRegUtils
 
 using Flux, LinearAlgebra, OrderedCollections, ChainRulesCore, Tensors, PrecompileTools
 
-
 # Abstract base type with parametric types for improved type stability
 abstract type AbstractOperationNode{T} end
 
