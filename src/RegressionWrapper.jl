@@ -265,8 +265,8 @@ These values can be adjusted to fine-tune the genetic algorithm's behavior.
 const GENE_COMMON_PROBS = Dict{String,AbstractFloat}(
     "one_point_cross_over_prob" => 0.4,
     "two_point_cross_over_prob" => 0.3,
-    "mutation_prob" => 0.9,
-    "mutation_rate" => 0.05,
+    "mutation_prob" => 1.0,
+    "mutation_rate" => 0.1,
     "dominant_fusion_prob" => 0.1,
     "dominant_fusion_rate" => 0.2,
     "rezessiv_fusion_prob" => 0.1,
