@@ -74,6 +74,7 @@ const FAILURE_RECURSION_SIZE = -21
 const STD_DIM_SIZE = 7
 const ZERO_DIM = zeros(Float16, STD_DIM_SIZE)
 const EMPTY_DIM = Float16[typemax(Float16) for _ in 1:STD_DIM_SIZE]
+const F16_LOWER_BOUND = eps(Float16)
 
 using OrderedCollections
 using Random
@@ -126,11 +127,11 @@ function mul_unit_backward(u1::Vector{Float16}, u2::Vector{Float16}, expected_di
     elseif has_inf16(u1)
         return expected_dim .- u2, u2
     else
-        if isapprox(u1, u2, atol=eps(Float16))
+        if isapprox(u1, u2, atol=F16_LOWER_BOUND)
             lr = expected_dim .- expected_dim .÷ 2
             rl = expected_dim .- lr
             return lr, rl
-        elseif isapprox(u1, expected_dim, atol=eps(Float16))
+        elseif isapprox(u1, expected_dim, atol=F16_LOWER_BOUND)
             return u1, expected_dim .- u1
         else
             return expected_dim .- u2, u2
@@ -159,11 +160,11 @@ function div_unit_backward(u1::Vector{Float16}, u2::Vector{Float16}, expected_di
     elseif has_inf16(u1)
         return expected_dim .+ u2, u2
     else
-        if isapprox(u1, u2, atol=eps(Float16))
+        if isapprox(u1, u2, atol=F16_LOWER_BOUND)
             lr = expected_dim .- expected_dim .÷ 2
             rl = .-(expected_dim .+ lr)
             return lr, rl
-        elseif isapprox(u1, expected_dim, atol=eps(Float16))
+        elseif isapprox(u1, expected_dim, atol=F16_LOWER_BOUND)
             return u1, .-(expected_dim .+ u1)
         else
             return expected_dim .+ u2, u2
@@ -718,6 +719,7 @@ mutable struct TempComputeTree
     tokenDto::TokenDto
     depend_on_total_number::Int
     exchange_len::Int
+    modified::Bool
 
     function TempComputeTree(symbol::Int8,
         depend_on::Vector{T}=Union{TempComputeTree,Int8}[],
@@ -728,7 +730,7 @@ mutable struct TempComputeTree
             vector_dimension,
             tokenDto,
             length(depend_on),
-            -1)
+            -1,true)
     end
 end
 
@@ -750,6 +752,7 @@ function flush!(tree::TempComputeTree)
 end
 
 function calculate_vector_dimension!(tree::TempComputeTree)
+    !tree.modified && return tree.vector_dimension
     tdto = tree.tokenDto
     tokenLib = tdto.tokenLib
     point_operations = tdto.point_operations
@@ -765,7 +768,7 @@ function calculate_vector_dimension!(tree::TempComputeTree)
         function_op = tokenLib.physical_operation_dict[][tree.symbol]
         tree.vector_dimension = function_op(dims...)
     end
-
+    tree.modified = false
     return tree.vector_dimension
 end
 
@@ -794,8 +797,9 @@ function enforce_changes!(tree::TempComputeTree, expected_dim::Vector{Float16}, 
         return false
     end
     tree.depend_on[index] = rand(exchange_symbol)
+    tree.modified = true
     calculate_vector_dimension!(tree)
-    return calculate_distance(tree.vector_dimension, expected_dim) < eps(Float16)
+    return calculate_distance(tree.vector_dimension, expected_dim) < F16_LOWER_BOUND
 
 end
 
@@ -867,9 +871,10 @@ function enforce_changes!(tree::TempComputeTree, expected_dim::Vector{Float16}; 
         if new_tree isa TempComputeTree
             tree.symbol = new_tree.symbol
             tree.depend_on = new_tree.depend_on
+            tree.modified = true
             calculate_vector_dimension!(tree)
         end
-        return calculate_distance(tree.vector_dimension, expected_dim) < eps(Float16)
+        return calculate_distance(tree.vector_dimension, expected_dim) < F16_LOWER_BOUND
 end
 
 
@@ -912,7 +917,7 @@ function find_closest(distance::Vector{Float16},
         for key in all_keys
             if min_len <= key[2] <= expression_len
                 sim = calculate_darityistance(distance, key[1])
-                sim < eps(Float16) && return rand(lib[key])
+                sim < F16_LOWER_BOUND && return rand(lib[key])
             end
         end
     end
@@ -1010,7 +1015,7 @@ function propagate_necessary_changes!(
         return false
     end
 
-    if !has_inf16(tree.vector_dimension) && isapprox(tree.vector_dimension, expected_dim, atol=eps(Float16)) 
+    if !has_inf16(tree.vector_dimension) && isapprox(tree.vector_dimension, expected_dim, atol=F16_LOWER_BOUND) 
         return true
     end
 
@@ -1024,7 +1029,7 @@ function propagate_necessary_changes!(
         ret_val = handle_unary_operation(tree, expected_dim, distance_to_change)
     end
     calculate_vector_dimension!(tree)
-    return ret_val && isapprox(tree.vector_dimension, expected_dim, atol=eps(Float16))
+    return ret_val && isapprox(tree.vector_dimension, expected_dim, atol=F16_LOWER_BOUND)
 end
 
 
@@ -1228,7 +1233,7 @@ See also: [`TempComputeTree`](@ref), [`SBPUtils.propagate_necessary_changes!`](@
     distance = calculate_distance(target_dimension, calculate_vector_dimension!(tree))
 
     temp_tree = tree
-    if distance < eps(Float16)
+    if distance < F16_LOWER_BOUND
         for (count, index) in enumerate(reverse(start_indices))
             if index != start_indices[1]
                 genes[count] = temp_tree.symbol
@@ -1240,7 +1245,7 @@ See also: [`TempComputeTree`](@ref), [`SBPUtils.propagate_necessary_changes!`](@
         end
     end
 
-    return distance, distance < eps(Float16)
+    return distance, distance < F16_LOWER_BOUND
 end
 
 function get_feature_dims_json(json_data::Dict{String,Any}, features::Vector{String}, case_name::String; dims_identifier::String="dims")

@@ -101,7 +101,7 @@ end
 
 
 const THREAD_BUFFERS = let
-    default_size = 1000
+    default_size = 256
     [GeneticBuffers(
         zeros(Int8, default_size),
         zeros(Int8, default_size),
@@ -248,7 +248,7 @@ struct Toolbox
         tailsyms = [key for (key, arity) in symbols if arity < 1 && !(key in preamble_syms)]
         len_preamble = length(preamble_syms)
         gen_start_indices = [gene_count + (gene_len * (i - 1)) for i in 1:gene_count]
-        ensure_buffer_size!(head_len, gene_count)
+        #ensure_buffer_size!(head_len, gene_count)
         new(gene_count, head_len, symbols, gene_connections, headsyms, unary_syms, tailsyms, symbols,
             callbacks, nodes, gen_start_indices, gep_probs, unary_prob, fitness_reset, preamble_syms, len_preamble, operators_, function_complile)
     end
@@ -324,7 +324,7 @@ Updates chromosome's compiled_function and related fields
             chromosome.fitness = chromosome.toolbox.fitness_reset[2]
             chromosome.compiled = true
         catch e
-            @error "something went wrong" exception = (e, catch_backtrace())
+            #@error "something went wrong" exception = (e, catch_backtrace())
             chromosome.fitness = chromosome.toolbox.fitness_reset[1]
         end
     end
