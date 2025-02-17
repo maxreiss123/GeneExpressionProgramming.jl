@@ -324,7 +324,7 @@ Updates chromosome's compiled_function and related fields
             chromosome.fitness = chromosome.toolbox.fitness_reset[2]
             chromosome.compiled = true
         catch e
-            @error "something went wrong" exception = (e, catch_backtrace())
+            #@error "something went wrong" exception = (e, catch_backtrace())
             chromosome.fitness = chromosome.toolbox.fitness_reset[1]
         end
     end

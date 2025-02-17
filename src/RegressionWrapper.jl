@@ -263,7 +263,7 @@ Dictionary containing default probabilities and parameters for genetic algorithm
 These values can be adjusted to fine-tune the genetic algorithm's behavior.
 """
 const GENE_COMMON_PROBS = Dict{String,AbstractFloat}(
-    "one_point_cross_over_prob" => 0.4,
+    "one_point_cross_over_prob" => 0.5,
     "two_point_cross_over_prob" => 0.3,
     "mutation_prob" => 1.0,
     "mutation_rate" => 0.1,
@@ -274,9 +274,9 @@ const GENE_COMMON_PROBS = Dict{String,AbstractFloat}(
     "fusion_prob" => 0.1,
     "fusion_rate" => 0.2,
     "inversion_prob" => 0.1,
-    "reverse_insertion" => 0.05,
-    "reverse_insertion_tail" => 0.05,
-    "mating_size" => 0.5)
+    "reverse_insertion" => 0.1,
+    "reverse_insertion_tail" => 0.1,
+    "mating_size" => 0.7)
 
 const SymbolDict = OrderedDict{Int8,Int8}
 const CallbackDict = Dict{Int8,Function}
@@ -753,8 +753,8 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, loss_f
     optimization_epochs::Int=100,
     hof::Int=3,
     correction_epochs::Int=1,
-    correction_amount::Real=0.05,
-    opt_method_const::Symbol=:cg,
+    correction_amount::Real=0.3,
+    opt_method_const::Symbol=:nd,
     target_dimension::Union{Vector{Float16},Nothing}=nothing,
     cycles::Int=10, max_iterations::Int=150, n_starts::Int=5,
     break_condition::Union{Function,Nothing}=nothing
@@ -827,7 +827,7 @@ function fit!(regressor::GepTensorRegressor, epochs::Int, population_size::Int, 
         regressor.toolbox_,
         evalStrat;
         hof=hof,
-        tourni_size=max(Int(ceil(population_size * 0.03)), 3)
+        tourni_size=max(Int(ceil(population_size * 0.003)), 3)
     )
 
     regressor.best_models_ = best
