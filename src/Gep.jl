@@ -118,7 +118,7 @@ Returns the computed fitness value (loss) or crash_value if computation fails
             y_pred = elem.compiled_function(evalArgs.x_data, evalArgs.operators)
             return (evalArgs.loss_function(evalArgs.y_data, y_pred),)
         else
-            return (elem.fitness,)
+            return elem.fitness
         end
     catch e
         return (evalArgs.crash_value,)
@@ -274,7 +274,10 @@ The evolution process stops when either:
     correction_epochs::Int=1,
     correction_amount::Real=0.6,
     tourni_size::Int=3,
-    optimization_epochs::Int=500)
+    optimization_epochs::Int=500,
+    file_logger_callback::Union{Function, Nothing}=nothing, 
+    save_state_callback::Union{Function, Nothing}=nothing,
+    load_state_callback::Union{Function, Nothing}=nothing)
 
     recorder = HistoryRecorder(epochs, Tuple)
     mating_ = toolbox.gep_probs["mating_size"]
@@ -284,11 +287,12 @@ The evolution process stops when either:
     fit_cache = Dict{Vector{Int8},Tuple}()
     cache_lock = SpinLock()
 
-    population = generate_population(population_size, toolbox)
+    population, start_epoch = isnothing(load_state_callback) ? (generate_population(population_size, toolbox), 1) : load_state_callback()
     next_gen = Vector{eltype(population)}(undef, mating_size)
     progBar = Progress(epochs; showspeed=true, desc="Training: ")
     prev_best = (typemax(Float64),)
-    for epoch in 1:epochs
+    
+    for epoch in start_epoch:epochs
         same = Atomic{Int}(0)
         perform_correction_callback!(population, epoch, correction_epochs, correction_amount, correction_callback)
 
@@ -332,18 +336,20 @@ The evolution process stops when either:
 
         update_surrogate!(evalStrategy)
 
-
         if !isnothing(evalStrategy.break_condition) && evalStrategy.break_condition(population, epoch)
             break
         end
 
-        if epoch < epochs
-            if length(fits_representation[1]) == 1
-                selectedMembers = tournament_selection(fits_representation, mating_size, tourni_size)
-            else
-                selectedMembers = nsga_selection(fits_representation)
-            end
+        if length(fits_representation[1]) == 1
+            selectedMembers = tournament_selection(fits_representation, mating_size, tourni_size)
+        else
+            selectedMembers = nsga_selection(fits_representation)
+        end
 
+        !isnothing(file_logger_callback) && file_logger_callback(population, epoch, selectedMembers)
+        !isnothing(save_state_callback) && save_state_callback(population, epoch)
+
+        if epoch < epochs
             parents = population[selectedMembers.indices]
             perform_step!(population, parents, next_gen, toolbox, mating_size)
         end

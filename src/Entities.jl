@@ -75,7 +75,7 @@ module GepEntities
 export Chromosome, Toolbox, EvaluationStrategy, StandardRegressionStrategy, GenericRegressionStrategy
 export fitness, set_fitness!
 export generate_gene, compile_expression!, generate_chromosome, generate_population
-export genetic_operations!, replicate, gene_inversion!, gene_mutation!, gene_one_point_cross_over!, gene_two_point_cross_over!, gene_fussion!
+export genetic_operations!, replicate, gene_inversion!, gene_mutation!, gene_one_point_cross_over!, gene_two_point_cross_over!, gene_fussion!, split_karva
 
 using ..GepUtils
 using ..TensorRegUtils
@@ -397,8 +397,7 @@ Vector{Int8} representing the K-expression of the chromosome
 ```
 
 """
-
-@inline function _karva_raw(chromosome::Chromosome)
+@inline function _karva_raw(chromosome::Chromosome; split::Bool=false)
     gene_len = chromosome.toolbox.head_len * 2 + 1
     gene_count = chromosome.toolbox.gene_count
 
@@ -416,9 +415,22 @@ Vector{Int8} representing the K-expression of the chromosome
         rolled_indices[idx+1] = @view genes[i:i+first(indices)-1]
     end
 
-    return vcat(rolled_indices...)
+    !split && return vcat(rolled_indices...) 
+    return rolled_indices
 end
 
+@inline function split_karva(chromosome::Chromosome, coeffs::Int=2)
+    raw = _karva_raw(chromosome; split=true)
+    connectors = popfirst!(raw)[coeffs:end]
+    gene_count_per_factor = div(chromosome.toolbox.gene_count,coeffs)
+    retval = []
+    for _ in 1:coeffs
+        temp_cons = splice!(connectors, 1:gene_count_per_factor-1)
+        temp_genes = reduce(vcat, splice!(raw,1:gene_count_per_factor))
+        push!(retval,vcat([temp_cons, temp_genes]...))
+    end
+    return retval
+end
 
 """
     generate_gene(headsyms::Vector{Int8}, tailsyms::Vector{Int8}, headlen::Int; 

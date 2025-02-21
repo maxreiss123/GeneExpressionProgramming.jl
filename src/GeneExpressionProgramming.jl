@@ -189,7 +189,8 @@ import .GepEntities:
     compile_expression!,
     generate_chromosome,
     generate_population,
-    genetic_operations!
+    genetic_operations!,
+    split_karva
 
 # Import regression wrapper functionality
 import .RegressionWrapper:
@@ -230,7 +231,7 @@ export InputSelector,
 # Export core GEP entities and operations
 export Chromosome, Toolbox, fitness, set_fitness!,
     generate_gene, compile_expression!, generate_chromosome, generate_population,
-    genetic_operations!
+    genetic_operations!, split_karva
 
 # Export regression components
 export GepRegressor, GepTensorRegressor, fit!,

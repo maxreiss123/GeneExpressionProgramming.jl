@@ -583,7 +583,7 @@ mutable struct GepTensorRegressor
     fitness_history_::Any
 
 
-    function GepTensorRegressor(scalar_feature_amount::Int; 
+    function GepTensorRegressor(scalar_feature_amount::Int;
         higher_dim_feature_amount::Int=0,
         entered_non_terminals::Vector{Symbol}=[:+, :-, :*],
         entered_terminal_nums::Vector{<:AbstractFloat}=Float64[],
@@ -631,7 +631,7 @@ mutable struct GepTensorRegressor
             callbacks[cur_idx] = TENSOR_NODES[elem]
             utilized_symbols[cur_idx] = TENSOR_NODES_ARITY[elem]
             if elem in gene_connections
-                push!(gene_connections_,cur_idx)
+                push!(gene_connections_, cur_idx)
             end
             cur_idx += 1
         end
@@ -680,7 +680,10 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, x_trai
     opt_method_const::Symbol=:cg,
     target_dimension::Union{Vector{Float16},Nothing}=nothing,
     cycles::Int=10, max_iterations::Int=1000, n_starts::Int=3,
-    break_condition::Union{Function,Nothing}=nothing
+    break_condition::Union{Function,Nothing}=nothing,
+    file_logger_callback::Union{Function,Nothing}=nothing,
+    save_state_callback::Union{Function,Nothing}=nothing,
+    load_state_callback::Union{Function,Nothing}=nothing
 )
 
     correction_callback = if !isnothing(target_dimension)
@@ -732,7 +735,10 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, x_trai
         correction_epochs=correction_epochs,
         correction_amount=correction_amount,
         tourni_size=max(Int(ceil(population_size * 0.03)), 3),
-        optimization_epochs=optimization_epochs
+        optimization_epochs=optimization_epochs,
+        file_logger_callback=file_logger_callback,
+        save_state_callback=save_state_callback,
+        load_state_callback=load_state_callback
     )
 
     regressor.best_models_ = best
@@ -748,7 +754,10 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, loss_f
     opt_method_const::Symbol=:nd,
     target_dimension::Union{Vector{Float16},Nothing}=nothing,
     cycles::Int=10, max_iterations::Int=150, n_starts::Int=5,
-    break_condition::Union{Function,Nothing}=nothing
+    break_condition::Union{Function,Nothing}=nothing,
+    file_logger_callback::Union{Function,Nothing}=nothing,
+    save_state_callback::Union{Function,Nothing}=nothing,
+    load_state_callback::Union{Function,Nothing}=nothing
 )
 
     correction_callback = if !isnothing(target_dimension)
@@ -793,7 +802,10 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, loss_f
         correction_epochs=correction_epochs,
         correction_amount=correction_amount,
         tourni_size=max(Int(ceil(population_size * 0.03)), 3),
-        optimization_epochs=optimization_epochs
+        optimization_epochs=optimization_epochs,
+        file_logger_callback=file_logger_callback,
+        save_state_callback=save_state_callback,
+        load_state_callback=load_state_callback
     )
 
     regressor.best_models_ = best
@@ -802,7 +814,10 @@ end
 
 function fit!(regressor::GepTensorRegressor, epochs::Int, population_size::Int, loss_function::Function;
     hof::Int=3,
-    break_condition::Union{Function,Nothing}=nothing
+    break_condition::Union{Function,Nothing}=nothing,
+    file_logger_callback::Union{Function, Nothing}=nothing, 
+    save_state_callback::Union{Function, Nothing}=nothing,
+    load_state_callback::Union{Function, Nothing}=nothing
 )
 
     evalStrat = GenericRegressionStrategy(
@@ -818,7 +833,10 @@ function fit!(regressor::GepTensorRegressor, epochs::Int, population_size::Int, 
         regressor.toolbox_,
         evalStrat;
         hof=hof,
-        tourni_size=max(Int(ceil(population_size * 0.003)), 3)
+        tourni_size=max(Int(ceil(population_size * 0.003)), 3),
+        file_logger_callback=file_logger_callback,
+        save_state_callback=save_state_callback,
+        load_state_callback=load_state_callback
     )
 
     regressor.best_models_ = best
