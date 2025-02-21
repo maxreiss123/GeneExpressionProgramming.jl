@@ -1,6 +1,3 @@
-include("../src/Entities.jl")
-
-using .GepEntities
 using DynamicExpressions
 using Test
 using OrderedCollections

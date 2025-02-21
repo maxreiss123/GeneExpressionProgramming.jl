@@ -77,12 +77,8 @@ export fitness, set_fitness!
 export generate_gene, compile_expression!, generate_chromosome, generate_population
 export genetic_operations!, replicate, gene_inversion!, gene_mutation!, gene_one_point_cross_over!, gene_two_point_cross_over!, gene_fussion!
 
-include("Util.jl")
-include("TensorOps.jl")
-
-
-using .GepUtils
-using .TensorRegUtils
+using ..GepUtils
+using ..TensorRegUtils
 using OrderedCollections
 using DynamicExpressions
 

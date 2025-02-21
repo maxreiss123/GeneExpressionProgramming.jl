@@ -698,7 +698,6 @@ See also: [`DynamicExpressions.Node`](@ref), [`Optim.optimize`](@ref), [`LineSea
             set_scalar_constants!(current_node,x, refs)
             loss(current_node)
         end
-
         result = Optim.optimize(opt_step, x0, algorithm, optimizer_options)
 
         if result.minimum < best_loss

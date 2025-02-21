@@ -1,7 +1,5 @@
-include("../src/TensorOps.jl")
 using BenchmarkTools
 using Test
-using .TensorRegUtils
 using Tensors
 using OrderedCollections
 using Flux

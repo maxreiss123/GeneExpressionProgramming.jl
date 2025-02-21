@@ -63,15 +63,10 @@ See also:
 module GepRegression
 
 
-include("Losses.jl")
-include("Util.jl")
-include("Selection.jl")
-
-
-using .LossFunction
-using .GepUtils
-using .EvoSelection
+using ..GepUtils
 using ..GepEntities
+using ..LossFunction
+using ..EvoSelection
 
 
 using Random

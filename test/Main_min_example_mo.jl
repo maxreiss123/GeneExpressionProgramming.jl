@@ -6,8 +6,6 @@ using Plots
 using DynamicExpressions
 using Statistics
 
-const Chromosome = GepEntities.Chromosome
-
 
 Random.seed!(1)
 

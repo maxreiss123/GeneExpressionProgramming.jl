@@ -131,29 +131,20 @@ export list_all_functions, list_all_arity, list_all_forward_handlers,
     set_function!, set_arity!, set_forward_handler!, set_backward_handler!,
     update_function!, vec_add, vec_mul
 
-include("Entities.jl")
-include("Gep.jl")
-include("Losses.jl")
-include("PhyConstants.jl")
-include("Sbp.jl")
-include("Selection.jl")
-include("Util.jl")
-include("TensorOps.jl")
 
+using ..GepEntities
+using ..LossFunction
+using ..EvoSelection
 
-using .GepEntities
-using .LossFunction
-using .EvoSelection
-
-using .GepRegression
-using .SBPUtils
-using .GepUtils
-using .TensorRegUtils
+using ..GepRegression
+using ..SBPUtils
+using ..GepUtils
+using ..TensorRegUtils
 using DynamicExpressions
 using OrderedCollections
 using LinearAlgebra
 
-const InputSelector = TensorRegUtils.InputSelector
+
 
 """
     FUNCTION_LIB_FORWARD_COMMON::Dict{Symbol,Function}
@@ -533,7 +524,7 @@ mutable struct GepRegressor
             token_dto = nothing
         end
 
-        toolbox = GepRegression.GepEntities.Toolbox(gene_count, head_len, utilized_symbols, gene_connections_,
+        toolbox = Toolbox(gene_count, head_len, utilized_symbols, gene_connections_,
             callbacks, nodes, GENE_COMMON_PROBS; preamble_syms=preamble_syms_, number_of_objectives=number_of_objectives,
             operators_=operators)
 
@@ -645,7 +636,7 @@ mutable struct GepTensorRegressor
             cur_idx += 1
         end
 
-        toolbox = GepRegression.GepEntities.Toolbox(gene_count, head_len, utilized_symbols, gene_connections_,
+        toolbox = Toolbox(gene_count, head_len, utilized_symbols, gene_connections_,
             callbacks, nodes, GENE_COMMON_PROBS; number_of_objectives=number_of_objectives,
             operators_=nothing, function_complile=compile_to_flux_network)
 
@@ -688,7 +679,7 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, x_trai
     correction_epochs::Int=1, correction_amount::Real=0.05,
     opt_method_const::Symbol=:cg,
     target_dimension::Union{Vector{Float16},Nothing}=nothing,
-    cycles::Int=10, max_iterations::Int=150, n_starts::Int=5,
+    cycles::Int=10, max_iterations::Int=1000, n_starts::Int=3,
     break_condition::Union{Function,Nothing}=nothing
 )
 

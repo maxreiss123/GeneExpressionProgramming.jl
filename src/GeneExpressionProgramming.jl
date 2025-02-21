@@ -78,18 +78,31 @@ dims = get_constant_dims(constant)
 - Includes comprehensive utilities for tree manipulation and unit consistency
 """
 
-include("Entities.jl")
-include("Gep.jl")
-include("Losses.jl")
-include("PhyConstants.jl")
-include("Sbp.jl")
-include("Selection.jl")
 include("Util.jl")
-include("RegressionWrapper.jl")
-
+include("TensorOps.jl")
+include("Entities.jl")
+include("Losses.jl")
+include("Selection.jl")
+include("Sbp.jl")
 # First export the submodules themselves
-export GepEntities, LossFunction, PhysicalConstants, 
-       GepUtils, GepRegression, RegressionWrapper, GPSurrogate
+export GepUtils, TensorRegUtils, GepEntities, LossFunction, EvoSelection, SBPUtils
+
+include("Gep.jl")
+include("PhyConstants.jl")
+include("RegressionWrapper.jl")
+export PhysicalConstants, GepRegression, RegressionWrapper
+
+# Import core functions for tensor regression
+import .TensorRegUtils:
+    OperationNode, InputSelector,
+    AdditionNode, SubtractionNode, MultiplicationNode, DivisionNode, PowerNode,
+    MinNode, MaxNode, InversionNode,
+    TraceNode, DeterminantNode, SymmetricNode, SkewNode,
+    VolumetricNode, DeviatricNode, TdotNode, DottNode,
+    DoubleContractionNode, DeviatoricNode,
+    ConstantNode, UnaryNode,
+    compile_to_flux_network,
+    TENSOR_NODES, TENSOR_NODES_ARITY
 
 # Import GEP core functionality
 import .GepRegression:
@@ -192,31 +205,81 @@ import .RegressionWrapper:
     set_arity!,
     set_forward_handler!,
     set_backward_handler!,
-    update_function!
+    update_function!,
+    create_physical_operations,
+    create_function_entries,
+    create_constants_entries,
+    create_feature_entries
 
 
-
+# Export GEP core functionality
 export runGep, EvaluationStrategy, StandardRegressionStrategy, GenericRegressionStrategy
+
+# Export structures for the tensor regression
+export OperationNode, InputSelector,
+    AdditionNode, SubtractionNode, MultiplicationNode, DivisionNode, PowerNode,
+    MinNode, MaxNode, InversionNode,
+    TraceNode, DeterminantNode, SymmetricNode, SkewNode,
+    VolumetricNode, DeviatricNode, TdotNode, DottNode,
+    DoubleContractionNode, DeviatoricNode,
+    ConstantNode, UnaryNode,
+    compile_to_flux_network,
+    TENSOR_NODES, TENSOR_NODES_ARITY
+
+
+# Export core GEP entities and operations
+export Chromosome, Toolbox, fitness, set_fitness!,
+    generate_gene, compile_expression!, generate_chromosome, generate_population,
+    genetic_operations!
+
+# Export regression components
+export GepRegressor, GepTensorRegressor, fit!,
+    list_all_functions, list_all_arity, list_all_forward_handlers,
+    list_all_backward_handlers, list_all_genetic_params,
+    set_function!, set_arity!, set_forward_handler!, set_backward_handler!,
+    update_function!, create_physical_operations, create_function_entries, create_constants_entries,
+    create_feature_entries
+
+# Export loss functions
 export get_loss_function
-export find_indices_with_sum, compile_djl_datatype, optimize_constants!, minmax_scale, isclose
-export save_state, load_state, record_history!, record!, close_recorder!
-export HistoryRecorder, OptimizationHistory, get_history_arrays
-export train_test_split
-export tournament_selection, nsga_selection, dominates_, fast_non_dominated_sort, calculate_fronts, determine_ranks, assign_crowding_distance
-export physical_constants, physical_constants_all, get_constant, get_constant_value, get_constant_dims
+
+# Export selection mechanisms
+export tournament_selection, nsga_selection, dominates_,
+    fast_non_dominated_sort, calculate_fronts,
+    determine_ranks, assign_crowding_distance
+
+# Export physical constants functionality
+export physical_constants, physical_constants_all,
+    get_constant, get_constant_value, get_constant_dims
+
+# Export symbolic computation types
 export TokenLib, TokenDto, LibEntry, TempComputeTree
-export create_lib, create_compute_tree, propagate_necessary_changes!, calculate_vector_dimension!, flush!, flatten_dependents
-export correct_genes!, equal_unit_forward, mul_unit_forward, div_unit_forward
-export zero_unit_backward, zero_unit_forward, sqr_unit_backward, sqr_unit_forward, mul_unit_backward, div_unit_backward, equal_unit_backward
-export get_feature_dims_json, get_target_dim_json, retrieve_coeffs_based_on_similarity
-export Chromosome, Toolbox, fitness, set_fitness!
-export generate_gene, compile_expression!, generate_chromosome, generate_population 
-export genetic_operations!
-export GepRegressor,GepTensorRegressor, fit!
-export list_all_functions, list_all_arity, list_all_forward_handlers
-export list_all_backward_handlers, list_all_genetic_params
-export set_function!, set_arity!, set_forward_handler!, set_backward_handler!
-export update_function!
+
+# Export symbolic computation utilities
+export create_lib, create_compute_tree,
+    propagate_necessary_changes!, calculate_vector_dimension!,
+    flush!, flatten_dependents, correct_genes!,
+    get_feature_dims_json, get_target_dim_json,
+    retrieve_coeffs_based_on_similarity
+
+# Export unit handling operations
+export equal_unit_forward, mul_unit_forward, div_unit_forward,
+    zero_unit_backward, zero_unit_forward,
+    sqr_unit_backward, sqr_unit_forward,
+    mul_unit_backward, div_unit_backward, equal_unit_backward
+
+# Export general utilities
+export find_indices_with_sum, compile_djl_datatype,
+    optimize_constants!, minmax_scale, isclose,
+    save_state, load_state,
+    train_test_split
+
+# Export history recording functionality
+export HistoryRecorder, OptimizationHistory,
+    record_history!, record!, close_recorder!,
+    get_history_arrays
+
+# Export common libraries
 export ARITY_LIB_COMMON, FUNCTION_LIB_COMMON
 
 
