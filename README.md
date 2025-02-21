@@ -150,16 +150,34 @@ fit!(regressor, epochs, population_size, loss_new)
 
 # Supported `Engines' for Symbolic Evaluation
 - DynamicExpressions.jl
-- Flux.jl --> in development
+- Flux.jl --> should be utilized when performing tensor regression
 
 
 # References
 - [1] Ferreira, C. (2001). Gene Expression Programming: a New Adaptive Algorithm for Solving Problems. Complex Systems, 13.
-- [2] Reissmann, M., Fang, Y., Ooi, A., & Sandberg, R. (2024). Constraining genetic symbolic regression via semantic backpropagation. arXiv. https://arxiv.org/abs/2409.07369
+- [2] Reissmann, M., Fang, Y., Ooi, A. S. H., & Sandberg, R. D. (2025). Constraining genetic symbolic regression via semantic backpropagation. Genetic Programming and Evolvable Machines, 26(1), 12
 
  # Acknowledgement
  - The Coefficient optimization is inspired by [https://github.com/MilesCranmer/SymbolicRegression.jl](https://github.com/MilesCranmer/SymbolicRegression.jl/blob/master/src/ConstantOptimization.jl)
  - We employ the insane fast [DynamicExpressions.jl](https://github.com/SymbolicML/DynamicExpressions.jl) for evaluating our expressions
+
+
+# How to cite
+Feel free to utilize it for your research, it would be nice __citing us__! Our [paper](https://doi.org/10.1007/s10710-025-09510-z).
+```
+@article{Reissmann2025,
+  author   = {Maximilian Reissmann and Yuan Fang and Andrew S. H. Ooi and Richard D. Sandberg},
+  title    = {Constraining Genetic Symbolic Regression via Semantic Backpropagation},
+  journal  = {Genetic Programming and Evolvable Machines},
+  year     = {2025},
+  volume   = {26},
+  number   = {1},
+  pages    = {12},
+  doi      = {10.1007/s10710-025-09510-z},
+  url      = {https://doi.org/10.1007/s10710-025-09510-z}
+}
+
+```
 
 # Todo 
 - [ ] Documentation
