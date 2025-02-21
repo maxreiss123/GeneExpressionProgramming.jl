@@ -94,7 +94,7 @@ export PhysicalConstants, GepRegression, RegressionWrapper
 
 # Import core functions for tensor regression
 import .TensorRegUtils:
-    OperationNode, InputSelector,
+    InputSelector,
     AdditionNode, SubtractionNode, MultiplicationNode, DivisionNode, PowerNode,
     MinNode, MaxNode, InversionNode,
     TraceNode, DeterminantNode, SymmetricNode, SkewNode,
@@ -216,7 +216,7 @@ import .RegressionWrapper:
 export runGep, EvaluationStrategy, StandardRegressionStrategy, GenericRegressionStrategy
 
 # Export structures for the tensor regression
-export OperationNode, InputSelector,
+export InputSelector,
     AdditionNode, SubtractionNode, MultiplicationNode, DivisionNode, PowerNode,
     MinNode, MaxNode, InversionNode,
     TraceNode, DeterminantNode, SymmetricNode, SkewNode,

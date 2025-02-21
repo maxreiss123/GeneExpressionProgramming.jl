@@ -439,10 +439,10 @@ Vector{Int8} representing gene
 @inline function generate_gene(headsyms::Vector{Int8}, tailsyms::Vector{Int8}, headlen::Int;
     unarys::Vector{Int8}=[], unary_prob::Real=0.2, tensor_prob::Real=0.2)
     if !isempty(unarys) && rand() < unary_prob
-        heads = vcat(headsyms, tailsyms)
+        heads = vcat(headsyms, rand(tailsyms,2))
         push!(heads, rand(unarys))
     else
-        heads = headsyms
+        heads = vcat(headsyms, rand(tailsyms,2))
     end
 
     head = rand(heads, headlen)
