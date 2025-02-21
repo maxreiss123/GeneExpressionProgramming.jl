@@ -1,10 +1,5 @@
 using Test
 
-include("../src/Selection.jl")
-
-using .EvoSelection
-
-
 function create_population(data)
     return data
 end

@@ -2,6 +2,8 @@ module TensorRegUtils
 
 using Flux, LinearAlgebra, OrderedCollections, ChainRulesCore, Tensors, PrecompileTools
 
+
+
 # Abstract base type with parametric types for improved type stability
 abstract type AbstractOperationNode{T} end
 
@@ -295,6 +297,10 @@ function compile_to_flux_network(rek_string::Vector, arity_map::OrderedDict, cal
     return Chain(pop!(stack))
 end
 
+function string()
+
+end
+
 # Constant mappings
 const TENSOR_NODES = Dict{Symbol,Type}(
     :+ => AdditionNode,
@@ -326,7 +332,7 @@ const TENSOR_NODES_ARITY = Dict{Symbol,Int8}(
 )
 
 # Exports
-export OperationNode, InputSelector
+export InputSelector
 export AdditionNode, SubtractionNode, MultiplicationNode, DivisionNode, PowerNode
 export MinNode, MaxNode, InversionNode
 export TraceNode, DeterminantNode, SymmetricNode, SkewNode

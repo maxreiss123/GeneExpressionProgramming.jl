@@ -1,9 +1,5 @@
 
 using Test
-include("../src/Sbp.jl")
-include("../src/Util.jl")
-
-using .SBPUtils
 using Random
 using OrderedCollections
 Random.seed!(1)

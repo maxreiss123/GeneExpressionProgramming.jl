@@ -131,29 +131,20 @@ export list_all_functions, list_all_arity, list_all_forward_handlers,
     set_function!, set_arity!, set_forward_handler!, set_backward_handler!,
     update_function!, vec_add, vec_mul
 
-include("Entities.jl")
-include("Gep.jl")
-include("Losses.jl")
-include("PhyConstants.jl")
-include("Sbp.jl")
-include("Selection.jl")
-include("Util.jl")
-include("TensorOps.jl")
 
+using ..GepEntities
+using ..LossFunction
+using ..EvoSelection
 
-using .GepEntities
-using .LossFunction
-using .EvoSelection
-
-using .GepRegression
-using .SBPUtils
-using .GepUtils
-using .TensorRegUtils
+using ..GepRegression
+using ..SBPUtils
+using ..GepUtils
+using ..TensorRegUtils
 using DynamicExpressions
 using OrderedCollections
 using LinearAlgebra
 
-const InputSelector = TensorRegUtils.InputSelector
+
 
 """
     FUNCTION_LIB_FORWARD_COMMON::Dict{Symbol,Function}
@@ -263,16 +254,16 @@ Dictionary containing default probabilities and parameters for genetic algorithm
 These values can be adjusted to fine-tune the genetic algorithm's behavior.
 """
 const GENE_COMMON_PROBS = Dict{String,AbstractFloat}(
-    "one_point_cross_over_prob" => 0.5,
-    "two_point_cross_over_prob" => 0.3,
+    "one_point_cross_over_prob" => 0.3,
+    "two_point_cross_over_prob" => 0.2,
     "mutation_prob" => 1.0,
-    "mutation_rate" => 0.1,
+    "mutation_rate" => 0.05,
     "dominant_fusion_prob" => 0.1,
-    "dominant_fusion_rate" => 0.2,
+    "dominant_fusion_rate" => 0.1,
     "rezessiv_fusion_prob" => 0.1,
-    "rezessiv_fusion_rate" => 0.2,
+    "rezessiv_fusion_rate" => 0.1,
     "fusion_prob" => 0.1,
-    "fusion_rate" => 0.2,
+    "fusion_rate" => 0.1,
     "inversion_prob" => 0.1,
     "reverse_insertion" => 0.1,
     "reverse_insertion_tail" => 0.1,
@@ -533,7 +524,7 @@ mutable struct GepRegressor
             token_dto = nothing
         end
 
-        toolbox = GepRegression.GepEntities.Toolbox(gene_count, head_len, utilized_symbols, gene_connections_,
+        toolbox = Toolbox(gene_count, head_len, utilized_symbols, gene_connections_,
             callbacks, nodes, GENE_COMMON_PROBS; preamble_syms=preamble_syms_, number_of_objectives=number_of_objectives,
             operators_=operators)
 
@@ -592,7 +583,7 @@ mutable struct GepTensorRegressor
     fitness_history_::Any
 
 
-    function GepTensorRegressor(scalar_feature_amount::Int; 
+    function GepTensorRegressor(scalar_feature_amount::Int;
         higher_dim_feature_amount::Int=0,
         entered_non_terminals::Vector{Symbol}=[:+, :-, :*],
         entered_terminal_nums::Vector{<:AbstractFloat}=Float64[],
@@ -640,12 +631,12 @@ mutable struct GepTensorRegressor
             callbacks[cur_idx] = TENSOR_NODES[elem]
             utilized_symbols[cur_idx] = TENSOR_NODES_ARITY[elem]
             if elem in gene_connections
-                push!(gene_connections_,cur_idx)
+                push!(gene_connections_, cur_idx)
             end
             cur_idx += 1
         end
 
-        toolbox = GepRegression.GepEntities.Toolbox(gene_count, head_len, utilized_symbols, gene_connections_,
+        toolbox = Toolbox(gene_count, head_len, utilized_symbols, gene_connections_,
             callbacks, nodes, GENE_COMMON_PROBS; number_of_objectives=number_of_objectives,
             operators_=nothing, function_complile=compile_to_flux_network)
 
@@ -688,8 +679,11 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, x_trai
     correction_epochs::Int=1, correction_amount::Real=0.05,
     opt_method_const::Symbol=:cg,
     target_dimension::Union{Vector{Float16},Nothing}=nothing,
-    cycles::Int=10, max_iterations::Int=150, n_starts::Int=5,
-    break_condition::Union{Function,Nothing}=nothing
+    cycles::Int=10, max_iterations::Int=1000, n_starts::Int=3,
+    break_condition::Union{Function,Nothing}=nothing,
+    file_logger_callback::Union{Function,Nothing}=nothing,
+    save_state_callback::Union{Function,Nothing}=nothing,
+    load_state_callback::Union{Function,Nothing}=nothing
 )
 
     correction_callback = if !isnothing(target_dimension)
@@ -741,7 +735,10 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, x_trai
         correction_epochs=correction_epochs,
         correction_amount=correction_amount,
         tourni_size=max(Int(ceil(population_size * 0.03)), 3),
-        optimization_epochs=optimization_epochs
+        optimization_epochs=optimization_epochs,
+        file_logger_callback=file_logger_callback,
+        save_state_callback=save_state_callback,
+        load_state_callback=load_state_callback
     )
 
     regressor.best_models_ = best
@@ -757,7 +754,10 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, loss_f
     opt_method_const::Symbol=:nd,
     target_dimension::Union{Vector{Float16},Nothing}=nothing,
     cycles::Int=10, max_iterations::Int=150, n_starts::Int=5,
-    break_condition::Union{Function,Nothing}=nothing
+    break_condition::Union{Function,Nothing}=nothing,
+    file_logger_callback::Union{Function,Nothing}=nothing,
+    save_state_callback::Union{Function,Nothing}=nothing,
+    load_state_callback::Union{Function,Nothing}=nothing
 )
 
     correction_callback = if !isnothing(target_dimension)
@@ -802,7 +802,10 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, loss_f
         correction_epochs=correction_epochs,
         correction_amount=correction_amount,
         tourni_size=max(Int(ceil(population_size * 0.03)), 3),
-        optimization_epochs=optimization_epochs
+        optimization_epochs=optimization_epochs,
+        file_logger_callback=file_logger_callback,
+        save_state_callback=save_state_callback,
+        load_state_callback=load_state_callback
     )
 
     regressor.best_models_ = best
@@ -811,7 +814,10 @@ end
 
 function fit!(regressor::GepTensorRegressor, epochs::Int, population_size::Int, loss_function::Function;
     hof::Int=3,
-    break_condition::Union{Function,Nothing}=nothing
+    break_condition::Union{Function,Nothing}=nothing,
+    file_logger_callback::Union{Function, Nothing}=nothing, 
+    save_state_callback::Union{Function, Nothing}=nothing,
+    load_state_callback::Union{Function, Nothing}=nothing
 )
 
     evalStrat = GenericRegressionStrategy(
@@ -827,7 +833,10 @@ function fit!(regressor::GepTensorRegressor, epochs::Int, population_size::Int, 
         regressor.toolbox_,
         evalStrat;
         hof=hof,
-        tourni_size=max(Int(ceil(population_size * 0.003)), 3)
+        tourni_size=max(Int(ceil(population_size * 0.003)), 3),
+        file_logger_callback=file_logger_callback,
+        save_state_callback=save_state_callback,
+        load_state_callback=load_state_callback
     )
 
     regressor.best_models_ = best

@@ -1,6 +1,3 @@
-include("../src/RegressionWrapper.jl")
-
-using .RegressionWrapper
 using Test
 using OrderedCollections
 using DynamicExpressions

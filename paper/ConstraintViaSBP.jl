@@ -142,7 +142,7 @@ function main()
 
                 #perform the regression by entering epochs, population_size, the feature cols, the target col and the loss function
                 fit!(regressor, epochs, population_size, x_train', y_train;
-                    x_test=x_test', y_test=y_test',
+                    x_test=x_test', y_test=y_test', target_dimension=target_dim,
                     loss_fun="mse", break_condition=break_condition)
 
                 end_time = (time_ns() - start_time) / 1e9
