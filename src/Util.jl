@@ -113,7 +113,7 @@ export create_history_recorder, record_history!, record!, close_recorder!
 export HistoryRecorder, OptimizationHistory, get_history_arrays
 export train_test_split
 export FUNCTION_LIB_COMMON, ARITY_LIB_COMMON
-export TensorNode, compile_network
+export TensorNode, compile_network, FUNCTION_STRINGIFY
 
 using OrderedCollections
 using DynamicExpressions
@@ -182,6 +182,40 @@ const FUNCTION_LIB_COMMON = Dict{Symbol,Function}(
     :acosh => acosh,
     :atanh => atanh, :sqr => sqr,
     :sqrt => sqrt, :sign => sign
+)
+
+
+const FUNCTION_STRINGIFY = Dict{Symbol,Function}(
+    :+ => (args...) -> join(args, " + "),
+    :- => (args...) -> length(args) == 1 ? "-$(args[1])" : join(args, " - "),
+    :* => (args...) -> join(args, " * "),
+    :/ => (args...) -> join(args, " / "),
+    :^ => (args...) -> "$(args[1])^$(args[2])",
+    :min => (args...) -> "min($(join(args, ", ")))",
+    :max => (args...) -> "max($(join(args, ", ")))",
+    :abs => a -> "|$a|",
+    :round => a -> "round($a)",
+    :exp => a -> "e^($a)",
+    :log => a -> "ln($a)",
+    :log10 => a -> "log₁₀($a)",
+    :log2 => a -> "log₂($a)",
+    :sin => a -> "sin($a)",
+    :cos => a -> "cos($a)",
+    :tan => a -> "tan($a)",
+    :asin => a -> "arcsin($a)",
+    :acos => a -> "arccos($a)",
+    :atan => a -> "arctan($a)",
+    
+    :sinh => a -> "sinh($a)",
+    :cosh => a -> "cosh($a)",
+    :tanh => a -> "tanh($a)",
+    :asinh => a -> "arcsinh($a)",
+    :acosh => a -> "arccosh($a)",
+    :atanh => a -> "arctanh($a)",
+    
+    :sqr => a -> "($a)²",
+    :sqrt => a -> "√($a)",
+    :sign => a -> "sign($a)"
 )
 
 """
@@ -690,10 +724,8 @@ See also: [`DynamicExpressions.Node`](@ref), [`Optim.optimize`](@ref), [`LineSea
                 end
             end
         end
-        #needs to be revised!
+
         x0, refs = get_scalar_constants(current_node)
-
-
         function opt_step(x::AbstractVector)
             set_scalar_constants!(current_node,x, refs)
             loss(current_node)

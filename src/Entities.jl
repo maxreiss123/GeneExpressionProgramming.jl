@@ -76,6 +76,7 @@ export Chromosome, Toolbox, EvaluationStrategy, StandardRegressionStrategy, Gene
 export fitness, set_fitness!
 export generate_gene, compile_expression!, generate_chromosome, generate_population
 export genetic_operations!, replicate, gene_inversion!, gene_mutation!, gene_one_point_cross_over!, gene_two_point_cross_over!, gene_fussion!, split_karva
+export print_karva_strings
 
 using ..GepUtils
 using ..TensorRegUtils
@@ -415,21 +416,43 @@ Vector{Int8} representing the K-expression of the chromosome
         rolled_indices[idx+1] = @view genes[i:i+first(indices)-1]
     end
 
-    !split && return vcat(rolled_indices...) 
+    !split && return vcat(rolled_indices...)
     return rolled_indices
 end
 
 @inline function split_karva(chromosome::Chromosome, coeffs::Int=2)
     raw = _karva_raw(chromosome; split=true)
     connectors = popfirst!(raw)[coeffs:end]
-    gene_count_per_factor = div(chromosome.toolbox.gene_count,coeffs)
+    gene_count_per_factor = div(chromosome.toolbox.gene_count, coeffs)
     retval = []
     for _ in 1:coeffs
         temp_cons = splice!(connectors, 1:gene_count_per_factor-1)
-        temp_genes = reduce(vcat, splice!(raw,1:gene_count_per_factor))
-        push!(retval,vcat([temp_cons, temp_genes]...))
+        temp_genes = reduce(vcat, splice!(raw, 1:gene_count_per_factor))
+        push!(retval, vcat([temp_cons, temp_genes]...))
     end
     return retval
+end
+
+@inline function print_karva_strings(chromosome::Chromosome)
+    coeff_count = length(chromosome.toolbox.preamble_syms)
+    callback_ = Dict{Int8, Function}()
+
+    for (key, value) in chromosome.toolbox.callbacks
+        if Symbol(value) in keys(FUNCTION_STRINGIFY)
+            callback_[key] = FUNCTION_STRINGIFY[Symbol(value)]
+        elseif Symbol(value) in keys(TENSOR_STRINGIFY)
+            callback_[key] = TENSOR_STRINGIFY[Symbol(value)]
+        end
+    end
+
+    return compile_djl_datatype(
+        chromosome.expression_raw, 
+        chromosome.toolbox.arrity_by_id,
+        callback_, 
+        chromosome.toolbox.nodes, 
+        1)
+
+
 end
 
 """
@@ -451,10 +474,10 @@ Vector{Int8} representing gene
 @inline function generate_gene(headsyms::Vector{Int8}, tailsyms::Vector{Int8}, headlen::Int;
     unarys::Vector{Int8}=[], unary_prob::Real=0.2, tensor_prob::Real=0.2)
     if !isempty(unarys) && rand() < unary_prob
-        heads = vcat(headsyms, rand(tailsyms,2))
+        heads = vcat(headsyms, rand(tailsyms, 2))
         push!(heads, rand(unarys))
     else
-        heads = vcat(headsyms, rand(tailsyms,2))
+        heads = vcat(headsyms, rand(tailsyms, 2))
     end
 
     head = rand(heads, headlen)

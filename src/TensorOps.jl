@@ -1,5 +1,6 @@
 module TensorRegUtils
 
+import Base: string
 using Flux, LinearAlgebra, OrderedCollections, ChainRulesCore, Tensors, PrecompileTools
 
 
@@ -10,6 +11,15 @@ abstract type AbstractOperationNode{T} end
 # Input selector with strict typing
 struct InputSelector{T<:Integer}
     idx::T
+    name::String
+end
+
+function InputSelector(idx::T) where T<:Integer
+    InputSelector{T}(idx, "x$idx")
+end
+
+function Base.string(node::InputSelector)
+    return "$(node.name)"
 end
 
 @inline function (l::InputSelector{T})(x::Tuple) where {T}
@@ -111,13 +121,16 @@ end
 end
 
 
-
 @inline function (l::MultiplicationNode{T})(x::Union{Tensor,SymmetricTensor}, y::Union{Tensor,SymmetricTensor}) where {T}
     @fastmath dot(x, y)::Union{Tensor,SymmetricTensor,Number}
 end
 
-@inline function (l::DivisionNode{T})(x::Union{Tensor,SymmetricTensor,Number}, y::Number) where {T}
+@inline function (l::DivisionNode{T})(x::Union{Tensor,SymmetricTensor}, y::Number) where {T}
     @fastmath (x / y)::Union{Tensor,SymmetricTensor,Number}
+end
+
+@inline function (l::DivisionNode{T})(x::Number, y::Number) where {T}
+    @fastmath (x / y)::Number
 end
 
 @inline function (l::DivisionNode{T})(x::Any, y::Any) where {T}
@@ -205,8 +218,12 @@ end
     map((a, b) -> l(a, b), x, y)::AbstractVector
 end
 
-@inline function (l::DivisionNode{T})(x::AbstractVector, y::Number) where {T}
-    map(a -> l(a, y), x)::AbstractVector
+@inline function (l::MultiplicationNode{T})(x::AbstractVector{Number}, y::AbstractVector{Number}) where {T}
+    (x .* y)::AbstractVector{Number}
+end
+
+@inline function (l::DivisionNode{T})(x::AbstractVector{Number}, y::AbstractVector{Number}) where {T}
+    (x ./ y)::AbstractVector{Number}
 end
 
 @inline function (l::DivisionNode{T})(x::AbstractVector, y::AbstractVector) where {T}
@@ -297,10 +314,6 @@ function compile_to_flux_network(rek_string::Vector, arity_map::OrderedDict, cal
     return Chain(pop!(stack))
 end
 
-function string()
-
-end
-
 # Constant mappings
 const TENSOR_NODES = Dict{Symbol,Type}(
     :+ => AdditionNode,
@@ -323,6 +336,28 @@ const TENSOR_NODES = Dict{Symbol,Type}(
     :deviator => DeviatoricNode
 )
 
+const TENSOR_STRINGIFY = Dict{Symbol,Function}(
+    :AdditionNode => (args...) -> "($(string(args[1])) + $(string(args[2])))",
+    :SubtractionNode => (args...) -> "($(string(args[1])) - $(string(args[2])))",
+    :MultiplicationNode => (args...) -> "($(string(args[1])) * $(string(args[2])))",
+    :DivisionNode => (args...) -> "($(string(args[1])) / $(string(args[2])))",
+    :PowerNode => (args...) -> "($(string(args[1]))^$(string(args[2])))",
+    :MinNode => (args...) -> "min($(string(args[1])),$(string(args[2])))",
+    :MaxNode => (args...) -> "max($(string(args[1])),$(string(args[2])))",
+    :InversionNode => A -> "inv($(string(A))",
+    :TraceNode => A -> "tr($(string(A))",
+    :DeterminantNode => A -> "det($(string(A))",
+    :SymmetricNode => A -> "sym($(string(A))",
+    :SkewNode => A -> "skew($(string(A))",
+    :VolumetricNode => A -> "vol($(string(A))",
+    :DeviatricNode => A -> "dev($(string(A))",
+    :TdotNode => (A, B) -> "($(string(A))·($(string(B))ᵀ",
+    :DottNode => (A, B) -> "($(string(A))ᵀ·($(string(B))",
+    :DoubleContractionNode => (A, B) -> "($(string(A)):($(string(B))",
+    :DeviatoricNode => A -> "dev($(string(A))"
+)
+
+
 const TENSOR_NODES_ARITY = Dict{Symbol,Int8}(
     :+ => 2, :- => 2, :* => 2, :/ => 2, :^ => 2,
     :min => 2, :max => 2,
@@ -340,7 +375,7 @@ export VolumetricNode, DeviatricNode, TdotNode, DottNode
 export DoubleContractionNode, DeviatoricNode
 export ConstantNode, UnaryNode
 export compile_to_flux_network
-export TENSOR_NODES, TENSOR_NODES_ARITY
+export TENSOR_NODES, TENSOR_NODES_ARITY, TENSOR_STRINGIFY
 
 
 @setup_workload begin
