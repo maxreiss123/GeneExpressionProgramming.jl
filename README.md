@@ -114,7 +114,8 @@ number_features = 5
 #define the 
 regressor = GepTensorRegressor(number_features,
     gene_count=2, #2 works quite reliable 
-    head_len=3) # 5 works quite reliable
+    head_len=3;
+    feature_names=["x1","x2","U1","U2","U3"]) # 5 works quite reliable
 
 #create some testdata - testing simply on a few velocity vectors
 size_test = 1000
@@ -126,7 +127,7 @@ x1 = [2.0 for _ in 1:size_test]
 
 x2 = [0.0 for _ in 1:size_test]
 
-a = 0.5 * u1 .+ x2 .* u2 + 2* u3
+a = 0.5 * u1 .+ x2 .* u2 + 2 .* u3
 
 inputs = (x1,x2,u1,u2,u3)
 
@@ -146,6 +147,10 @@ inputs = (x1,x2,u1,u2,u3)
     end
 end
 fit!(regressor, epochs, population_size, loss_new)
+
+#Print the best expression
+lsg = regressor.best_models_[1]
+print_karva_strings(lsg)
 ```
 
 # Supported `Engines' for Symbolic Evaluation

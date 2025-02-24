@@ -254,8 +254,8 @@ Dictionary containing default probabilities and parameters for genetic algorithm
 These values can be adjusted to fine-tune the genetic algorithm's behavior.
 """
 const GENE_COMMON_PROBS = Dict{String,AbstractFloat}(
-    "one_point_cross_over_prob" => 0.3,
-    "two_point_cross_over_prob" => 0.2,
+    "one_point_cross_over_prob" => 0.6,
+    "two_point_cross_over_prob" => 0.4,
     "mutation_prob" => 1.0,
     "mutation_rate" => 0.05,
     "dominant_fusion_prob" => 0.1,
@@ -585,13 +585,14 @@ mutable struct GepTensorRegressor
 
     function GepTensorRegressor(scalar_feature_amount::Int;
         higher_dim_feature_amount::Int=0,
-        entered_non_terminals::Vector{Symbol}=[:+, :-, :*],
+        entered_non_terminals::Vector{Symbol}=[:+, :-, :*, :/],
         entered_terminal_nums::Vector{<:AbstractFloat}=Float64[],
         gene_connections::Vector{Symbol}=[:+, :*],
         rnd_count::Int=0,
         gene_count::Int=2,
         head_len::Int=3,
-        number_of_objectives::Int=1
+        number_of_objectives::Int=1,
+        feature_names::Vector{String}=String[]
     )
         #Creating the feature Nodes -> asuming a data dict pointing to 
         cur_idx = Int8(1)
@@ -602,7 +603,8 @@ mutable struct GepTensorRegressor
         tensor_syms_idx = Int8[]
         tensor_function_idx = Int8[]
         for _ in 1:scalar_feature_amount
-            nodes[cur_idx] = InputSelector(cur_idx)
+            feature_name = isempty(feature_names) ? "x$cur_idx" : feature_names[cur_idx]
+            nodes[cur_idx] = InputSelector(cur_idx, feature_name)
             utilized_symbols[cur_idx] = Int8(0)
             cur_idx += 1
         end
@@ -628,6 +630,7 @@ mutable struct GepTensorRegressor
 
         #callback - index => function
         for elem in entered_non_terminals
+            @show elem
             callbacks[cur_idx] = TENSOR_NODES[elem]
             utilized_symbols[cur_idx] = TENSOR_NODES_ARITY[elem]
             if elem in gene_connections

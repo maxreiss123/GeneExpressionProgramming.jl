@@ -212,7 +212,7 @@ Applies correction operations to ensure dimensional homogeneity in chromosomes.
                     compile_expression!(population[i]; force_compile=true)
                     population[i].dimension_homogene = true
                 else
-                    #population[i].fitness += distance
+                    population[i].fitness = (population[i].fitness[1]+distance,)
                 end
             end
         end
@@ -299,7 +299,10 @@ The evolution process stops when either:
          
         Threads.@threads for i in eachindex(population)
             if isnan(mean(population[i].fitness)) 
-                cache_value = get(fit_cache, population[i].expression_raw, nothing)
+                cache_value = nothing
+                lock(cache_lock) do
+                    cache_value = get(fit_cache, population[i].expression_raw, nothing)
+                end
                 if isnothing(cache_value)
                     
                     population[i].fitness = compute_fitness(population[i], evalStrategy)

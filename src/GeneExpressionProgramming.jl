@@ -102,7 +102,7 @@ import .TensorRegUtils:
     DoubleContractionNode, DeviatoricNode,
     ConstantNode, UnaryNode,
     compile_to_flux_network,
-    TENSOR_NODES, TENSOR_NODES_ARITY
+    TENSOR_NODES, TENSOR_NODES_ARITY, TENSOR_STRINGIFY
 
 # Import GEP core functionality
 import .GepRegression:
@@ -129,7 +129,8 @@ import .GepUtils:
     get_history_arrays,
     train_test_split,
     ARITY_LIB_COMMON,
-    FUNCTION_LIB_COMMON
+    FUNCTION_LIB_COMMON,
+    FUNCTION_STRINGIFY
 
 # Import selection mechanisms
 import .EvoSelection:
@@ -190,7 +191,8 @@ import .GepEntities:
     generate_chromosome,
     generate_population,
     genetic_operations!,
-    split_karva
+    split_karva,
+    print_karva_strings
 
 # Import regression wrapper functionality
 import .RegressionWrapper:
@@ -225,13 +227,13 @@ export InputSelector,
     DoubleContractionNode, DeviatoricNode,
     ConstantNode, UnaryNode,
     compile_to_flux_network,
-    TENSOR_NODES, TENSOR_NODES_ARITY
+    TENSOR_NODES, TENSOR_NODES_ARITY, TENSOR_STRINGIFY
 
 
 # Export core GEP entities and operations
 export Chromosome, Toolbox, fitness, set_fitness!,
     generate_gene, compile_expression!, generate_chromosome, generate_population,
-    genetic_operations!, split_karva
+    genetic_operations!, split_karva, print_karva_strings
 
 # Export regression components
 export GepRegressor, GepTensorRegressor, fit!,
@@ -281,7 +283,7 @@ export HistoryRecorder, OptimizationHistory,
     get_history_arrays
 
 # Export common libraries
-export ARITY_LIB_COMMON, FUNCTION_LIB_COMMON
+export ARITY_LIB_COMMON, FUNCTION_LIB_COMMON, FUNCTION_STRINGIFY
 
 
 end
