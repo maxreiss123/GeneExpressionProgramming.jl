@@ -110,10 +110,10 @@ module GepUtils
 export find_indices_with_sum, compile_djl_datatype, optimize_constants!, minmax_scale, float16_scale, isclose
 export save_state, load_state
 export create_history_recorder, record_history!, record!, close_recorder!
-export HistoryRecorder, OptimizationHistory, get_history_arrays
+export HistoryRecorder, OptimizationHistory, get_history_arrays, one_hot_mean, FUNCTION_STRINGIFY
 export train_test_split
 export FUNCTION_LIB_COMMON, ARITY_LIB_COMMON
-export TensorNode, compile_network, FUNCTION_STRINGIFY
+export TensorNode, compile_network
 
 using OrderedCollections
 using DynamicExpressions
@@ -126,6 +126,7 @@ using Statistics
 using Random
 using Tensors
 using Flux
+using StatsBase
 using Base.Threads: @spawn
 
 
@@ -724,8 +725,10 @@ See also: [`DynamicExpressions.Node`](@ref), [`Optim.optimize`](@ref), [`LineSea
                 end
             end
         end
-
+        #needs to be revised!
         x0, refs = get_scalar_constants(current_node)
+
+
         function opt_step(x::AbstractVector)
             set_scalar_constants!(current_node,x, refs)
             loss(current_node)
@@ -807,6 +810,50 @@ function train_test_split(
 
     return x_train, y_train, x_test, y_test
 end
+
+function one_hot_mean(vectors::Vector{Vector{T}}, k::Int) where T <: Integer
+    if isempty(vectors)
+        return T[]
+    end
+    
+    max_value = maximum(maximum(v) for v in vectors if !isempty(v))
+    
+    max_length = maximum(length(v) for v in vectors)
+    
+    frequency_matrix = zeros(Float64, max_length, max_value)
+    
+    position_counts = zeros(Int, max_length)
+    
+    for vec in vectors
+        for (i, val) in enumerate(vec)
+            frequency_matrix[i, convert(Int, val)] += 1
+            position_counts[i] += 1
+        end
+    end
+    
+    for i in 1:max_length
+        if position_counts[i] > 0
+            frequency_matrix[i, :] ./= position_counts[i]
+        end
+    end
+    
+    result = Vector{T}(undef, max_length)
+    
+    for i in 1:max_length
+        sorted_indices = sortperm(frequency_matrix[i, :], rev=true)
+        if k == 1
+            result[i] = convert(T, sorted_indices[1])
+        else
+            top_k_indices = sorted_indices[1:min(k, length(sorted_indices))]
+            top_k_probs = frequency_matrix[i, top_k_indices]
+            top_k_probs = top_k_probs ./ sum(top_k_probs)
+            result[i] = convert(T, sample(top_k_indices, Weights(top_k_probs)))
+        end
+    end
+    
+    return result
+end
+
 
 
 end

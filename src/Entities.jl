@@ -191,23 +191,26 @@ Contains parameters and operations for GEP algorithm execution.
 - `symbols::OrderedDict{Int8,Int8}`: Available symbols and their arities
 - `gene_connections::Vector{Int8}`: How genes connect
 - `headsyms::Vector{Int8}`: Symbols allowed in head
-- `unary_syms::Vector{Int8}`: Unary operators
 - `tailsyms::Vector{Int8}`: Symbols allowed in tail
 - `arrity_by_id::OrderedDict{Int8,Int8}`: Symbol arities
 - `callbacks::Dict`: Operation callbacks
 - `nodes::OrderedDict`: Node definitions
 - `gen_start_indices::Vector{Int}`: Gene start positions
 - `gep_probs::Dict{String,AbstractFloat}`: Operation probabilities
-- `unary_prob::Real`: Unary operator probability
 - `fitness_reset::Tuple`: Default fitness values
 - `preamble_syms::Vector{Int8}`: Preamble symbols
 - `len_preamble::Int8`: Preamble length
+- `tail_weights::Union{Weights,Nothing}` Defines the probability for tail symbols
+- `head_weigths::Union{Weights,Nothing}` Defines the probability for head symbols 
 
 # Constructor
     Toolbox(gene_count::Int, head_len::Int, symbols::OrderedDict{Int8,Int8}, 
            gene_connections::Vector{Int8}, callbacks::Dict, nodes::OrderedDict, 
-           gep_probs::Dict{String,AbstractFloat}; unary_prob::Real=0.4, 
-           fitness_reset::Tuple=(Inf, NaN), preamble_syms=Int8[])
+           gep_probs::Dict{String,AbstractFloat}; 
+           fitness_reset::Tuple=(Inf, NaN), preamble_syms=Int8[],
+           function_complile::Function=compile_djl_datatype,
+           tail_weights_::Union{Weights,Nothing}=nothing,
+           head_tail_balance::Real=0.2)
 """
 struct Toolbox
     gene_count::Int
@@ -215,20 +218,19 @@ struct Toolbox
     symbols::OrderedDict{Int8,Int8}
     gene_connections::Vector{Int8}
     headsyms::Vector{Int8}
-    unary_syms::Vector{Int8}
     tailsyms::Vector{Int8}
     arrity_by_id::OrderedDict{Int8,Int8}
     callbacks::Dict
     nodes::OrderedDict
     gen_start_indices::Vector{Int}
     gep_probs::Dict{String,AbstractFloat}
-    unary_prob::Real
     fitness_reset::Tuple
     preamble_syms::Vector{Int8}
     len_preamble::Int8
     operators_::Union{OperatorEnum,Nothing}
     compile_function_::Function
     tail_weights::Union{Weights,Nothing}
+    head_weights::Union{Weights,Nothing}
 
 
     function Toolbox(gene_count::Int, head_len::Int, symbols::OrderedDict{Int8,Int8}, gene_connections::Vector{Int8},
@@ -236,7 +238,8 @@ struct Toolbox
         unary_prob::Real=0.1, preamble_syms=Int8[],
         number_of_objectives::Int=1, operators_::Union{OperatorEnum,Nothing}=nothing, 
         function_complile::Function=compile_djl_datatype,
-        tail_weights_::Union{Weights,Nothing}=nothing)
+        tail_weights_::Union{Weights,Nothing}=nothing, 
+        head_tail_balance::Real=0.8)
 
         fitness_reset = (
             ntuple(_ -> Inf, number_of_objectives),
@@ -245,15 +248,26 @@ struct Toolbox
         gene_len = head_len * 2 + 1
         headsyms = [key for (key, arity) in symbols if arity == 2]
         unary_syms = [key for (key, arity) in symbols if arity == 1]
+        up = isempty(unary_syms) ? unary_prob : 0
+
         tailsyms = [key for (key, arity) in symbols if arity < 1 && !(key in preamble_syms)]
         len_preamble = length(preamble_syms)
         gen_start_indices = [gene_count + (gene_len * (i - 1)) for i in 1:gene_count]
+        
+
         tail_weights = isnothing(tail_weights_) ? weights([1/length(tailsyms) for _ in 1:length(tailsyms)]) : tail_weights_
+        head_weights = weights([
+            fill(head_tail_balance/length(headsyms), length(headsyms));
+            fill(unary_prob/length(unary_syms), length(unary_syms));
+            tail_weights .* (1-head_tail_balance-up)
+        ])
+
         #ensure_buffer_size!(head_len, gene_count)
-        new(gene_count, head_len, symbols, gene_connections, headsyms, unary_syms, tailsyms, symbols,
-            callbacks, nodes, gen_start_indices, gep_probs, unary_prob, fitness_reset, preamble_syms, len_preamble, operators_, 
+        head_syms = vcat([headsyms, unary_syms, tailsyms]...)
+        new(gene_count, head_len, symbols, gene_connections, head_syms, tailsyms, symbols,
+            callbacks, nodes, gen_start_indices, gep_probs, fitness_reset, preamble_syms, len_preamble, operators_, 
             function_complile,
-            tail_weights)
+            tail_weights, head_weights)
     end
 end
 
@@ -469,26 +483,16 @@ Generate a single gene for GEP.
 - `headsyms::Vector{Int8}`: Symbols for head
 - `tailsyms::Vector{Int8}`: Symbols for tail
 - `headlen::Int`: Head length
-- `unarys::Vector{Int8}=[]`: Unary operators
-- `unary_prob::Real=0.2`: Unary operator probability
+- `tail_weights::Union{Weights,Nothing}` Defines the probability for tail symbols
+- `head_weigths::Union{Weights,Nothing}` Defines the probability for head symbols 
 
 # Returns
 Vector{Int8} representing gene
 """
 @inline function generate_gene(headsyms::Vector{Int8}, tailsyms::Vector{Int8}, headlen::Int,
-    tail_weights::Weights;
-    unarys::Vector{Int8}=[], unary_prob::Real=0.2)
-
-
-    if !isempty(unarys) && rand() < unary_prob
-        heads = vcat(headsyms)
-        push!(heads, rand(unarys))
-    else
-        heads = vcat(headsyms)
-    end
-    head_len_temp = rand(1:headlen)
-    head = rand(heads, head_len_temp)
-    tail = sample(tailsyms,tail_weights,headlen + (headlen-head_len_temp) + 1)
+    tail_weights::Weights, head_weights::Weights)
+    head = sample(headsyms,head_weights,headlen)
+    tail = sample(tailsyms,tail_weights,headlen + 1)
     return vcat(head, tail)
 end
 
@@ -504,8 +508,8 @@ New Chromosome instance
 """
 @inline function generate_chromosome(toolbox::Toolbox)
     connectors = rand(toolbox.gene_connections, toolbox.gene_count - 1)
-    genes = vcat([generate_gene(toolbox.headsyms, toolbox.tailsyms, toolbox.head_len, toolbox.tail_weights;
-        unarys=toolbox.unary_syms,unary_prob=toolbox.unary_prob) for _ in 1:toolbox.gene_count]...)
+    genes = vcat([generate_gene(toolbox.headsyms, toolbox.tailsyms, toolbox.head_len, toolbox.tail_weights,
+        toolbox.head_weights) for _ in 1:toolbox.gene_count]...)
     return Chromosome(vcat(connectors, genes), toolbox, true)
 end
 
@@ -716,6 +720,21 @@ end
 end
 
 
+@inline function gene_fussion_extent!(chromosome1::Chromosome, parents::Vector{Chromosome}, pb::Real=0.2)
+    buffer = THREAD_BUFFERS[Threads.threadid()]
+    len_a = length(chromosome1.genes)
+    genes2 = one_hot_mean([p.genes for p in parents], 2)
+
+    create_operator_masks(chromosome1.genes, genes2, pb)
+
+    @inbounds @simd for i in eachindex(chromosome1.genes)
+        buffer.child_1_genes[i] = buffer.alpha_operator[i] == 1 ? genes2[i] : chromosome1.genes[i]
+    end
+
+    chromosome1.genes .= @view buffer.child_1_genes[1:len_a]
+end
+
+
 """
     diversity_injection!(chromosome::Chromosome, diversity_factor::Real=0.5)
 
@@ -742,8 +761,7 @@ Useful for avoiding premature convergence.
             chromosome.toolbox.tailsyms, 
             chromosome.toolbox.head_len,
             chromosome.toolbox.tail_weights,
-            unarys=chromosome.toolbox.unary_syms,
-            unary_prob=chromosome.toolbox.unary_prob
+            chromosome.toolbox.head_weights
         )
         
         chromosome.genes[gene_start:(gene_start + gene_len - 1)] .= new_gene
@@ -845,7 +863,7 @@ Genetic operators for chromosome modification.
 Modify chromosome genes in place
 """
 @inline function genetic_operations!(space_next::Vector{Chromosome}, i::Int, toolbox::Toolbox;
-        generation::Int=0, max_generation::Int=0)
+        generation::Int=0, max_generation::Int=0, parents::Union{Vector{Chromosome},Nothing}=nothing)
     #allocate them within the space - create them once instead of n time 
     space_next[i:i+1] = replicate(space_next[i], space_next[i+1], toolbox)
     rand_space = rand(17)
@@ -919,6 +937,16 @@ Modify chromosome genes in place
         gene_transposition!(space_next[i+1])
     end
 
+    if rand_space[16] < toolbox.gep_probs["gene_transposition"]
+        gene_fussion_extent!(space_next[i], parents)
+    end
+
+    if rand_space[17] < toolbox.gep_probs["gene_transposition"]
+        gene_fussion_extent!(space_next[i+1], parents)
+    end
+
+
+    
 
 end
 end

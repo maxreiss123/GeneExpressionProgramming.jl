@@ -49,8 +49,7 @@ end
         
         @test toolbox.gene_count == 2
         @test toolbox.head_len == 3
-        @test length(toolbox.headsyms) == 2  # + and *
-        @test length(toolbox.unary_syms) == 1  # square
+        @test length(toolbox.headsyms) == 2+1+2  # all symbols possible in the head
         @test length(toolbox.tailsyms) == 2  # x and 1.0
     end
 
