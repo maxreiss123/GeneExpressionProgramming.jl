@@ -75,13 +75,13 @@ module GepEntities
 export Chromosome, Toolbox, EvaluationStrategy, StandardRegressionStrategy, GenericRegressionStrategy
 export fitness, set_fitness!
 export generate_gene, compile_expression!, generate_chromosome, generate_population
-export genetic_operations!, replicate, gene_inversion!, gene_mutation!, gene_one_point_cross_over!, gene_two_point_cross_over!, gene_fussion!, split_karva
-export print_karva_strings
+export genetic_operations!, replicate, gene_inversion!, gene_mutation!, gene_one_point_cross_over!, gene_two_point_cross_over!, gene_fussion!, split_karva, print_karva_strings
 
 using ..GepUtils
 using ..TensorRegUtils
 using OrderedCollections
 using DynamicExpressions
+using StatsBase
 
 
 """
@@ -228,12 +228,15 @@ struct Toolbox
     len_preamble::Int8
     operators_::Union{OperatorEnum,Nothing}
     compile_function_::Function
+    tail_weights::Union{Weights,Nothing}
 
 
     function Toolbox(gene_count::Int, head_len::Int, symbols::OrderedDict{Int8,Int8}, gene_connections::Vector{Int8},
         callbacks::Dict, nodes::OrderedDict, gep_probs::Dict{String,AbstractFloat};
         unary_prob::Real=0.1, preamble_syms=Int8[],
-        number_of_objectives::Int=1, operators_::Union{OperatorEnum,Nothing}=nothing, function_complile::Function=compile_djl_datatype)
+        number_of_objectives::Int=1, operators_::Union{OperatorEnum,Nothing}=nothing, 
+        function_complile::Function=compile_djl_datatype,
+        tail_weights_::Union{Weights,Nothing}=nothing)
 
         fitness_reset = (
             ntuple(_ -> Inf, number_of_objectives),
@@ -245,9 +248,12 @@ struct Toolbox
         tailsyms = [key for (key, arity) in symbols if arity < 1 && !(key in preamble_syms)]
         len_preamble = length(preamble_syms)
         gen_start_indices = [gene_count + (gene_len * (i - 1)) for i in 1:gene_count]
+        tail_weights = isnothing(tail_weights_) ? weights([1/length(tailsyms) for _ in 1:length(tailsyms)]) : tail_weights_
         #ensure_buffer_size!(head_len, gene_count)
         new(gene_count, head_len, symbols, gene_connections, headsyms, unary_syms, tailsyms, symbols,
-            callbacks, nodes, gen_start_indices, gep_probs, unary_prob, fitness_reset, preamble_syms, len_preamble, operators_, function_complile)
+            callbacks, nodes, gen_start_indices, gep_probs, unary_prob, fitness_reset, preamble_syms, len_preamble, operators_, 
+            function_complile,
+            tail_weights)
     end
 end
 
@@ -416,19 +422,19 @@ Vector{Int8} representing the K-expression of the chromosome
         rolled_indices[idx+1] = @view genes[i:i+first(indices)-1]
     end
 
-    !split && return vcat(rolled_indices...)
+    !split && return vcat(rolled_indices...) 
     return rolled_indices
 end
 
 @inline function split_karva(chromosome::Chromosome, coeffs::Int=2)
     raw = _karva_raw(chromosome; split=true)
     connectors = popfirst!(raw)[coeffs:end]
-    gene_count_per_factor = div(chromosome.toolbox.gene_count, coeffs)
+    gene_count_per_factor = div(chromosome.toolbox.gene_count,coeffs)
     retval = []
     for _ in 1:coeffs
         temp_cons = splice!(connectors, 1:gene_count_per_factor-1)
-        temp_genes = reduce(vcat, splice!(raw, 1:gene_count_per_factor))
-        push!(retval, vcat([temp_cons, temp_genes]...))
+        temp_genes = reduce(vcat, splice!(raw,1:gene_count_per_factor))
+        push!(retval,vcat([temp_cons, temp_genes]...))
     end
     return retval
 end
@@ -451,8 +457,6 @@ end
         callback_, 
         chromosome.toolbox.nodes, 
         1)
-
-
 end
 
 """
@@ -471,17 +475,20 @@ Generate a single gene for GEP.
 # Returns
 Vector{Int8} representing gene
 """
-@inline function generate_gene(headsyms::Vector{Int8}, tailsyms::Vector{Int8}, headlen::Int;
-    unarys::Vector{Int8}=[], unary_prob::Real=0.2, tensor_prob::Real=0.2)
+@inline function generate_gene(headsyms::Vector{Int8}, tailsyms::Vector{Int8}, headlen::Int,
+    tail_weights::Weights;
+    unarys::Vector{Int8}=[], unary_prob::Real=0.2)
+
+
     if !isempty(unarys) && rand() < unary_prob
-        heads = vcat(headsyms, rand(tailsyms, 2))
+        heads = vcat(headsyms)
         push!(heads, rand(unarys))
     else
-        heads = vcat(headsyms, rand(tailsyms, 2))
+        heads = vcat(headsyms)
     end
-
-    head = rand(heads, headlen)
-    tail = rand(tailsyms, headlen + 1)
+    head_len_temp = rand(1:headlen)
+    head = rand(heads, head_len_temp)
+    tail = sample(tailsyms,tail_weights,headlen + (headlen-head_len_temp) + 1)
     return vcat(head, tail)
 end
 
@@ -497,8 +504,8 @@ New Chromosome instance
 """
 @inline function generate_chromosome(toolbox::Toolbox)
     connectors = rand(toolbox.gene_connections, toolbox.gene_count - 1)
-    genes = vcat([generate_gene(toolbox.headsyms, toolbox.tailsyms, toolbox.head_len; unarys=toolbox.unary_syms,
-        unary_prob=toolbox.unary_prob) for _ in 1:toolbox.gene_count]...)
+    genes = vcat([generate_gene(toolbox.headsyms, toolbox.tailsyms, toolbox.head_len, toolbox.tail_weights;
+        unarys=toolbox.unary_syms,unary_prob=toolbox.unary_prob) for _ in 1:toolbox.gene_count]...)
     return Chromosome(vcat(connectors, genes), toolbox, true)
 end
 
@@ -710,6 +717,99 @@ end
 
 
 """
+    diversity_injection!(chromosome::Chromosome, diversity_factor::Real=0.5)
+
+Injects diversity by randomly replacing portions of genes with completely new material.
+Useful for avoiding premature convergence.
+
+# Arguments
+- `chromosome::Chromosome`: Target chromosome
+- `diversity_factor::Real=0.5`: Controls how much of the chromosome to randomize
+"""
+@inline function diversity_injection!(chromosome::Chromosome, diversity_factor::Real=0.5)
+    gene_len = chromosome.toolbox.head_len * 2 + 1
+    gene_count = chromosome.toolbox.gene_count
+    
+    genes_to_randomize = max(1, round(Int, diversity_factor * gene_count))
+    
+    genes_indices = sample(1:gene_count, genes_to_randomize, replace=false)
+    
+    for gene_idx in genes_indices
+        gene_start = chromosome.toolbox.gen_start_indices[gene_idx]
+        
+        new_gene = generate_gene(
+            chromosome.toolbox.headsyms, 
+            chromosome.toolbox.tailsyms, 
+            chromosome.toolbox.head_len,
+            chromosome.toolbox.tail_weights,
+            unarys=chromosome.toolbox.unary_syms,
+            unary_prob=chromosome.toolbox.unary_prob
+        )
+        
+        chromosome.genes[gene_start:(gene_start + gene_len - 1)] .= new_gene
+    end
+end
+
+"""
+    adaptive_mutation!(chromosome::Chromosome, generation::Int, max_generations::Int, pb_start::Real=0.4, pb_end::Real=0.1)
+
+Adaptive mutation operator that adjusts mutation rate based on generation progress.
+Higher mutation rate early for exploration, lower later for exploitation.
+
+# Arguments
+- `chromosome::Chromosome`: Target chromosome
+- `generation::Int`: Current generation
+- `max_generations::Int`: Maximum generations for the run
+- `pb_start::Real=0.4`: Starting probability (higher for exploration)
+- `pb_end::Real=0.1`: Ending probability (lower for exploitation)
+"""
+@inline function adaptive_mutation!(chromosome::Chromosome, generation::Int, max_generations::Int; 
+        pb_start::Real=0.4, pb_end::Real=0.1)
+    progress = generation / max_generations
+    adaptive_pb = pb_start - (pb_start - pb_end) * progress
+    
+    buffer = THREAD_BUFFERS[Threads.threadid()]
+    create_operator_masks(chromosome.genes, chromosome.genes, adaptive_pb)
+    buffer.child_1_genes[1:length(chromosome.genes)] .= generate_chromosome(chromosome.toolbox).genes[1:length(chromosome.genes)]
+
+    @inbounds @simd for i in eachindex(chromosome.genes)
+        chromosome.genes[i] = buffer.alpha_operator[i] == 1 ? buffer.child_1_genes[i] : chromosome.genes[i]
+    end
+end
+
+"""
+    gene_transposition!(chromosome::Chromosome, len::Int=3)
+
+Transposes a small segment of genes from one position to another within the same chromosome,
+preserving their order but changing their context.
+
+# Arguments
+- `chromosome::Chromosome`: Target chromosome
+- `len::Int=3`: Length of segment to transpose
+"""
+@inline function gene_transposition!(chromosome::Chromosome, len::Int=3)
+    gene_len = chromosome.toolbox.head_len * 2 + 1
+    gene_count = chromosome.toolbox.gene_count
+    
+    source_gene_idx = rand(1:gene_count)
+    target_gene_idx = rand([i for i in 1:gene_count if i != source_gene_idx])
+    
+    source_start = chromosome.toolbox.gen_start_indices[source_gene_idx]
+    target_start = chromosome.toolbox.gen_start_indices[target_gene_idx]
+    
+    segment_len = min(len, gene_len - 1)
+    
+    source_pos = rand(source_start:(source_start + gene_len - segment_len - 1))
+    target_pos = rand(target_start:(target_start + gene_len - segment_len - 1))
+    
+    segment = copy(chromosome.genes[source_pos:(source_pos + segment_len - 1)])
+    
+    target_region = chromosome.genes[target_pos:(target_pos + segment_len - 1)]
+    chromosome.genes[target_pos:(target_pos + segment_len - 1)] .= segment
+end
+
+
+"""
     genetic_operations!(space_next::Vector{Chromosome}, i::Int, toolbox::Toolbox)
 
 Apply genetic operations to chromosomes.
@@ -744,10 +844,11 @@ Genetic operators for chromosome modification.
 # Effects
 Modify chromosome genes in place
 """
-@inline function genetic_operations!(space_next::Vector{Chromosome}, i::Int, toolbox::Toolbox)
+@inline function genetic_operations!(space_next::Vector{Chromosome}, i::Int, toolbox::Toolbox;
+        generation::Int=0, max_generation::Int=0)
     #allocate them within the space - create them once instead of n time 
     space_next[i:i+1] = replicate(space_next[i], space_next[i+1], toolbox)
-    rand_space = rand(15)
+    rand_space = rand(17)
 
 
     if rand_space[1] < toolbox.gep_probs["one_point_cross_over_prob"]
@@ -809,6 +910,15 @@ Modify chromosome genes in place
     if rand_space[15] < toolbox.gep_probs["reverse_insertion_tail"]
         reverse_insertion_tail!(space_next[i+1])
     end
+
+    if rand_space[16] < toolbox.gep_probs["gene_transposition"]
+        gene_transposition!(space_next[i])
+    end
+
+    if rand_space[17] < toolbox.gep_probs["gene_transposition"]
+        gene_transposition!(space_next[i+1])
+    end
+
 
 end
 end

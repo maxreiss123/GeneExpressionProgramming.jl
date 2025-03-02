@@ -143,7 +143,7 @@ using ..TensorRegUtils
 using DynamicExpressions
 using OrderedCollections
 using LinearAlgebra
-
+using StatsBase
 
 
 """
@@ -254,8 +254,8 @@ Dictionary containing default probabilities and parameters for genetic algorithm
 These values can be adjusted to fine-tune the genetic algorithm's behavior.
 """
 const GENE_COMMON_PROBS = Dict{String,AbstractFloat}(
-    "one_point_cross_over_prob" => 0.6,
-    "two_point_cross_over_prob" => 0.4,
+    "one_point_cross_over_prob" => 0.3,
+    "two_point_cross_over_prob" => 0.2,
     "mutation_prob" => 1.0,
     "mutation_rate" => 0.05,
     "dominant_fusion_prob" => 0.1,
@@ -267,7 +267,8 @@ const GENE_COMMON_PROBS = Dict{String,AbstractFloat}(
     "inversion_prob" => 0.1,
     "reverse_insertion" => 0.1,
     "reverse_insertion_tail" => 0.1,
-    "mating_size" => 0.7)
+    "gene_transposition" => 0.2,
+    "mating_size" => 0.5)
 
 const SymbolDict = OrderedDict{Int8,Int8}
 const CallbackDict = Dict{Int8,Function}
@@ -450,6 +451,8 @@ Create a Gene Expression Programming regressor for symbolic regression.
 - `max_permutations_lib::Int=10000`: Maximum permutations for dimension library
 - `rounds::Int=4`: Rounds for dimension library creation
 - `number_of_objectives::Int=1`: Defines the number of objectives considered by the search
+- `head_weigths=nothing`: Defines the weights for the different function - ∑(head_weigths)==1
+- `tail_weigths=[0.6,0.2,0.2]`: Defines the weights for the different utilized symbols - ∑(tail-weights)==1
 """
 mutable struct GepRegressor
     toolbox_::Toolbox
@@ -472,12 +475,17 @@ mutable struct GepRegressor
         head_len::Int=6,
         preamble_syms::Vector{Symbol}=Symbol[],
         max_permutations_lib::Int=10000, rounds::Int=4,
-        number_of_objectives::Int=1
-    )
+        number_of_objectives::Int=1,
+        head_weigths::Union{Vector{<:AbstractFloat},Nothing}=nothing,
+        tail_weigths::Union{Vector{<:AbstractFloat},Nothing}=[0.6,0.2,0.2]
+    )        
+        tail_count = feature_amount + rnd_count + length(entered_terminal_nums)
+        tail_weigths_ = [tail_weigths[1]/tail_count for _ in 1:feature_amount]
+        append!(tail_weigths_, fill(tail_weigths[2]/tail_count, length(entered_terminal_nums)))
+        append!(tail_weigths_, fill(tail_weigths[3]/tail_count, rnd_count))
 
         entered_features_ = isempty(entered_features) ?
                             [Symbol("x$i") for i in 1:feature_amount] : entered_features
-
 
         func_syms, callbacks, binary_ops, unary_ops, gene_connections_, cur_idx = create_function_entries(
             entered_non_terminals, gene_connections
@@ -497,10 +505,11 @@ mutable struct GepRegressor
 
 
         utilized_symbols = merge_collections(func_syms, feat_syms, const_syms, pre_syms)
+        
         nodes = merge!(NodeDict(), feat_nodes, const_nodes, pre_nodes)
+        
         dimension_information = merge!(DimensionDict(), feat_dims, const_dims, pre_dims)
-
-
+        
         operators = OperatorEnum(binary_operators=binary_ops, unary_operators=unary_ops)
 
         if !isempty(considered_dimensions)
@@ -526,7 +535,7 @@ mutable struct GepRegressor
 
         toolbox = Toolbox(gene_count, head_len, utilized_symbols, gene_connections_,
             callbacks, nodes, GENE_COMMON_PROBS; preamble_syms=preamble_syms_, number_of_objectives=number_of_objectives,
-            operators_=operators)
+            operators_=operators, tail_weights_=weights(tail_weigths_))
 
         obj = new()
         obj.toolbox_ = toolbox
