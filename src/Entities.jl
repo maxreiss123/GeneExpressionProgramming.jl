@@ -720,10 +720,10 @@ end
 end
 
 
-@inline function gene_fussion_extent!(chromosome1::Chromosome, parents::Vector{Chromosome}, pb::Real=0.2)
+@inline function gene_fussion_extent!(chromosome1::Chromosome, parents::Vector{Chromosome}, pb::Real=0.2; topk::Int=1)
     buffer = THREAD_BUFFERS[Threads.threadid()]
     len_a = length(chromosome1.genes)
-    genes2 = one_hot_mean([p.genes for p in parents], 2)
+    genes2 = one_hot_mean([p.genes for p in parents], topk)
 
     create_operator_masks(chromosome1.genes, genes2, pb)
 
@@ -937,12 +937,12 @@ Modify chromosome genes in place
         gene_transposition!(space_next[i+1])
     end
 
-    if rand_space[16] < toolbox.gep_probs["gene_transposition"]
-        gene_fussion_extent!(space_next[i], parents)
+    if rand_space[16] < toolbox.gep_probs["gene_averaging_prob"]
+        gene_fussion_extent!(space_next[i], parents, toolbox.gep_probs["gene_averaging_rate"])
     end
 
-    if rand_space[17] < toolbox.gep_probs["gene_transposition"]
-        gene_fussion_extent!(space_next[i+1], parents)
+    if rand_space[17] < toolbox.gep_probs["gene_averaging_prob"]
+        gene_fussion_extent!(space_next[i+1], parents, toolbox.gep_probs["gene_averaging_rate"])
     end
 
 
