@@ -254,8 +254,8 @@ Dictionary containing default probabilities and parameters for genetic algorithm
 These values can be adjusted to fine-tune the genetic algorithm's behavior.
 """
 const GENE_COMMON_PROBS = Dict{String,AbstractFloat}(
-    "one_point_cross_over_prob" => 0.5,
-    "two_point_cross_over_prob" => 0.4,
+    "one_point_cross_over_prob" => 0.2,
+    "two_point_cross_over_prob" => 0.1,
     "mutation_prob" => 1.0,
     "mutation_rate" => 0.1,
     "dominant_fusion_prob" => 0.0,
@@ -264,12 +264,12 @@ const GENE_COMMON_PROBS = Dict{String,AbstractFloat}(
     "rezessiv_fusion_rate" => 0.1,
     "fusion_prob" => 0.0,
     "fusion_rate" => 0.0,
-    "inversion_prob" => 0.1,
-    "reverse_insertion" => 0.1,
-    "reverse_insertion_tail" => 0.1,
-    "gene_transposition" => 0.1,
+    "inversion_prob" => 0.2,
+    "reverse_insertion" => 0.2,
+    "reverse_insertion_tail" => 0.2,
+    "gene_transposition" => 0.0,
     "gene_averaging_prob" => 1.0,
-    "gene_averaging_rate" => 0.1,
+    "gene_averaging_rate" => 0.05,
     "mating_size" => 0.7)
 
 const SymbolDict = OrderedDict{Int8,Int8}

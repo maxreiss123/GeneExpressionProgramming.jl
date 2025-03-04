@@ -297,12 +297,13 @@ The evolution process stops when either:
 
         Threads.@threads for i in eachindex(population[1:population_size])
             if isnan(mean(population[i].fitness)) 
-                cache_value = get(fit_cache, population[i].expression_raw, nothing)
+                key = copy(population[i].expression_raw)
+                cache_value = get(fit_cache,key,nothing)
                 if isnothing(cache_value)
                     
                     population[i].fitness = compute_fitness(population[i], evalStrategy)
                     lock(cache_lock)
-                        fit_cache[population[i].expression_raw] = population[i].fitness
+                        fit_cache[key] = population[i].fitness
                     unlock(cache_lock)
                 else
                     atomic_add!(same, 1)
@@ -339,7 +340,7 @@ The evolution process stops when either:
 
 
         if length(fits_representation[1]) == 1
-            selectedMembers = tournament_selection(fits_representation, mating_size, tourni_size)
+            selectedMembers = tournament_selection(fits_representation[1:mating_size], mating_size, tourni_size)
         else
             selectedMembers = nsga_selection(fits_representation)
         end
