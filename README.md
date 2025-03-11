@@ -1,6 +1,14 @@
 # GeneExpressionProgramming for symbolic regression
 The repository contains an implementation of the Gene Expression Programming [1], whereby the internal representation of the equation is fully tokenized as a vector of integers. This representation allows a lower memory footprint, leading to faster processing of the application of the genetic operators. Moreover, the implementation also contains a mechanism for semantic backpropagation, ensuring dimensional homogeneity for physical units [2]. 
 
+# Features
+- Standard GEP Symbolic Regression
+- Multi-Objective optimization
+- Population initialization based on Latin Hypercube Sampling
+- Coefficient Optimization
+- Matrix/ Tensor optimization
+- Phy. Dimensionality Consideration
+
 # How to use it?
 - Install the package:
   ```julia
@@ -165,7 +173,6 @@ print_karva_strings(lsg)
  # Acknowledgement
  - The Coefficient optimization is inspired by [https://github.com/MilesCranmer/SymbolicRegression.jl](https://github.com/MilesCranmer/SymbolicRegression.jl/blob/master/src/ConstantOptimization.jl)
  - We employ the insane fast [DynamicExpressions.jl](https://github.com/SymbolicML/DynamicExpressions.jl) for evaluating our expressions
-
 
 # How to cite
 Feel free to utilize it for your research, it would be nice __citing us__! Our [paper](https://doi.org/10.1007/s10710-025-09510-z).

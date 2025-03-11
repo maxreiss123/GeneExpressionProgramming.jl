@@ -226,7 +226,7 @@ end
 """
 @inline function equation_characterization_default(population::Vector{Chromosome}, n_samples::Int; inputs_::Int=0)
     len_extented_pop = length(population)
-    coeff_count = isempty(population[1].toolbox.preamble_syms) ? 1 : length(length(population[1].toolbox.preamble_syms))
+    coeff_count = isempty(population[1].toolbox.preamble_syms) ? 1 : length(population[1].toolbox.preamble_syms)
     features = zeros(coeff_count * 2, len_extented_pop)
     prob_dataset = rand(Uniform(0, 1), 100, inputs_ == 0 ? 10 : inputs_)
 
