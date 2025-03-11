@@ -79,6 +79,7 @@ using Logging
 using Printf
 using Base.Threads: SpinLock
 using .Threads
+using Distributions
 
 export runGep
 
@@ -163,7 +164,7 @@ Performs one evolutionary step in the GEP algorithm, creating and evaluating new
         compile_expression!(next_gen[i+1]; force_compile=true)
 
     end
-    
+
     Threads.@threads for i in eachindex(next_gen)
         try
             population[end-i] = population[end-mating_size-i]
@@ -215,6 +216,43 @@ Applies correction operations to ensure dimensional homogeneity in chromosomes.
             end
         end
     end
+end
+
+
+"""
+    equation_characterization_default(population::Vector, n_samples::Int)
+
+    Employs latin hyperqube sampling on a population
+"""
+@inline function equation_characterization_default(population::Vector{Chromosome}, n_samples::Int; inputs_::Int=0)
+    len_extented_pop = length(population)
+    coeff_count = isempty(population[1].toolbox.preamble_syms) ? 1 : length(length(population[1].toolbox.preamble_syms))
+    features = zeros(coeff_count * 2, len_extented_pop)
+    prob_dataset = rand(Uniform(0, 1), 100, inputs_ == 0 ? 10 : inputs_)
+
+    Threads.@threads for p_index in eachindex(population)
+        if population[p_index].compiled
+            try
+                if coeff_count > 1
+                    for e_index in 1:coeff_count
+                        features[e_index, p_index] = mean(population[p_index].compiled_function[e_index](prob_dataset,
+                            population[p_index].toolbox.operators_))
+                        features[e_index+1, p_index] = length(population[p_index].expression_raw[e_index])
+                    end
+                else
+                    features[coeff_count, p_index] = mean(population[p_index].compiled_function(prob_dataset, population[p_index].toolbox.operators_))
+                    features[coeff_count+1, p_index] = length(population[p_index].expression_raw)
+                end
+            catch
+                features[:, p_index] .= Inf
+            end
+
+        else
+            features[:, p_index] .= Inf
+        end
+    end
+
+    return select_n_samples_lhs(features, n_samples)
 end
 
 
@@ -273,10 +311,11 @@ The evolution process stops when either:
     correction_amount::Real=0.6,
     tourni_size::Int=3,
     optimization_epochs::Int=500,
-    file_logger_callback::Union{Function, Nothing}=nothing, 
-    save_state_callback::Union{Function, Nothing}=nothing,
-    load_state_callback::Union{Function, Nothing}=nothing,
-    update_surrogate_callback::Union{Function, Nothing}=nothing)
+    file_logger_callback::Union{Function,Nothing}=nothing,
+    save_state_callback::Union{Function,Nothing}=nothing,
+    load_state_callback::Union{Function,Nothing}=nothing,
+    update_surrogate_callback::Union{Function,Nothing}=nothing, 
+    population_sampling_multiplier::Int=100)
 
     recorder = HistoryRecorder(epochs, Tuple)
     mating_ = toolbox.gep_probs["mating_size"]
@@ -286,24 +325,30 @@ The evolution process stops when either:
     fit_cache = Dict{Vector{Int8},Tuple}()
     cache_lock = SpinLock()
 
-    population, start_epoch = isnothing(load_state_callback) ? (generate_population(population_size+mating_size, toolbox), 1) : load_state_callback()
+
+    initial_size = isnothing(toolbox.operators_) ? population_size + mating_size : population_size * population_sampling_multiplier
+    population, start_epoch = isnothing(load_state_callback) ? (generate_population(initial_size, toolbox), 1) : load_state_callback()
+    if start_epoch <= 1 & !isnothing(toolbox.operators_)
+        population = population[equation_characterization_default(population, population_size + mating_size)]
+    end
+
     next_gen = Vector{eltype(population)}(undef, mating_size)
     progBar = Progress(epochs; showspeed=true, desc="Training: ")
     prev_best = (typemax(Float64),)
-    
+
     for epoch in start_epoch:epochs
         same = Atomic{Int}(0)
         perform_correction_callback!(population[1:population_size], epoch, correction_epochs, correction_amount, correction_callback)
 
         Threads.@threads for i in eachindex(population[1:population_size])
-            if isnan(mean(population[i].fitness)) 
+            if isnan(mean(population[i].fitness))
                 key = copy(population[i].expression_raw)
-                cache_value = get(fit_cache,key,nothing)
+                cache_value = get(fit_cache, key, nothing)
                 if isnothing(cache_value)
-                    
+
                     population[i].fitness = compute_fitness(population[i], evalStrategy)
                     lock(cache_lock)
-                        fit_cache[key] = population[i].fitness
+                    fit_cache[key] = population[i].fitness
                     unlock(cache_lock)
                 else
                     atomic_add!(same, 1)

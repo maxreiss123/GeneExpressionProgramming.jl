@@ -111,7 +111,7 @@ export find_indices_with_sum, compile_djl_datatype, optimize_constants!, minmax_
 export save_state, load_state
 export create_history_recorder, record_history!, record!, close_recorder!
 export HistoryRecorder, OptimizationHistory, get_history_arrays, one_hot_mean, FUNCTION_STRINGIFY
-export train_test_split
+export train_test_split, select_n_samples_lhs
 export FUNCTION_LIB_COMMON, ARITY_LIB_COMMON
 export TensorNode, compile_network
 
@@ -127,8 +127,8 @@ using Random
 using Tensors
 using Flux
 using StatsBase
+using NearestNeighbors
 using Base.Threads: @spawn
-
 
 
 function sqr(x::Vector{T}) where {T<:AbstractFloat}
@@ -855,5 +855,96 @@ function one_hot_mean(vectors::Vector{Vector{T}}, k::Int) where T <: Integer
 end
 
 
+function select_closest_points(lhs_points, normalized_features, n_samples)
+    n_available = size(normalized_features, 2)
+    if n_available < n_samples
+        @warn "Not enough valid points: $n_available available, $n_samples requested"
+        return collect(1:n_available)
+    end
+    
+    selected_indices = zeros(Int, n_samples)
+    remaining_indices = Set(1:n_available)
+    
+    kdtree = KDTree(normalized_features)
+    
+    for i in 1:n_samples
+        best_idx = -1
+        try
+            idxs, dists = knn(kdtree, lhs_points[:, i], 1, true, j -> j ∈ remaining_indices)
+            best_idx = idxs[1]
+        catch e
+            if !isempty(remaining_indices)
+                best_idx = first(remaining_indices)
+            else
+                error("No remaining points to select")
+            end
+        end
+        
+        selected_indices[i] = best_idx
+        delete!(remaining_indices, best_idx)
+    end
+    
+    return selected_indices
+end
+
+"""
+    select_n_samples_lhs(equastacked_features, n_samples; seed=nothing)
+
+Select a subset of equations using Latin Hypercube Sampling based on their characteristics.
+
+Parameters:
+- `stacked_features`: Array of equation information -> (n_features × n_probes)
+- `n_samples`: Number of equations to select
+- `seed`: Optional random seed for reproducibility
+
+Returns:
+- Indices of selected equations
+"""
+function select_n_samples_lhs(stacked_features::AbstractArray, n_samples::Int)
+    _,test_len = size(stacked_features)
+    invalid_mask = falses(test_len)
+    for i in 1:test_len
+        if any(isnan.(stacked_features[:, i])) || any(stacked_features[:, i] .< 0)
+            invalid_mask[i] = true
+        end
+    end
+    valid_indices = findall(.!invalid_mask)
+    valid_features = stacked_features[:, valid_indices]
+    normalized_features = normalize_features(valid_features)
+    n_features, n_probes = size(normalized_features)
+
+    bins = zeros(n_features, n_samples, 2)
+    bins[:, :, 1] .= ((1:n_samples)' .- 1) ./ n_samples
+    bins[:, :, 2] .= (1:n_samples)' ./ n_samples
+
+
+    for i in 1:n_features
+        shuffle!(view(bins,i,:,:))
+    end
+
+    rand_vals = rand(n_features, n_samples)
+    lhs_points = bins[:,:,1] + rand_vals .* (bins[:,:,2] - bins[:,:,1])
+
+    selected_indices = select_closest_points(lhs_points, normalized_features, n_samples)
+    return valid_indices[selected_indices]
+end
+
+
+function normalize_features(features)
+
+    feature_mins = minimum(features, dims=2)
+    feature_maxs = maximum(features, dims=2)
+    feature_ranges = feature_maxs .- feature_mins
+    
+    normalized = similar(features)
+    
+    normalized = @. ifelse(
+        feature_ranges > 0,
+        (features - feature_mins) / feature_ranges,
+        0.5
+    )
+    
+    return normalized
+end
 
 end

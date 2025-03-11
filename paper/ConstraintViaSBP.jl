@@ -89,7 +89,7 @@ function main()
                 @show ("Current case: ", case_name)
                 #gep_params
                 epochs = 1000
-                population_size = 1500
+                population_size = 200
 
                 results = DataFrame(Seed=[],
                     Name=String[], NoiseLeve=String[], Fitness=Float64[], Equation=String[], R2_test=Float64[],
