@@ -75,13 +75,13 @@ module GepEntities
 export Chromosome, Toolbox, EvaluationStrategy, StandardRegressionStrategy, GenericRegressionStrategy
 export fitness, set_fitness!
 export generate_gene, compile_expression!, generate_chromosome, generate_population
-export genetic_operations!, replicate, gene_inversion!, gene_mutation!, gene_one_point_cross_over!, gene_two_point_cross_over!, gene_fussion!, split_karva
-export print_karva_strings
+export genetic_operations!, replicate, gene_inversion!, gene_mutation!, gene_one_point_cross_over!, gene_two_point_cross_over!, gene_fussion!, split_karva, print_karva_strings
 
 using ..GepUtils
 using ..TensorRegUtils
 using OrderedCollections
 using DynamicExpressions
+using StatsBase
 
 
 """
@@ -191,23 +191,26 @@ Contains parameters and operations for GEP algorithm execution.
 - `symbols::OrderedDict{Int8,Int8}`: Available symbols and their arities
 - `gene_connections::Vector{Int8}`: How genes connect
 - `headsyms::Vector{Int8}`: Symbols allowed in head
-- `unary_syms::Vector{Int8}`: Unary operators
 - `tailsyms::Vector{Int8}`: Symbols allowed in tail
 - `arrity_by_id::OrderedDict{Int8,Int8}`: Symbol arities
 - `callbacks::Dict`: Operation callbacks
 - `nodes::OrderedDict`: Node definitions
 - `gen_start_indices::Vector{Int}`: Gene start positions
 - `gep_probs::Dict{String,AbstractFloat}`: Operation probabilities
-- `unary_prob::Real`: Unary operator probability
 - `fitness_reset::Tuple`: Default fitness values
 - `preamble_syms::Vector{Int8}`: Preamble symbols
 - `len_preamble::Int8`: Preamble length
+- `tail_weights::Union{Weights,Nothing}` Defines the probability for tail symbols
+- `head_weigths::Union{Weights,Nothing}` Defines the probability for head symbols 
 
 # Constructor
     Toolbox(gene_count::Int, head_len::Int, symbols::OrderedDict{Int8,Int8}, 
            gene_connections::Vector{Int8}, callbacks::Dict, nodes::OrderedDict, 
-           gep_probs::Dict{String,AbstractFloat}; unary_prob::Real=0.4, 
-           fitness_reset::Tuple=(Inf, NaN), preamble_syms=Int8[])
+           gep_probs::Dict{String,AbstractFloat}; 
+           fitness_reset::Tuple=(Inf, NaN), preamble_syms=Int8[],
+           function_complile::Function=compile_djl_datatype,
+           tail_weights_::Union{Weights,Nothing}=nothing,
+           head_tail_balance::Real=0.2)
 """
 struct Toolbox
     gene_count::Int
@@ -215,25 +218,28 @@ struct Toolbox
     symbols::OrderedDict{Int8,Int8}
     gene_connections::Vector{Int8}
     headsyms::Vector{Int8}
-    unary_syms::Vector{Int8}
     tailsyms::Vector{Int8}
     arrity_by_id::OrderedDict{Int8,Int8}
     callbacks::Dict
     nodes::OrderedDict
     gen_start_indices::Vector{Int}
     gep_probs::Dict{String,AbstractFloat}
-    unary_prob::Real
     fitness_reset::Tuple
     preamble_syms::Vector{Int8}
     len_preamble::Int8
     operators_::Union{OperatorEnum,Nothing}
     compile_function_::Function
+    tail_weights::Union{Weights,Nothing}
+    head_weights::Union{Weights,Nothing}
 
 
     function Toolbox(gene_count::Int, head_len::Int, symbols::OrderedDict{Int8,Int8}, gene_connections::Vector{Int8},
         callbacks::Dict, nodes::OrderedDict, gep_probs::Dict{String,AbstractFloat};
         unary_prob::Real=0.1, preamble_syms=Int8[],
-        number_of_objectives::Int=1, operators_::Union{OperatorEnum,Nothing}=nothing, function_complile::Function=compile_djl_datatype)
+        number_of_objectives::Int=1, operators_::Union{OperatorEnum,Nothing}=nothing,
+        function_complile::Function=compile_djl_datatype,
+        tail_weights_::Union{Weights,Nothing}=nothing,
+        head_tail_balance::Real=0.8)
 
         fitness_reset = (
             ntuple(_ -> Inf, number_of_objectives),
@@ -242,12 +248,26 @@ struct Toolbox
         gene_len = head_len * 2 + 1
         headsyms = [key for (key, arity) in symbols if arity == 2]
         unary_syms = [key for (key, arity) in symbols if arity == 1]
+        up = isempty(unary_syms) ? unary_prob : 0
+
         tailsyms = [key for (key, arity) in symbols if arity < 1 && !(key in preamble_syms)]
         len_preamble = length(preamble_syms)
         gen_start_indices = [gene_count + (gene_len * (i - 1)) for i in 1:gene_count]
+
+
+        tail_weights = isnothing(tail_weights_) ? weights([1 / length(tailsyms) for _ in 1:length(tailsyms)]) : tail_weights_
+        head_weights = weights([
+            fill(head_tail_balance / length(headsyms), length(headsyms));
+            fill(unary_prob / length(unary_syms), length(unary_syms));
+            tail_weights .* (1 - head_tail_balance - up)
+        ])
+
         #ensure_buffer_size!(head_len, gene_count)
-        new(gene_count, head_len, symbols, gene_connections, headsyms, unary_syms, tailsyms, symbols,
-            callbacks, nodes, gen_start_indices, gep_probs, unary_prob, fitness_reset, preamble_syms, len_preamble, operators_, function_complile)
+        head_syms = vcat([headsyms, unary_syms, tailsyms]...)
+        new(gene_count, head_len, symbols, gene_connections, head_syms, tailsyms, symbols,
+            callbacks, nodes, gen_start_indices, gep_probs, fitness_reset, preamble_syms, len_preamble, operators_,
+            function_complile,
+            tail_weights, head_weights)
     end
 end
 
@@ -435,7 +455,7 @@ end
 
 @inline function print_karva_strings(chromosome::Chromosome)
     coeff_count = length(chromosome.toolbox.preamble_syms)
-    callback_ = Dict{Int8, Function}()
+    callback_ = Dict{Int8,Function}()
 
     for (key, value) in chromosome.toolbox.callbacks
         if Symbol(value) in keys(FUNCTION_STRINGIFY)
@@ -446,13 +466,11 @@ end
     end
 
     return compile_djl_datatype(
-        chromosome.expression_raw, 
+        chromosome.expression_raw,
         chromosome.toolbox.arrity_by_id,
-        callback_, 
-        chromosome.toolbox.nodes, 
+        callback_,
+        chromosome.toolbox.nodes,
         1)
-
-
 end
 
 """
@@ -465,23 +483,16 @@ Generate a single gene for GEP.
 - `headsyms::Vector{Int8}`: Symbols for head
 - `tailsyms::Vector{Int8}`: Symbols for tail
 - `headlen::Int`: Head length
-- `unarys::Vector{Int8}=[]`: Unary operators
-- `unary_prob::Real=0.2`: Unary operator probability
+- `tail_weights::Union{Weights,Nothing}` Defines the probability for tail symbols
+- `head_weigths::Union{Weights,Nothing}` Defines the probability for head symbols 
 
 # Returns
 Vector{Int8} representing gene
 """
-@inline function generate_gene(headsyms::Vector{Int8}, tailsyms::Vector{Int8}, headlen::Int;
-    unarys::Vector{Int8}=[], unary_prob::Real=0.2, tensor_prob::Real=0.2)
-    if !isempty(unarys) && rand() < unary_prob
-        heads = vcat(headsyms, rand(tailsyms, 2))
-        push!(heads, rand(unarys))
-    else
-        heads = vcat(headsyms, rand(tailsyms, 2))
-    end
-
-    head = rand(heads, headlen)
-    tail = rand(tailsyms, headlen + 1)
+@inline function generate_gene(headsyms::Vector{Int8}, tailsyms::Vector{Int8}, headlen::Int,
+    tail_weights::Weights, head_weights::Weights)
+    head = sample(headsyms, head_weights, headlen)
+    tail = sample(tailsyms, tail_weights, headlen + 1)
     return vcat(head, tail)
 end
 
@@ -497,8 +508,8 @@ New Chromosome instance
 """
 @inline function generate_chromosome(toolbox::Toolbox)
     connectors = rand(toolbox.gene_connections, toolbox.gene_count - 1)
-    genes = vcat([generate_gene(toolbox.headsyms, toolbox.tailsyms, toolbox.head_len; unarys=toolbox.unary_syms,
-        unary_prob=toolbox.unary_prob) for _ in 1:toolbox.gene_count]...)
+    genes = vcat([generate_gene(toolbox.headsyms, toolbox.tailsyms, toolbox.head_len, toolbox.tail_weights,
+        toolbox.head_weights) for _ in 1:toolbox.gene_count]...)
     return Chromosome(vcat(connectors, genes), toolbox, true)
 end
 
@@ -528,27 +539,18 @@ end
 
 
 @inline function create_operator_masks(gene_seq_alpha::Vector{Int8}, gene_seq_beta::Vector{Int8}, pb::Real=0.2)
-    buffer = THREAD_BUFFERS[Threads.threadid()]
-    len_a = length(gene_seq_alpha)
-
-    buffer.alpha_operator[1:len_a] .= zeros(Int8)
-    buffer.beta_operator[1:len_a] .= zeros(Int8)
-
-    indices_alpha = rand(1:len_a, min(round(Int, (pb * len_a)), len_a))
-    indices_beta = rand(1:len_a, min(round(Int, (pb * len_a)), len_a))
-
-    buffer.alpha_operator[indices_alpha] .= Int8(1)
-    buffer.beta_operator[indices_beta] .= Int8(1)
+    alpha_operator = zeros(Int8, length(gene_seq_alpha))
+    beta_operator = zeros(Int8, length(gene_seq_beta))
+    indices_alpha = rand(1:length(gene_seq_alpha), min(round(Int, (pb * length(gene_seq_alpha))), length(gene_seq_alpha)))
+    indices_beta = rand(1:length(gene_seq_beta), min(round(Int, (pb * length(gene_seq_beta))), length(gene_seq_beta)))
+    alpha_operator[indices_alpha] .= Int8(1)
+    beta_operator[indices_beta] .= Int8(1)
+    return alpha_operator, beta_operator
 end
 
-
 @inline function create_operator_point_one_masks(gene_seq_alpha::Vector{Int8}, gene_seq_beta::Vector{Int8}, toolbox::Toolbox)
-    buffer = THREAD_BUFFERS[Threads.threadid()]
-    len_a = length(gene_seq_alpha)
-
-    buffer.alpha_operator[1:len_a] .= zeros(Int8)
-    buffer.beta_operator[1:len_a] .= zeros(Int8)
-
+    alpha_operator = zeros(Int8, length(gene_seq_alpha))
+    beta_operator = zeros(Int8, length(gene_seq_beta))
     head_len = toolbox.head_len
     gene_len = head_len * 2 + 1
 
@@ -558,21 +560,20 @@ end
 
         point1 = rand(ref:mid)
         point2 = rand((mid+1):(ref+gene_len-1))
-        buffer.alpha_operator[point1:point2] .= Int8(1)
+        alpha_operator[point1:point2] .= Int8(1)
 
         point1 = rand(ref:mid)
         point2 = rand((mid+1):(ref+gene_len-1))
-        buffer.beta_operator[point1:point2] .= Int8(1)
+        beta_operator[point1:point2] .= Int8(1)
     end
+
+    return alpha_operator, beta_operator
 end
 
 
 @inline function create_operator_point_two_masks(gene_seq_alpha::Vector{Int8}, gene_seq_beta::Vector{Int8}, toolbox::Toolbox)
-    buffer = THREAD_BUFFERS[Threads.threadid()]
-    len_a = length(gene_seq_alpha)
-
-    buffer.alpha_operator[1:len_a] .= zeros(Int8)
-    buffer.beta_operator[1:len_a] .= zeros(Int8)
+    alpha_operator = zeros(Int8, length(gene_seq_alpha))
+    beta_operator = zeros(Int8, length(gene_seq_beta))
     head_len = toolbox.head_len
     gene_len = head_len * 2 + 1
 
@@ -586,17 +587,17 @@ end
         point1 = rand(start:quarter)
         point2 = rand(quarter+1:half)
         point3 = rand(half+1:end_gene)
-        buffer.alpha_operator[point1:point2] .= Int8(1)
-        buffer.alpha_operator[point3:end_gene] .= Int8(1)
+        alpha_operator[point1:point2] .= Int8(1)
+        alpha_operator[point3:end_gene] .= Int8(1)
 
 
         point1 = rand(start:end_gene)
         point2 = rand(point1:end_gene)
-        buffer.beta_operator[point1:point2] .= Int8(1)
-        buffer.beta_operator[point2+1:end_gene] .= Int8(1)
+        beta_operator[point1:point2] .= Int8(1)
+        beta_operator[point2+1:end_gene] .= Int8(1)
     end
 
-
+    return alpha_operator, beta_operator
 end
 
 @inline function replicate(chromosome1::Chromosome, chromosome2::Chromosome, toolbox)
@@ -605,82 +606,97 @@ end
 
 
 @inline function gene_dominant_fusion!(chromosome1::Chromosome, chromosome2::Chromosome, pb::Real=0.2)
-    buffer = THREAD_BUFFERS[Threads.threadid()]
-    len_a = length(chromosome1.genes)
-    create_operator_masks(chromosome1.genes, chromosome2.genes, pb)
+    gene_seq_alpha = chromosome1.genes
+    gene_seq_beta = chromosome2.genes
+    alpha_operator, beta_operator = create_operator_masks(gene_seq_alpha, gene_seq_beta, pb)
 
-    @inbounds @simd for i in eachindex(chromosome1.genes)
-        buffer.child_1_genes[i] = buffer.alpha_operator[i] == 1 ? max(chromosome1.genes[i], chromosome2.genes[i]) : chromosome1.genes[i]
-        buffer.child_2_genes[i] = buffer.beta_operator[i] == 1 ? max(chromosome1.genes[i], chromosome2.genes[i]) : chromosome2.genes[i]
+    child_1_genes = similar(gene_seq_alpha)
+    child_2_genes = similar(gene_seq_beta)
+
+    @inbounds @simd for i in eachindex(gene_seq_alpha)
+        child_1_genes[i] = alpha_operator[i] == 1 ? max(gene_seq_alpha[i], gene_seq_beta[i]) : gene_seq_alpha[i]
+        child_2_genes[i] = beta_operator[i] == 1 ? max(gene_seq_alpha[i], gene_seq_beta[i]) : gene_seq_beta[i]
     end
 
-    chromosome1.genes .= @view buffer.child_1_genes[1:len_a]
-    chromosome2.genes .= @view buffer.child_2_genes[1:len_a]
+    chromosome1.genes = child_1_genes
+    chromosome2.genes = child_2_genes
 end
 
 @inline function gen_rezessiv!(chromosome1::Chromosome, chromosome2::Chromosome, pb::Real=0.2)
-    buffer = THREAD_BUFFERS[Threads.threadid()]
-    len_a = length(chromosome1.genes)
-    create_operator_masks(chromosome1.genes, chromosome2.genes, pb)
+    gene_seq_alpha = chromosome1.genes
+    gene_seq_beta = chromosome2.genes
+    alpha_operator, beta_operator = create_operator_masks(gene_seq_alpha, gene_seq_beta, pb)
 
-    @inbounds @simd for i in eachindex(chromosome1.genes)
-        buffer.child_1_genes[i] = buffer.alpha_operator[i] == 1 ? min(chromosome1.genes[i], chromosome2.genes[i]) : chromosome1.genes[i]
-        buffer.child_2_genes[i] = buffer.beta_operator[i] == 1 ? min(chromosome1.genes[i], chromosome2.genes[i]) : chromosome2.genes[i]
+    child_1_genes = similar(gene_seq_alpha)
+    child_2_genes = similar(gene_seq_beta)
+
+    @inbounds @simd for i in eachindex(gene_seq_alpha)
+        child_1_genes[i] = alpha_operator[i] == 1 ? min(gene_seq_alpha[i], gene_seq_beta[i]) : gene_seq_alpha[i]
+        child_2_genes[i] = beta_operator[i] == 1 ? min(gene_seq_alpha[i], gene_seq_beta[i]) : gene_seq_beta[i]
     end
 
-    chromosome1.genes .= @view buffer.child_1_genes[1:len_a]
-    chromosome2.genes .= @view buffer.child_2_genes[1:len_a]
+    chromosome1.genes = child_1_genes
+    chromosome2.genes = child_2_genes
 end
 
 @inline function gene_fussion!(chromosome1::Chromosome, chromosome2::Chromosome, pb::Real=0.2)
-    buffer = THREAD_BUFFERS[Threads.threadid()]
-    len_a = length(chromosome1.genes)
-    create_operator_masks(chromosome1.genes, chromosome2.genes, pb)
+    gene_seq_alpha = chromosome1.genes
+    gene_seq_beta = chromosome2.genes
+    alpha_operator, beta_operator = create_operator_masks(gene_seq_alpha, gene_seq_beta, pb)
 
-    @inbounds @simd for i in eachindex(chromosome1.genes)
-        buffer.child_1_genes[i] = buffer.alpha_operator[i] == 1 ? Int8((chromosome1.genes[i] + chromosome2.genes[i]) ÷ 2) : chromosome1.genes[i]
-        buffer.child_2_genes[i] = buffer.beta_operator[i] == 1 ? Int8((chromosome1.genes[i] + chromosome2.genes[i]) ÷ 2) : chromosome2.genes[i]
+    child_1_genes = similar(gene_seq_alpha)
+    child_2_genes = similar(gene_seq_beta)
+
+    @inbounds @simd for i in eachindex(gene_seq_alpha)
+        child_1_genes[i] = alpha_operator[i] == 1 ? Int8((gene_seq_alpha[i] + gene_seq_beta[i]) ÷ 2) : gene_seq_alpha[i]
+        child_2_genes[i] = beta_operator[i] == 1 ? Int8((gene_seq_alpha[i] + gene_seq_beta[i]) ÷ 2) : gene_seq_beta[i]
     end
 
-    chromosome1.genes .= @view buffer.child_1_genes[1:len_a]
-    chromosome2.genes .= @view buffer.child_2_genes[1:len_a]
+    chromosome1.genes = child_1_genes
+    chromosome2.genes = child_2_genes
 end
 
 @inline function gene_one_point_cross_over!(chromosome1::Chromosome, chromosome2::Chromosome)
-    buffer = THREAD_BUFFERS[Threads.threadid()]
-    len_a = length(chromosome1.genes)
-    create_operator_point_one_masks(chromosome1.genes, chromosome2.genes, chromosome1.toolbox)
+    gene_seq_alpha = chromosome1.genes
+    gene_seq_beta = chromosome2.genes
+    alpha_operator, beta_operator = create_operator_point_one_masks(gene_seq_alpha, gene_seq_beta, chromosome1.toolbox)
 
-    @inbounds @simd for i in eachindex(chromosome1.genes)
-        buffer.child_1_genes[i] = buffer.alpha_operator[i] == 1 ? chromosome1.genes[i] : chromosome2.genes[i]
-        buffer.child_2_genes[i] = buffer.beta_operator[i] == 1 ? chromosome2.genes[i] : chromosome1.genes[i]
+    child_1_genes = similar(gene_seq_alpha)
+    child_2_genes = similar(gene_seq_beta)
+
+    @inbounds @simd for i in eachindex(gene_seq_alpha)
+        child_1_genes[i] = alpha_operator[i] == 1 ? gene_seq_alpha[i] : gene_seq_beta[i]
+        child_2_genes[i] = beta_operator[i] == 1 ? gene_seq_beta[i] : gene_seq_alpha[i]
     end
 
-    chromosome1.genes .= @view buffer.child_1_genes[1:len_a]
-    chromosome2.genes .= @view buffer.child_2_genes[1:len_a]
+    chromosome1.genes = child_1_genes
+    chromosome2.genes = child_2_genes
 end
 
 @inline function gene_two_point_cross_over!(chromosome1::Chromosome, chromosome2::Chromosome)
-    buffer = THREAD_BUFFERS[Threads.threadid()]
-    len_a = length(chromosome1.genes)
-    create_operator_point_two_masks(chromosome1.genes, chromosome2.genes, chromosome1.toolbox)
+    gene_seq_alpha = chromosome1.genes
+    gene_seq_beta = chromosome2.genes
+    alpha_operator, beta_operator = create_operator_point_two_masks(gene_seq_alpha, gene_seq_beta, chromosome1.toolbox)
 
-    @inbounds @simd for i in eachindex(chromosome1.genes)
-        buffer.child_1_genes[i] = buffer.alpha_operator[i] == 1 ? chromosome1.genes[i] : chromosome2.genes[i]
-        buffer.child_2_genes[i] = buffer.beta_operator[i] == 1 ? chromosome2.genes[i] : chromosome1.genes[i]
+    child_1_genes = similar(gene_seq_alpha)
+    child_2_genes = similar(gene_seq_beta)
+
+    @inbounds @simd for i in eachindex(gene_seq_alpha)
+        child_1_genes[i] = alpha_operator[i] == 1 ? gene_seq_alpha[i] : gene_seq_beta[i]
+        child_2_genes[i] = beta_operator[i] == 1 ? gene_seq_beta[i] : gene_seq_alpha[i]
     end
 
-    chromosome1.genes .= @view buffer.child_1_genes[1:len_a]
-    chromosome2.genes .= @view buffer.child_2_genes[1:len_a]
+    chromosome1.genes = child_1_genes
+    chromosome2.genes = child_2_genes
 end
 
 @inline function gene_mutation!(chromosome1::Chromosome, pb::Real=0.25)
-    buffer = THREAD_BUFFERS[Threads.threadid()]
-    create_operator_masks(chromosome1.genes, chromosome1.genes, pb)
-    buffer.child_1_genes[1:length(chromosome1.genes)] .= generate_chromosome(chromosome1.toolbox).genes[1:length(chromosome1.genes)]
+    gene_seq_alpha = chromosome1.genes
+    alpha_operator, _ = create_operator_masks(gene_seq_alpha, gene_seq_alpha, pb)
+    mutation_seq_1 = generate_chromosome(chromosome1.toolbox)
 
-    @inbounds @simd for i in eachindex(chromosome1.genes)
-        chromosome1.genes[i] = buffer.alpha_operator[i] == 1 ? buffer.child_1_genes[i] : chromosome1.genes[i]
+    @inbounds @simd for i in eachindex(gene_seq_alpha)
+        gene_seq_alpha[i] = alpha_operator[i] == 1 ? mutation_seq_1.genes[i] : gene_seq_alpha[i]
     end
 end
 
@@ -744,7 +760,7 @@ Genetic operators for chromosome modification.
 # Effects
 Modify chromosome genes in place
 """
-@inline function genetic_operations!(space_next::Vector{Chromosome}, i::Int, toolbox::Toolbox)
+@inline function genetic_operations!(space_next::Vector{Chromosome}, i::Int, toolbox::Toolbox; generation::Int, max_generation::Int, parents::Vector{Chromosome})
     #allocate them within the space - create them once instead of n time 
     space_next[i:i+1] = replicate(space_next[i], space_next[i+1], toolbox)
     rand_space = rand(15)

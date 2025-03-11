@@ -19,4 +19,4 @@ y_data = @. x_data[:,1] * x_data[:,1] + x_data[:,1] * x_data[:,2] - 2 * x_data[:
 
 #define the 
 regressor = GepRegressor(number_features)
-@btime fit!(regressor, epochs, population_size, x_data', y_data; loss_fun="mse")
+@btime fit!(regressor, epochs, population_size, x_data', y_data; loss_fun="mse", population_sampling_multiplier=1000)

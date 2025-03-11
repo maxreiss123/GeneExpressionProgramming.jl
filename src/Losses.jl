@@ -73,6 +73,7 @@ module LossFunction
 export get_loss_function
 using Statistics
 using LoopVectorization
+using Random
 
 function floor_to_n10p(x::T) where T<:AbstractFloat
     abs_x = abs(x)
@@ -98,15 +99,21 @@ function xicor(y_true::AbstractArray{T}, y_pred::AbstractArray{T}; ties::Bool=tr
             end
         end
         
-        tie_indices = tie_counts .> 1
-        mean_ties = mean(tie_counts[tie_indices])
+        tie_groups = Dict{Int, Vector{Int}}()
+        for i in 1:n
+            val = r[i]
+            if haskey(tie_groups, val)
+                push!(tie_groups[val], i)
+            else
+                tie_groups[val] = [i]
+            end
+        end
         
-        Threads.@threads for i in 1:n
-            if tie_counts[i] > 1
-                tie_group = findall(==(r[i]), r)
-                shuffled = Random.shuffle(0:(tie_counts[i]-1))
-                for (idx, group_idx) in enumerate(tie_group)
-                    r[group_idx] = r[i] - shuffled[idx]
+        for (val, group) in tie_groups
+            if length(group) > 1
+                shuffled = Random.shuffle(0:(length(group)-1))
+                for (idx, group_idx) in enumerate(group)
+                    r[group_idx] = val - shuffled[idx]
                 end
             end
         end

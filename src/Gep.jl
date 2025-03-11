@@ -79,6 +79,7 @@ using Logging
 using Printf
 using Base.Threads: SpinLock
 using .Threads
+using Distributions
 
 export runGep
 
@@ -151,22 +152,24 @@ Performs one evolutionary step in the GEP algorithm, creating and evaluating new
 - Operations are performed in parallel using multiple threads
 """
 @inline function perform_step!(population::Vector{Chromosome}, parents::Vector{Chromosome}, next_gen::Vector{Chromosome},
-    toolbox::Toolbox, mating_size::Int)
-
+    toolbox::Toolbox, mating_size::Int, generation::Int, max_generation::Int)
     @inbounds Threads.@threads for i in 1:2:mating_size-1
         next_gen[i] = parents[i]
         next_gen[i+1] = parents[i+1]
 
-        genetic_operations!(next_gen, i, toolbox)
+        genetic_operations!(next_gen, i, toolbox;
+            generation=generation, max_generation=max_generation, parents=parents)
 
         compile_expression!(next_gen[i]; force_compile=true)
         compile_expression!(next_gen[i+1]; force_compile=true)
 
     end
 
-    Threads.@threads for i in 1:mating_size-1
+    Threads.@threads for i in eachindex(next_gen)
         try
-            population[end-i] = next_gen[i]
+            population[end-i] = population[end-mating_size-i]
+            population[end-mating_size-i] = next_gen[i]
+            #@show ("Position $i - new insert $(length(population)-mating_size-i) - $(pointer_from_objref(next_gen[i]))")
         catch e
             error_message = sprint(showerror, e, catch_backtrace())
             @error "Error in perform_step!: $error_message"
@@ -174,10 +177,6 @@ Performs one evolutionary step in the GEP algorithm, creating and evaluating new
     end
 end
 
-
-@inline function update_surrogate!(::EvaluationStrategy) 
-    nothing
-end
 
 """
     perform_correction_callback!(population::Vector{Chromosome}, epoch::Int, 
@@ -212,11 +211,48 @@ Applies correction operations to ensure dimensional homogeneity in chromosomes.
                     compile_expression!(population[i]; force_compile=true)
                     population[i].dimension_homogene = true
                 else
-                    population[i].fitness = (population[i].fitness[1]+distance,)
+                    #population[i].fitness += distance
                 end
             end
         end
     end
+end
+
+
+"""
+    equation_characterization_default(population::Vector, n_samples::Int)
+
+    Employs latin hyperqube sampling on a population
+"""
+@inline function equation_characterization_default(population::Vector{Chromosome}, n_samples::Int; inputs_::Int=0)
+    len_extented_pop = length(population)
+    coeff_count = isempty(population[1].toolbox.preamble_syms) ? 1 : length(length(population[1].toolbox.preamble_syms))
+    features = zeros(coeff_count * 2, len_extented_pop)
+    prob_dataset = rand(Uniform(0, 1), 100, inputs_ == 0 ? 10 : inputs_)
+
+    Threads.@threads for p_index in eachindex(population)
+        if population[p_index].compiled
+            try
+                if coeff_count > 1
+                    for e_index in 1:coeff_count
+                        features[e_index, p_index] = mean(population[p_index].compiled_function[e_index](prob_dataset,
+                            population[p_index].toolbox.operators_))
+                        features[e_index+1, p_index] = length(population[p_index].expression_raw[e_index])
+                    end
+                else
+                    features[coeff_count, p_index] = mean(population[p_index].compiled_function(prob_dataset, population[p_index].toolbox.operators_))
+                    features[coeff_count+1, p_index] = length(population[p_index].expression_raw)
+                end
+            catch
+                features[:, p_index] .= Inf
+            end
+
+        else
+            features[:, p_index] .= Inf
+        end
+    end
+
+    return select_n_samples_lhs(features, n_samples)
 end
 
 
@@ -275,9 +311,11 @@ The evolution process stops when either:
     correction_amount::Real=0.6,
     tourni_size::Int=3,
     optimization_epochs::Int=500,
-    file_logger_callback::Union{Function, Nothing}=nothing, 
-    save_state_callback::Union{Function, Nothing}=nothing,
-    load_state_callback::Union{Function, Nothing}=nothing)
+    file_logger_callback::Union{Function,Nothing}=nothing,
+    save_state_callback::Union{Function,Nothing}=nothing,
+    load_state_callback::Union{Function,Nothing}=nothing,
+    update_surrogate_callback::Union{Function,Nothing}=nothing, 
+    population_sampling_multiplier::Int=100)
 
     recorder = HistoryRecorder(epochs, Tuple)
     mating_ = toolbox.gep_probs["mating_size"]
@@ -287,27 +325,30 @@ The evolution process stops when either:
     fit_cache = Dict{Vector{Int8},Tuple}()
     cache_lock = SpinLock()
 
-    population, start_epoch = isnothing(load_state_callback) ? (generate_population(population_size, toolbox), 1) : load_state_callback()
+
+    initial_size = isnothing(toolbox.operators_) ? population_size + mating_size : population_size * population_sampling_multiplier
+    population, start_epoch = isnothing(load_state_callback) ? (generate_population(initial_size, toolbox), 1) : load_state_callback()
+    if start_epoch <= 1 & !isnothing(toolbox.operators_)
+        population = population[equation_characterization_default(population, population_size + mating_size)]
+    end
+
     next_gen = Vector{eltype(population)}(undef, mating_size)
     progBar = Progress(epochs; showspeed=true, desc="Training: ")
     prev_best = (typemax(Float64),)
-    
+
     for epoch in start_epoch:epochs
         same = Atomic{Int}(0)
-        perform_correction_callback!(population, epoch, correction_epochs, correction_amount, correction_callback)
+        perform_correction_callback!(population[1:population_size], epoch, correction_epochs, correction_amount, correction_callback)
 
-         
-        Threads.@threads for i in eachindex(population)
-            if isnan(mean(population[i].fitness)) 
-                cache_value = nothing
-                lock(cache_lock) do
-                    cache_value = get(fit_cache, population[i].expression_raw, nothing)
-                end
+        Threads.@threads for i in eachindex(population[1:population_size])
+            if isnan(mean(population[i].fitness))
+                key = copy(population[i].expression_raw)
+                cache_value = get(fit_cache, key, nothing)
                 if isnothing(cache_value)
-                    
+
                     population[i].fitness = compute_fitness(population[i], evalStrategy)
                     lock(cache_lock)
-                        fit_cache[population[i].expression_raw] = population[i].fitness
+                    fit_cache[key] = population[i].fitness
                     unlock(cache_lock)
                 else
                     atomic_add!(same, 1)
@@ -315,8 +356,10 @@ The evolution process stops when either:
                 end
             end
         end
+
+
         sort!(population, by=x -> mean(x.fitness))
-        Threads.@threads for index in eachindex(population)
+        Threads.@threads for index in eachindex(population[1:population_size])
             fits_representation[index] = population[index].fitness
         end
 
@@ -337,24 +380,22 @@ The evolution process stops when either:
             (:validation_loss, @sprintf("%.6e", mean(val_loss)))
         ])
 
-        update_surrogate!(evalStrategy)
+        !isnothing(update_surrogate_callback) && update_surrogate_callback(evalStrategy)
+        !isnothing(evalStrategy.break_condition) && evalStrategy.break_condition(population[1:population_size], epoch) && break
 
-        if !isnothing(evalStrategy.break_condition) && evalStrategy.break_condition(population, epoch)
-            break
-        end
 
         if length(fits_representation[1]) == 1
-            selectedMembers = tournament_selection(fits_representation, mating_size, tourni_size)
+            selectedMembers = tournament_selection(fits_representation[1:mating_size], mating_size, tourni_size)
         else
             selectedMembers = nsga_selection(fits_representation)
         end
 
-        !isnothing(file_logger_callback) && file_logger_callback(population, epoch, selectedMembers)
+        !isnothing(file_logger_callback) && file_logger_callback(population[1:population_size], epoch, selectedMembers)
         !isnothing(save_state_callback) && save_state_callback(population, epoch)
 
         if epoch < epochs
             parents = population[selectedMembers.indices]
-            perform_step!(population, parents, next_gen, toolbox, mating_size)
+            perform_step!(population, parents, next_gen, toolbox, mating_size, epoch, epochs)
         end
 
     end
