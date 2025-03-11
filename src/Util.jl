@@ -856,29 +856,16 @@ end
 
 
 function select_closest_points(lhs_points, normalized_features, n_samples)
-    n_available = size(normalized_features, 2)
-    if n_available < n_samples
-        @warn "Not enough valid points: $n_available available, $n_samples requested"
-        return collect(1:n_available)
-    end
-    
     selected_indices = zeros(Int, n_samples)
-    remaining_indices = Set(1:n_available)
+    remaining_indices = Set(1:size(normalized_features, 2))
     
+    # Build KD-tree once with all points
     kdtree = KDTree(normalized_features)
     
     for i in 1:n_samples
-        best_idx = -1
-        try
-            idxs, dists = knn(kdtree, lhs_points[:, i], 1, true, j -> j ∈ remaining_indices)
-            best_idx = idxs[1]
-        catch e
-            if !isempty(remaining_indices)
-                best_idx = first(remaining_indices)
-            else
-                error("No remaining points to select")
-            end
-        end
+        # Find nearest neighbors among remaining points
+        idxs, dists = knn(kdtree, lhs_points[:, i], 1, true, j -> j ∉ remaining_indices)
+        best_idx = idxs[1]
         
         selected_indices[i] = best_idx
         delete!(remaining_indices, best_idx)
@@ -904,7 +891,7 @@ function select_n_samples_lhs(stacked_features::AbstractArray, n_samples::Int)
     _,test_len = size(stacked_features)
     invalid_mask = falses(test_len)
     for i in 1:test_len
-        if any(isnan.(stacked_features[:, i])) || any(stacked_features[:, i] .< 0)
+        if any(isnan.(stacked_features[:, i])) || any(isinf.(stacked_features[:, i])) 
             invalid_mask[i] = true
         end
     end
