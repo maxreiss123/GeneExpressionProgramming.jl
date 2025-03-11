@@ -228,22 +228,21 @@ end
     len_extented_pop = length(population)
     coeff_count = isempty(population[1].toolbox.preamble_syms) ? 1 : length(population[1].toolbox.preamble_syms)
     features = zeros(coeff_count * 2, len_extented_pop)
-    prob_dataset = rand(Uniform(0, 1), 100, inputs_ == 0 ? 10 : inputs_)
-
-    Threads.@threads for p_index in eachindex(population)
+    prob_dataset = rand(Uniform(-1, 1), 100, inputs_ == 0 ? 10 : inputs_)
+    for p_index in eachindex(population)
         if population[p_index].compiled
             try
                 if coeff_count > 1
                     for e_index in 1:coeff_count
                         features[e_index, p_index] = mean(population[p_index].compiled_function[e_index](prob_dataset,
                             population[p_index].toolbox.operators_))
-                        features[e_index+1, p_index] = length(population[p_index].expression_raw[e_index])
+                        features[coeff_count+e_index, p_index] = length(population[p_index].expression_raw[e_index])
                     end
                 else
                     features[coeff_count, p_index] = mean(population[p_index].compiled_function(prob_dataset, population[p_index].toolbox.operators_))
                     features[coeff_count+1, p_index] = length(population[p_index].expression_raw)
                 end
-            catch
+            catch 
                 features[:, p_index] .= Inf
             end
 
@@ -251,7 +250,6 @@ end
             features[:, p_index] .= Inf
         end
     end
-
     return select_n_samples_lhs(features, n_samples)
 end
 
