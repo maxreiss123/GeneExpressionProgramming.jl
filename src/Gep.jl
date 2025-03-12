@@ -318,7 +318,7 @@ The evolution process stops when either:
     mating_size = Int(ceil(population_size * mating_))
     mating_size = mating_size % 2 == 0 ? mating_size : mating_size - 1
     fits_representation = Vector{Tuple}(undef, population_size)
-    fit_cache = Dict{Vector{Int8},Tuple}()
+    fit_cache = Dict{String,Tuple}()
     cache_lock = SpinLock()
 
 
@@ -338,7 +338,7 @@ The evolution process stops when either:
 
         Threads.@threads for i in eachindex(population[1:population_size])
             if isnan(mean(population[i].fitness))
-                key = copy(population[i].expression_raw)
+                key = join(population[i].expression_raw, ",")
                 cache_value = get(fit_cache, key, nothing)
                 if isnothing(cache_value)
 
