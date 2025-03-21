@@ -291,7 +291,7 @@ function create_physical_operations(entered_non_terminals::Vector{Symbol})
         end
         forward_funs[idx] = FUNCTION_LIB_FORWARD_COMMON[elem]
         backward_funs[idx] = FUNCTION_LIB_BACKWARD_COMMON[elem]
-        if elem == :mul || elem == :/
+        if elem == :* || elem == :/
             push!(point_ops, idx)
         end
 
