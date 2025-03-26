@@ -770,9 +770,13 @@ function minmax_scale(X::AbstractArray{T}; feature_range=(zero(T), one(T))) wher
 end
 
 function save_state(filename::String, state::Any)
-    open(filename, "w") do io
+    temp_filename = filename * ".tmp"
+    open(temp_filename, "w") do io
         serialize(io, state)
+        flush(io)
     end
+    mv(temp_filename, filename; force=true)
+    return true
 end
 
 function load_state(filename::String)
