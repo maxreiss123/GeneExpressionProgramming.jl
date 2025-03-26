@@ -3,34 +3,34 @@ using LinearAlgebra
 
 export tournament_selection, nsga_selection, dominates_, fast_non_dominated_sort, calculate_fronts, determine_ranks, assign_crowding_distance
 
-
 struct SelectedMembers
     indices::Vector{Int}
     fronts::Dict{Int,Vector{Int}}
 end
 
-#Note: selection is constructed to allways return a list of indices => {just care about the data not the objects}
-@inline function tournament_selection(population::AbstractArray{Tuple}, number_of_winners::Int, tournament_size::Int) 
+@inline function tournament_selection(population::AbstractArray{Tuple}, number_of_winners::Int, tournament_size::Int)
     selected_indices = Vector{Int}(undef, number_of_winners)
     valid_indices_ = findall(x -> isfinite(x[1]), population)
     valid_indices = []
     doubles = Set()
     for elem in valid_indices_
-    	if !(population[elem] in doubles)
-    		push!(doubles,population[elem])
-    		push!(valid_indices, elem)
-    	end
+        if !(population[elem] in doubles)
+            push!(doubles, population[elem])
+            push!(valid_indices, elem)
+        end
     end
-    
-    Threads.@threads for index in 1:number_of_winners-1
-        contenders = rand(valid_indices, tournament_size)
-        winner = reduce((best, contender) -> population[contender] < population[best] ? contender : best, contenders)
-        selected_indices[index] = winner
-    end
-    selected_indices[end] = 1
-    return SelectedMembers(selected_indices,Dict{Int,Vector{Int}}())
-end
 
+    for index in 1:number_of_winners
+        if index == number_of_winners
+            selected_indices[index] = 1  # Keep the original behavior
+        else
+            contenders = rand(valid_indices, min(tournament_size, length(valid_indices)))
+            winner = reduce((best, contender) -> population[contender] < population[best] ? contender : best, contenders)
+            selected_indices[index] = winner
+        end
+    end
+    return SelectedMembers(selected_indices, Dict{Int,Vector{Int}}())
+end
 
 function count_infinites(t::Tuple)
     return count(isinf, t) + count(isnan, t)
@@ -57,25 +57,22 @@ function dominates_(a::Tuple, b::Tuple)
         return false
     end
 
-
-    @inbounds for i in eachindex(a)
+    for i in eachindex(a)
         ai, bi = a[i], b[i]
         if ai ≪ bi
             one_significant_smaller = true
         elseif ai <= bi
-            all_smaller = true & all_smaller
-        elseif bi ≪ ai || ai > bi
+            all_smaller = all_smaller
+        else
             all_smaller = false
         end
     end
     return one_significant_smaller || all_smaller
 end
 
-
-@inline function determine_ranks(pop::Vector{T}) where T<:Tuple
+@inline function determine_ranks(pop::Vector{T}) where {T<:Tuple}
     n = length(pop)
-
-    dom_list = [ Int[] for i in 1:n ]
+    dom_list = [Int[] for _ in 1:n]
     rank = zeros(Int, n)
     dom_count = zeros(Int, n)
 
@@ -84,11 +81,10 @@ end
             i_dominates_j = dominates_(pop[i], pop[j])
             j_dominates_i = dominates_(pop[j], pop[i])
 
-
-            if i_dominates_j 
+            if i_dominates_j
                 push!(dom_list[i], j)
                 dom_count[j] += 1
-            elseif j_dominates_i 
+            elseif j_dominates_i
                 push!(dom_list[j], i)
                 dom_count[i] += 1
             end
@@ -98,42 +94,42 @@ end
         end
     end
 
-    k = UInt16(2)
-    while any(==(k-one(UInt16)), (rank[p] for p in 1:n)) 
+    k = 2
+    while any(==(k - 1), rank)
         for p in 1:n
-            if rank[p] == k-one(UInt16)
+            if rank[p] == k - 1
                 for q in dom_list[p]
-                    dom_count[q] -= one(UInt16)
-                    if dom_count[q] == zero(UInt16)
+                    dom_count[q] -= 1
+                    if dom_count[q] == 0
                         rank[q] = k
                     end
                 end
             end
         end
-        k += one(UInt16)
+        k += 1
     end
     return rank
 end
 
 @inline function fast_non_dominated_sort(population::Vector{T}) where {T<:Tuple}
     ranks = determine_ranks(population)
-    pop_indices = [(index,rank) for (index, rank) in enumerate(ranks)]
-    sort!(pop_indices, by = x -> x[2])
+    pop_indices = [(index, rank) for (index, rank) in enumerate(ranks)]
+    sort!(pop_indices, by=x -> x[2])
     return [elem[1] for elem in pop_indices]
 end
 
 @inline function calculate_fronts(population::Vector{T}) where {T<:Tuple}
     ranks = determine_ranks(population)
-    min_rank = minimum(unique(ranks)) 
-    max_rank = maximum(unique(ranks))
-    if min_rank == 0
-        ranks = [rank == 0 ? max_rank+1 : rank for rank in ranks]
-    end
-    fronts = [Int[] for i in eachindex(unique(ranks))]
+    min_rank = minimum(ranks)
+    max_rank = maximum(ranks)
+
+    fronts = [Int[] for _ in min_rank:max_rank]
 
     for (i, r) in enumerate(ranks)
-        push!(fronts[r], i)
+        push!(fronts[r-min_rank+1], i)
     end
+
+    filter!(!isempty, fronts)
     return fronts
 end
 
@@ -145,10 +141,13 @@ end
     for i in front
         distances[i] = 0.0
     end
-    # only looking to the direct neighbour!
+
     for m in 1:objectives_count
         sorted_front = sort(front, by=i -> population[i][m])
-        distances[sorted_front[1]] = distances[sorted_front[end]] = Inf
+
+        # Set extreme points to infinity
+        distances[sorted_front[1]] = Inf
+        distances[sorted_front[end]] = Inf
 
         if n > 2
             obj_range = population[sorted_front[end]][m] - population[sorted_front[1]][m]
@@ -165,33 +164,47 @@ end
 end
 
 
-@inline function nsga_selection(population::Vector{T}) where {T<:Tuple}
-    fronts = calculate_fronts(population)
-    n_fronts = length(fronts)
-
-    selected_indices = Int[]
-    pareto_fronts = Dict{Int,Vector{Int}}()
-
-    estimated_size = length(population)
-    selected_indices = Vector{Int}(undef, estimated_size)
-    current_idx = 1
-
-
-    @inbounds for front_idx in 1:n_fronts
-        front = fronts[front_idx]
-        crowding_distances = assign_crowding_distance(front, population)
-
-        sorted_front = sort(front, by=i -> crowding_distances[i], rev=true)
-        front_size = length(sorted_front)
-        copyto!(selected_indices, current_idx, sorted_front, 1, front_size)
-        
-        pareto_fronts[front_idx] = sorted_front
-        current_idx +=front_size
+function tournament_selection_nsga(pop_indices::Vector{Int}, ranks::Vector{Int}, crowding_distances::Dict{Int,Float64}, number_of_winners::Int, tournament_size::Int)
+    selected_indices = Vector{Int}(undef, number_of_winners)
+    for i in 1:number_of_winners
+        contenders = rand(pop_indices, tournament_size)
+        winner = reduce(contenders; init=contenders[1]) do best, contender
+            if ranks[contender] < ranks[best]
+                contender
+            elseif ranks[contender] > ranks[best]
+                best
+            else
+                crowding_distances[contender] > crowding_distances[best] ? contender : best
+            end
+        end
+        selected_indices[i] = winner
     end
-    resize!(selected_indices, current_idx - 1)
+    return selected_indices
+end
 
-    return SelectedMembers(selected_indices, pareto_fronts)
+function nsga_selection(population::Vector{T}; tournament_size::Int=2) where {T<:Tuple}
+    pop_size = length(population)
 
+    # Compute ranks for all individuals
+    ranks = determine_ranks(population)
+
+    # Compute fronts for tracking and crowding distances
+    fronts = calculate_fronts(population)
+    crowding_distances = Dict{Int,Float64}()
+    for front in fronts
+        front_distances = assign_crowding_distance(front, population)
+        for (i, d) in front_distances
+            crowding_distances[i] = d
+        end
+    end
+
+    all_indices = collect(1:pop_size)
+    selected_indices = tournament_selection_nsga(all_indices, ranks, crowding_distances, pop_size, tournament_size)
+
+    @debug selected_indices
+    @debug population[selected_indices]
+
+    return SelectedMembers(selected_indices, Dict(enumerate(fronts)))
 end
 
 
