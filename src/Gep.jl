@@ -387,7 +387,7 @@ The evolution process stops when either:
         end
 
         !isnothing(file_logger_callback) && file_logger_callback(population[1:population_size], epoch, selectedMembers)
-        !isnothing(save_state_callback) && save_state_callback(population, epoch)
+        !isnothing(save_state_callback) && save_state_callback(population, evalStrategy)
 
         if epoch < epochs
             parents = population[selectedMembers.indices]
