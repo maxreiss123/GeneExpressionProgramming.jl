@@ -198,3 +198,4 @@ Feel free to utilize it for your research, it would be nice __citing us__! Our [
 - [ ] Next operations: Tail flip, Connection symbol flip, wrapper class for easy usage, config class for predefinition, staggered exploration
 - [ ] nice print flux
 - [ ] constant node needs to be fixed
+- [ ] Clean Package Structure
