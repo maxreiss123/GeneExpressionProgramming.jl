@@ -311,7 +311,7 @@ The evolution process stops when either:
     save_state_callback::Union{Function,Nothing}=nothing,
     load_state_callback::Union{Function,Nothing}=nothing,
     update_surrogate_callback::Union{Function,Nothing}=nothing, 
-    population_sampling_multiplier::Int=100)
+    population_sampling_multiplier::Int=1)
 
     recorder = HistoryRecorder(epochs, Tuple)
     mating_ = toolbox.gep_probs["mating_size"]
@@ -322,10 +322,11 @@ The evolution process stops when either:
     cache_lock = SpinLock()
 
 
-    initial_size = isnothing(toolbox.operators_) ? population_size + mating_size : population_size * population_sampling_multiplier
+    initial_size =  population_size + mating_size 
     population, start_epoch = isnothing(load_state_callback) ? (generate_population(initial_size, toolbox), 1) : load_state_callback()
-    if start_epoch <= 1 & !isnothing(toolbox.operators_)
-        population = population[equation_characterization_default(population, population_size + mating_size)]
+    if start_epoch <= 1 & !isnothing(toolbox.operators_) & population_sampling_multiplier>1 
+        temp_pop = generate_population(initial_size*population_sampling_multiplier, toolbox) 
+        population = population[equation_characterization_default(temp_pop, population_size + mating_size)]
     end
 
     next_gen = Vector{eltype(population)}(undef, mating_size)
