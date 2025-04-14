@@ -268,8 +268,6 @@ const GENE_COMMON_PROBS = Dict{String,AbstractFloat}(
     "reverse_insertion" => 0.2,
     "reverse_insertion_tail" => 0.2,
     "gene_transposition" => 0.0,
-    "gene_averaging_prob" => 1.0,
-    "gene_averaging_rate" => 0.05,
     "mating_size" => 0.7)
 
 const SymbolDict = OrderedDict{Int8,Int8}
@@ -698,7 +696,7 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, x_trai
     file_logger_callback::Union{Function,Nothing}=nothing,
     save_state_callback::Union{Function,Nothing}=nothing,
     load_state_callback::Union{Function,Nothing}=nothing, 
-    population_sampling_multiplier::Int=100
+    population_sampling_multiplier::Int=1
 )
 
     correction_callback = if !isnothing(target_dimension)
