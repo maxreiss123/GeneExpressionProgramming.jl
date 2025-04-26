@@ -80,6 +80,7 @@ using Printf
 using Base.Threads: SpinLock
 using .Threads
 using Distributions
+using LRUCache
 
 export runGep
 
@@ -240,7 +241,7 @@ end
                 else
                     features[coeff_count, p_index] = mean(population[p_index].compiled_function(prob_dataset, population[p_index].toolbox.operators_))
                 end
-            catch 
+            catch
                 features[:, p_index] .= Inf
             end
 
@@ -310,28 +311,29 @@ The evolution process stops when either:
     file_logger_callback::Union{Function,Nothing}=nothing,
     save_state_callback::Union{Function,Nothing}=nothing,
     load_state_callback::Union{Function,Nothing}=nothing,
-    update_surrogate_callback::Union{Function,Nothing}=nothing, 
-    population_sampling_multiplier::Int=1)
+    update_surrogate_callback::Union{Function,Nothing}=nothing,
+    population_sampling_multiplier::Int=1,
+    cache_size::Int=10000)
 
     recorder = HistoryRecorder(epochs, Tuple)
     mating_ = toolbox.gep_probs["mating_size"]
     mating_size = Int(ceil(population_size * mating_))
     mating_size = mating_size % 2 == 0 ? mating_size : mating_size - 1
     fits_representation = Vector{Tuple}(undef, population_size)
-    fit_cache = Dict{String,Tuple}()
+    fit_cache = LRU{String,Tuple{Float64}}(maxsize=cache_size)
     cache_lock = SpinLock()
 
-
-    initial_size =  population_size + mating_size 
+    initial_size = population_size + mating_size
     population, start_epoch = isnothing(load_state_callback) ? (generate_population(initial_size, toolbox), 1) : load_state_callback()
-    if start_epoch <= 1 & !isnothing(toolbox.operators_) & population_sampling_multiplier>1 
-        temp_pop = generate_population(initial_size*population_sampling_multiplier, toolbox) 
+    if start_epoch <= 1 & !isnothing(toolbox.operators_) & population_sampling_multiplier > 1
+        temp_pop = generate_population(initial_size * population_sampling_multiplier, toolbox)
         population = population[equation_characterization_default(temp_pop, population_size + mating_size)]
     end
 
     next_gen = Vector{eltype(population)}(undef, mating_size)
     progBar = Progress(epochs; showspeed=true, desc="Training: ")
     prev_best = (typemax(Float64),)
+
 
     for epoch in start_epoch:epochs
         same = Atomic{Int}(0)
@@ -341,8 +343,8 @@ The evolution process stops when either:
             if isnan(mean(population[i].fitness))
                 key = join(population[i].expression_raw, ",")
                 cache_value = get(fit_cache, key, nothing)
-                if isnothing(cache_value)
 
+                if isnothing(cache_value)
                     population[i].fitness = compute_fitness(population[i], evalStrategy)
                     lock(cache_lock)
                     fit_cache[key] = population[i].fitness
@@ -353,7 +355,6 @@ The evolution process stops when either:
                 end
             end
         end
-
 
         sort!(population, by=x -> mean(x.fitness))
         Threads.@threads for index in eachindex(population[1:population_size])
@@ -367,7 +368,7 @@ The evolution process stops when either:
         end
 
         val_loss = compute_fitness(population[1], evalStrategy; validate=true)
-        record!(recorder, epoch, fits_representation[1], val_loss, fits_representation)
+        record!(recorder, epoch, fits_representation[1], val_loss)
 
 
         ProgressMeter.update!(progBar, epoch, showvalues=[
