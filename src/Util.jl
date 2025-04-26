@@ -263,13 +263,9 @@ const ARITY_LIB_COMMON = Dict{Symbol,Int8}(
 struct OptimizationHistory{T<:Union{AbstractFloat,Tuple}}
     train_loss::Vector{T}
     val_loss::Vector{T}
-    train_mean::Vector{T}
-    train_std::Vector{T}
 
     function OptimizationHistory(epochs::Int, ::Type{T}) where {T<:Union{AbstractFloat,Tuple}}
         return new{T}(
-            Vector{T}(undef, epochs),
-            Vector{T}(undef, epochs),
             Vector{T}(undef, epochs),
             Vector{T}(undef, epochs)
         )
@@ -283,9 +279,7 @@ function Base.iterate(hist::OptimizationHistory, state::Int=1)
     return (
         (
             train_loss=hist.train_loss[state],
-            val_loss=hist.val_loss[state],
-            train_mean=hist.train_mean[state],
-            train_std=hist.train_std[state]
+            val_loss=hist.val_loss[state]
         ),
         state + 1
     )
@@ -298,9 +292,7 @@ Base.size(hist::OptimizationHistory) = (length(hist.train_loss),)
 function Base.getindex(hist::OptimizationHistory, i::Int)
     return (
         train_loss=hist.train_loss[i],
-        val_loss=hist.val_loss[i],
-        train_mean=hist.train_mean[i],
-        train_std=hist.train_std[i]
+        val_loss=hist.val_loss[i]
     )
 end
 
@@ -317,9 +309,7 @@ end
 function get_history_arrays(hist::OptimizationHistory)
     return (
         train_loss=hist.train_loss,
-        val_loss=hist.val_loss,
-        train_mean=hist.train_mean,
-        train_std=hist.train_std
+        val_loss=hist.val_loss
     )
 end
 
@@ -331,7 +321,7 @@ A thread-safe structure for asynchronous recording of optimization history durin
 GEP evolution, using channels for communication between optimization and recording tasks.
 
 # Fields
-- `channel::Channel{Tuple{Int,T,T,Vector{T}}}`: Communication channel for metrics
+- `channel::Channel{Tuple{Int,T,T}}`: Communication channel for metrics
   - Tuple format: (epoch, train_loss, validation_loss, fitness_vector)
 - `task::Task`: Asynchronous task handling the recording process
 - `history::OptimizationHistory{T}`: Storage for optimization metrics
@@ -395,13 +385,13 @@ final_history = recorder.history
 - Channel depth can be adjusted for different recording patterns
 """
 struct HistoryRecorder{T<:Union{AbstractFloat,Tuple}}
-    channel::Channel{Tuple{Int,T,T,Vector{T}}}
+    channel::Channel{Tuple{Int,T,T}}
     task::Task
     history::OptimizationHistory{T}
 
     function HistoryRecorder(epochs::Int, ::Type{T}; buffer_size::Int=32) where {T<:Union{AbstractFloat,Tuple}}
         history = OptimizationHistory(epochs, T)
-        channel = Channel{Tuple{Int,T,T,Vector{T}}}(buffer_size)
+        channel = Channel{Tuple{Int,T,T}}(buffer_size)
         task = @spawn record_history!(channel, history)
         return new{T}(channel, task, history)
     end
@@ -424,15 +414,13 @@ end
 end
 
 @inline function record_history!(
-    channel::Channel{Tuple{Int,T,T,Vector{T}}},
+    channel::Channel{Tuple{Int,T,T}},
     history::OptimizationHistory{T}
 ) where {T<:Union{AbstractFloat,Tuple}}
-    for (epoch, train_loss, val_loss, fit_vector) in channel
+    for (epoch, train_loss, val_loss) in channel
         @inbounds begin
             history.train_loss[epoch] = train_loss
             history.val_loss[epoch] = val_loss
-            history.train_mean[epoch] = tuple_agg(fit_vector, mean)
-            history.train_std[epoch] = tuple_agg(fit_vector, std)
         end
     end
 end
@@ -441,10 +429,9 @@ end
     recorder::HistoryRecorder{T},
     epoch::Int,
     train_loss::T,
-    val_loss::T,
-    fit_vector::Vector{T}
+    val_loss::T
 ) where {T<:Union{AbstractFloat,Tuple}}
-    put!(recorder.channel, (epoch, train_loss, val_loss, fit_vector))
+    put!(recorder.channel, (epoch, train_loss, val_loss))
 end
 
 @inline function close_recorder!(recorder::HistoryRecorder)
