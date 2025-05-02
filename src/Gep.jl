@@ -320,7 +320,7 @@ The evolution process stops when either:
     mating_size = Int(ceil(population_size * mating_))
     mating_size = mating_size % 2 == 0 ? mating_size : mating_size - 1
     fits_representation = Vector{Tuple}(undef, population_size)
-    fit_cache = LRU{String,Tuple{Float64}}(maxsize=cache_size)
+    fit_cache = LRU{String,Tuple}(maxsize=cache_size)
     cache_lock = SpinLock()
 
     initial_size = population_size + mating_size
@@ -332,7 +332,7 @@ The evolution process stops when either:
 
     next_gen = Vector{eltype(population)}(undef, mating_size)
     progBar = Progress(epochs; showspeed=true, desc="Training: ")
-    prev_best = (typemax(Float64),)
+    prev_best = toolbox.fitness_reset[1]
 
 
     for epoch in start_epoch:epochs
