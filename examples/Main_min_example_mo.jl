@@ -26,12 +26,10 @@ regressor = GepRegressor(number_features; number_of_objectives=2)
     try
         if isnan(mean(elem.fitness)) || validate
             y_pred = elem.compiled_function(x_data', regressor.operators_)
-            return (get_loss_function("mse")(y_data, y_pred), length(elem.expression_raw)*0.01)
-        else
-            return elem.fitness
+            elem.fitness = (get_loss_function("mse")(y_data, y_pred), length(elem.expression_raw)*0.01)
         end
     catch e
-        return (typemax(Float64),typemax(Float64))
+        elem.fitness = (typemax(Float64),typemax(Float64))
     end
 end
 

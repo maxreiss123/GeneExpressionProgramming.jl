@@ -149,9 +149,7 @@ inputs = (x1,x2,u1,u2,u3)
         size(a_pred[1]) != size(a[1]) && return (typemax(Float64),)
         
         loss = norm(a_pred .- a)
-        return (loss,)
-    else
-        return (elem.fitness,)
+        elem.fitness = (loss,)
     end
 end
 fit!(regressor, epochs, population_size, loss_new)

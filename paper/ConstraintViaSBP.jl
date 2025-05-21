@@ -89,7 +89,7 @@ function main()
                 @show ("Current case: ", case_name)
                 #gep_params
                 epochs = 1000
-                population_size = 200
+                population_size = 500
 
                 results = DataFrame(Seed=[],
                     Name=String[], NoiseLeve=String[], Fitness=Float64[], Equation=String[], R2_test=Float64[],
@@ -129,13 +129,13 @@ function main()
                     try
                         if isnan(mean(elem.fitness)) || validate
                             y_pred = elem.compiled_function(x_train', regressor.operators_)
-                            return (get_loss_function("mse")(y_train, y_pred),)
+                            elem.fitness = (get_loss_function("mse")(y_train, y_pred),)
                         else
-                            return (elem.fitness, length(elem.expression_raw) * elem.fitness)
+                            elem.fitness = (elem.fitness, length(elem.expression_raw) * elem.fitness)
                             #return (elem.fitness,)
                         end
                     catch e
-                        return (typemax(Float64),typemax(Float64))
+                        elem.fitness = (typemax(Float64),typemax(Float64))
                     end
                 end
 
@@ -143,7 +143,7 @@ function main()
                 #perform the regression by entering epochs, population_size, the feature cols, the target col and the loss function
                 fit!(regressor, epochs, population_size, x_train', y_train;
                     x_test=x_test', y_test=y_test', target_dimension=target_dim,
-                    loss_fun="mse", break_condition=break_condition)
+                    loss_fun="mse", break_condition=break_condition, correction_amount=0.5)
 
                 end_time = (time_ns() - start_time) / 1e9
                 elem = regressor.best_models_[1]
