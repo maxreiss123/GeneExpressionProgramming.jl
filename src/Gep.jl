@@ -118,12 +118,10 @@ Returns the computed fitness value (loss) or crash_value if computation fails
     try
         if isnan(mean(elem.fitness)) || validate
             y_pred = elem.compiled_function(evalArgs.x_data, evalArgs.operators)
-            return (evalArgs.loss_function(evalArgs.y_data, y_pred),)
-        else
-            return elem.fitness
+            elem.fitness = (evalArgs.loss_function(evalArgs.y_data, y_pred),)
         end
     catch e
-        return (evalArgs.crash_value,)
+        elem.fitness = (evalArgs.crash_value,)
     end
 end
 
@@ -342,16 +340,15 @@ The evolution process stops when either:
         Threads.@threads for i in eachindex(population[1:population_size])
             if isnan(mean(population[i].fitness))
                 key = join(population[i].expression_raw, ",")
-                cache_value = get(fit_cache, key, nothing)
-
-                if isnothing(cache_value)
-                    population[i].fitness = compute_fitness(population[i], evalStrategy)
+                cache_value = key in keys(fit_cache)
+                if !(cache_value)
+                    compute_fitness(population[i], evalStrategy)
                     lock(cache_lock)
-                    fit_cache[key] = population[i].fitness
+                        fit_cache[key] = population[i].fitness
                     unlock(cache_lock)
                 else
                     atomic_add!(same, 1)
-                    population[i].fitness = cache_value
+                    population[i].fitness = toolbox.fitness_reset[1]
                 end
             end
         end
