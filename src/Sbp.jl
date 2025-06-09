@@ -84,9 +84,11 @@ export TokenLib, TokenDto, LibEntry, TempComputeTree
 export create_lib, create_compute_tree, propagate_necessary_changes!, calculate_vector_dimension!, flush!, calculate_vector_dimension!, flatten_dependents
 export propagate_necessary_changes!, correct_genes!
 export equal_unit_forward, mul_unit_forward, div_unit_forward, zero_unit_forward, sqr_unit_backward, sqr_unit_forward, arbitrary_unit_forward
-export zero_unit_backward, mul_unit_backward, div_unit_backward, equal_unit_backward  
+export zero_unit_backward, mul_unit_backward, div_unit_backward, equal_unit_backward
 export get_feature_dims_json, get_target_dim_json, retrieve_coeffs_based_on_similarity
-export ZERO_DIM
+export ZERO_DIM, mul_t_unit_backward, mul_t_unit_forward, div_t_unit_backward, div_t_unit_forward
+export contraction_unit_backward, contraction_unit_forward, crossp_unit_backward, crossp_unit_forward, double_contraction_unit_backward, double_contraction_unit_forward
+export symmetric_contraction_backward, symmetric_contraction_forward, arbitrary_unit_backward, tr_unit_backward
 
 @inline function has_inf16(u::Vector{Float16})
     @inbounds for x in u
@@ -95,7 +97,398 @@ export ZERO_DIM
     return false
 end
 
-function equal_unit_forward(u1::Vector{Float16}, u2::Vector{Float16}) 
+@inline function ll_top_up(u1::Vector{Float16}, u2::Vector{Float16}; index_::Int=1, topup::Float16=1)
+    ll = copy(u1)
+    ll[index_] = topup
+    return ll, u2
+end
+
+@inline function rr_top_up(u1::Vector{Float16}, u2::Vector{Float16}; index_::Int=1, topup::Float16=1)
+    rr = copy(u2)
+    rr[index_] = topup
+    return u1, rr
+end
+
+#Array dimensions => [m,n,o,-,-,-,]
+function contraction_unit_forward(u1::Vector{Float16}, u2::Vector{Float16}; index_::Int=1)
+    temp = copy(u1)
+    temp[index_] = u1[index_] + u2[index_] - 2
+    if temp[index_] < 0
+        return EMPTY_DIM
+    end
+    return temp
+end
+
+function contraction_unit_backward(u1::Vector{Float16}, u2::Vector{Float16}, expected_dim::Vector{Float16}; index_::Int=1)
+    expected_order = expected_dim[index_]
+
+    # Simplest case - allready valid 
+    if u1[index_] + u2[index_] - 2 == expected_order
+        return u1, u2
+    end
+
+    #Case expecting a scalar - first two treading scalars; last forces first order tensor
+    if expected_order == 0
+        ll = copy(expected_dim)
+        rr = copy(expected_dim)
+        ll[index_] = expected_order + 1
+        rr[index_] = expected_order + 1
+        return ll, rr
+    end
+
+    #Second_order ⋅ first_order vise versa 
+    if expected_order == 1
+        if u1[index_] == expected_order
+            return rr_top_up(u1, u2; index_=index_, topup=expected_order + 1)
+        elseif u2[index_] == expected_order
+            return ll_top_up(u1, u2; index_=index_, topup=expected_order + 1)
+        elseif u1[index_] == expected_order + 1
+            return rr_top_up(u1, u2; index_=index_, topup=expected_order)
+        elseif u2[index_] == expected_order + 1
+            return ll_top_up(u1, u2; index_=index_, topup=expected_order)
+        else
+            ll = copy(expected_dim)
+            rr = copy(expected_dim)
+            if rand() < 0.5
+                ll[index_] = expected_order
+                rr[index_] = expected_order + 1
+            else
+                ll[index_] = expected_order + 1
+                rr[index_] = expected_order
+            end
+            return ll, rr
+        end
+    end
+
+    #Second_order ⋅ Second_order => remains  Second_order
+    if expected_order == 2
+        if u1[index_] == expected_order
+            return rr_top_up(u1, u2; index_=index_, topup=expected_order)
+        elseif u2[index_] == expected_order
+            return ll_top_up(u1, u2; index_=index_, topup=expected_order)
+        elseif u1[index_] == expected_order + 1
+            return rr_top_up(u1, u2; index_=index_, topup=expected_order - 1)
+        elseif u2[index_] == expected_order + 1
+            return ll_top_up(u1, u2; index_=index_, topup=expected_order - 1)
+        else
+            ll = copy(expected_dim)
+            rr = copy(expected_dim)
+            if rand() < 0.5
+                ll[index_] = expected_order
+                rr[index_] = expected_order
+            elseif rand() < 0.5
+                ll[index_] = expected_order + 1
+                rr[index_] = expected_order - 1
+            else
+                ll[index_] = expected_order - 1
+                rr[index_] = expected_order + 1
+            end
+            return ll, rr
+        end
+    end
+
+    #third order tensor 
+    if expected_order == 3
+        if u1[index_] == expected_order
+            return rr_top_up(u1, u2; index_=index_, topup=expected_order - 1)
+        elseif u2[index_] == expected_order
+            return ll_top_up(u1, u2; index_=index_, topup=expected_order - 1)
+        elseif u1[index_] == expected_order - 1
+            return rr_top_up(u1, u2; index_=index_, topup=expected_order)
+        elseif u2[index_] == expected_order - 1
+            return ll_top_up(u1, u2; index_=index_, topup=expected_order)
+        elseif u1[index_] == expected_order - 2
+            return rr_top_up(u1, u2; index_=index_, topup=expected_order + 1)
+        elseif u2[index_] == expected_order - 2
+            return ll_top_up(u1, u2; index_=index_, topup=expected_order + 1)
+        else
+            ll = copy(expected_dim)
+            rr = copy(expected_dim)
+            if rand() < 0.5
+                ll[index_] = expected_order
+                rr[index_] = expected_order - 1
+            elseif rand() < 0.5
+                ll[index_] = expected_order - 1
+                rr[index_] = expected_order
+            elseif rand() < 0.5
+                ll[index_] = expected_order - 2
+                rr[index_] = expected_order + 1
+            else
+                ll[index_] = expected_order + 1
+                rr[index_] = expected_order - 2
+            end
+            return ll, rr
+        end
+    end
+
+    #Fourth order tensor 
+    if expected_order == 4
+        if u1[index_] == expected_order
+            return rr_top_up(u1, u2; index_=index_, topup=expected_order - 2)
+        elseif u2[index_] == expected_order
+            return ll_top_up(u1, u2; index_=index_, topup=expected_order - 2)
+        elseif u1[index_] == expected_order - 1
+            return rr_top_up(u1, u2; index_=index_, topup=expected_order - 1)
+        elseif u2[index_] == expected_order - 1
+            return ll_top_up(u1, u2; index_=index_, topup=expected_order - 1)
+        elseif u1[index_] == expected_order - 2
+            return rr_top_up(u1, u2; index_=index_, topup=expected_order)
+        elseif u2[index_] == expected_order - 2
+            return ll_top_up(u1, u2; index_=index_, topup=expected_order)
+        else
+            ll = copy(expected_dim)
+            rr = copy(expected_dim)
+            if rand() < 0.5
+                ll[index_] = expected_order
+                rr[index_] = expected_order - 2
+            elseif rand() < 0.5
+                ll[index_] = expected_order - 2
+                rr[index_] = expected_order
+            else
+                ll[index_] = expected_order - 1
+                rr[index_] = expected_order - 1
+            end
+            return ll, rr
+        end
+    end
+end
+
+function double_contraction_unit_forward(u1::Vector{Float16}, u2::Vector{Float16}; index_::Int=1)
+    temp = copy(u1)
+    temp[index_] = u1[index_] + u2[index_] - 4
+    if temp[index_] < 0
+        return EMPTY_DIM
+    end
+    return temp
+end
+
+function double_contraction_unit_backward(u1::Vector{Float16}, u2::Vector{Float16}, expected_dim::Vector{Float16}; index_::Int=1)
+    expected_order = expected_dim[index_]
+
+    # Simplest case - allready valid 
+    if u1[index_] + u2[index_] - 4 == expected_order
+        return u1, u2
+    end
+
+    #Case expecting a scalar -
+    if expected_order == 0
+        if u1[index_] == expected_order + 2
+            return rr_top_up(u1, u2; index_=index_, topup=expected_order + 2)
+        elseif u2[index_] == expected_order + 2
+            return ll_top_up(u1, u2; index_=index_, topup=expected_order + 2)
+        else
+            ll = copy(expected_dim)
+            rr = copy(expected_dim)
+            ll[index_] = expected_order + 2
+            rr[index_] = expected_order + 2
+            return ll, rr
+        end
+    end
+
+    #Third order and second order => 
+    if expected_order == 1
+        if u1[index_] == expected_order + 1
+            return rr_top_up(u1, u2; index_=index_, topup=expected_order + 2)
+        elseif u2[index_] == expected_order + 1
+            return ll_top_up(u1, u2; index_=index_, topup=expected_order + 2)
+        elseif u1[index_] == expected_order + 2
+            return rr_top_up(u1, u2; index_=index_, topup=expected_order + 1)
+        elseif u2[index_] == expected_order + 2
+            return ll_top_up(u1, u2; index_=index_, topup=expected_order + 1)
+        else
+            ll = copy(expected_dim)
+            rr = copy(expected_dim)
+            if rand() < 0.5
+                ll[index_] = expected_order + 1
+                rr[index_] = expected_order + 2
+            else
+                ll[index_] = expected_order + 2
+                rr[index_] = expected_order + 1
+            end
+            return ll, rr
+        end
+    end
+
+    #Second_order ⋅ Second_order => remains  Second_order
+    if expected_order == 2
+        if u1[index_] == expected_order
+            return rr_top_up(u1, u2; index_=index_, topup=expected_order + 2)
+        elseif u2[index_] == expected_order
+            return ll_top_up(u1, u2; index_=index_, topup=expected_order + 2)
+        elseif u1[index_] == expected_order + 1
+            return rr_top_up(u1, u2; index_=index_, topup=expected_order + 1)
+        elseif u2[index_] == expected_order + 1
+            return ll_top_up(u1, u2; index_=index_, topup=expected_order + 1)
+        else
+            ll = copy(expected_dim)
+            rr = copy(expected_dim)
+            if rand() < 0.5
+                ll[index_] = expected_order
+                rr[index_] = expected_order + 2
+            elseif rand() < 0.5
+                ll[index_] = expected_order + 2
+                rr[index_] = expected_order
+            else
+                rand() < 0.5
+                ll[index_] = expected_order + 1
+                rr[index_] = expected_order + 1
+            end
+            return ll, rr
+        end
+    end
+
+    #third order tensor 
+    if expected_order == 3
+        if u1[index_] == expected_order
+            return rr_top_up(u1, u2; index_=index_, topup=expected_order + 1)
+        elseif u2[index_] == expected_order
+            return ll_top_up(u1, u2; index_=index_, topup=expected_order + 1)
+        elseif u1[index_] == expected_order + 1
+            return rr_top_up(u1, u2; index_=index_, topup=expected_order)
+        elseif u2[index_] == expected_order + 1
+            return ll_top_up(u1, u2; index_=index_, topup=expected_order)
+        else
+            ll = copy(expected_dim)
+            rr = copy(expected_dim)
+            if rand() < 0.5
+                ll[index_] = expected_order
+                rr[index_] = expected_order + 1
+            else
+                ll[index_] = expected_order + 1
+                rr[index_] = expected_order
+            end
+            return ll, rr
+        end
+    end
+
+    #Fourth order tensor 
+    if expected_order == 4
+        if u1[index_] == expected_order
+            return rr_top_up(u1, u2; index_=index_, topup=expected_order)
+        elseif u2[index_] == expected_order
+            return ll_top_up(u1, u2; index_=index_, topup=expected_order)
+        else
+            ll = copy(expected_dim)
+            rr = copy(expected_dim)
+            ll[index_] = expected_order
+            rr[index_] = expected_order
+            return ll, rr
+        end
+    end
+end
+
+
+function symmetric_contraction_forward(u1::Vector{Float16}; index_::Int=1)
+    temp = copy(u1)
+    temp[index_] = temp[index_] + 2 - 4
+    if temp[index_] < 0
+        return EMPTY_DIM
+    end
+    return temp
+end
+
+function symmetric_contraction_backward(u1::Vector{Float16}; index_::Int=1)
+    temp = copy(u1)
+    temp[index_] = temp[index_] - 2 + 4
+    return temp
+end
+
+function arbitrary_unit_forward(u1::Vector{Float16}, u2::Vector{Float16})
+    return maximum([u1, u2])
+end
+
+function arbitrary_unit_backward(u1::Vector{Float16}, u2::Vector{Float16}, expected_dim::Vector{Float16}; index_::Int=1)
+    if u1[index_] > u2[index_]
+        return expected_dim, u2
+    elseif u1[index_] < u2[index_]
+        return u1, expected_dim
+    else
+        return expected_dim, expected_dim
+    end
+end
+
+
+function mul_t_unit_forward(u1::Vector{Float16}, u2::Vector{Float16}; index_::Int=1)
+    if u1[index_] == 0 || u2[index_] == 0
+        return maximum([u1, u2])
+    else
+        return EMPTY_DIM
+    end
+
+end
+
+
+function mul_t_unit_backward(u1::Vector{Float16}, u2::Vector{Float16}, expected_dim::Vector{Float16}; index_::Int=1)
+    if u1[index_] == 0
+        return u1, expected_dim
+    elseif u2[index_] == 0
+        return expected_dim, u2
+    else
+        if rand() < 0.5
+            return expected_dim, ZERO_DIM
+        else
+            return ZERO_DIM, expected_dim
+        end
+    end
+end
+
+function div_t_unit_forward(u1::Vector{Float16}, u2::Vector{Float16}; index_::Int=1)
+    if u2[index_] == 0
+        return maximum([u1, u2])
+    else
+        return EMPTY_DIM
+    end
+
+end
+
+
+function div_t_unit_backward(u1::Vector{Float16}, u2::Vector{Float16}, expected_dim::Vector{Float16}; index_::Int=1)
+    return expected_dim, ZERO_DIM
+end
+
+
+function crossp_unit_forward(u1::Vector{Float16}, u2::Vector{Float16}; index_::Int=1)
+    if u1[index_] == u2[index_] && u1[index_] == 1
+        return u1
+    else
+        return EMPTY_DIM
+    end
+end
+
+#only copy when we change!
+function crossp_unit_backward(u1::Vector{Float16}, u2::Vector{Float16}, expected_dim::Vector{Float16}; index_::Int=1)
+    if expected_dim[index_] > 1
+        return EMPTY_DIM
+    elseif u1[index_] == 1 && u2[index_] == 1
+        return u1, u2
+    elseif u1[index_] == 1
+        temp = copy(u2)
+        temp[index_] = 1
+        return u1, temp
+    elseif u2[index_] == 1
+        temp = copy(u1)
+        temp[index_] = 1
+        return temp, u2
+    else
+        temp = copy(u1)
+        temp[index_] = 1
+        return temp, temp
+    end
+end
+
+function tr_unit_backward(u1::Vector{Float16}; index_::Int=1)
+    if u1[index_] > 0
+        return EMPTY_DIM
+    end
+    temp = copy(u1)
+    temp[1] = 2
+    return temp
+end
+
+
+
+#Physical dimensions => 
+function equal_unit_forward(u1::Vector{Float16}, u2::Vector{Float16})
     @inbounds return all(u1 .== u2) ? u1 : EMPTY_DIM
 end
 
@@ -108,11 +501,15 @@ function arbitrary_unit_forward(u1::Vector{Float16})
     return u1
 end
 
+function arbitrary_unit_backward(u1::Vector{Float16})
+    return u1
+end
+
 function mul_unit_forward(u1::Vector{Float16}, u2::Vector{Float16})
     return u1 .+ u2
 end
 
-function mul_unit_backward(u1::Vector{Float16}, u2::Vector{Float16}, expected_dim::Vector{Float16}) 
+function mul_unit_backward(u1::Vector{Float16}, u2::Vector{Float16}, expected_dim::Vector{Float16})
     if has_inf16(u2) && has_inf16(u1)
         if 0.5 < rand()
             lr = expected_dim
@@ -140,12 +537,12 @@ function mul_unit_backward(u1::Vector{Float16}, u2::Vector{Float16}, expected_di
 end
 
 
-function div_unit_forward(u1::Vector{Float16}, u2::Vector{Float16}) 
+function div_unit_forward(u1::Vector{Float16}, u2::Vector{Float16})
     return u1 .- u2
 end
 
 
-function div_unit_backward(u1::Vector{Float16}, u2::Vector{Float16}, expected_dim::Vector{Float16}) 
+function div_unit_backward(u1::Vector{Float16}, u2::Vector{Float16}, expected_dim::Vector{Float16})
     if has_inf16(u2) && has_inf16(u1)
         if 0.5 < rand()
             lr = expected_dim
@@ -177,15 +574,18 @@ function zero_unit_forward(u1::Vector{Float16})
     @inbounds return all(u1 .== 0) ? ZERO_DIM .* u1 : EMPTY_DIM
 end
 
-function zero_unit_backward(u1::Vector{Float16}) 
+function zero_unit_backward(u1::Vector{Float16})
+    if any(u1 .!= 0)
+        return EMPTY_DIM
+    end
     return ZERO_DIM
 end
 
-function sqr_unit_forward(u1::Vector{Float16}) 
+function sqr_unit_forward(u1::Vector{Float16})
     return 2.0 .* u1
 end
 
-function sqr_unit_backward(u1::Vector{Float16}) 
+function sqr_unit_backward(u1::Vector{Float16})
     return 0.5 .* u1
 end
 
@@ -426,7 +826,8 @@ end
                 entry.homogene = true
             end
         catch e
-            @warn "Issue in Lib. could not apply binary symbol [append-method]: $e"
+            operation = get_physical_operation(entry.tokenLib, item)
+            @warn "Issue in Lib. could not apply binary symbol [append-method] - $operation : $e, $(catch_backtrace()))" 
             entry.homogene = false
         end
     end
@@ -508,6 +909,7 @@ function create_lib(tokenLib::TokenLib, features::Vector{Int8},
     end
 
     organized_lib = reorganize_lib(lib)
+    sort!(collect(keys(organized_lib)), by=key -> key[2])
     return organized_lib
 end
 
@@ -730,7 +1132,7 @@ mutable struct TempComputeTree
             vector_dimension,
             tokenDto,
             length(depend_on),
-            -1,true)
+            -1, true)
     end
 end
 
@@ -752,7 +1154,7 @@ function flush!(tree::TempComputeTree)
 end
 
 function calculate_vector_dimension!(tree::TempComputeTree)
-    !tree.modified && return tree.vector_dimension
+    #!tree.modified && return tree.vector_dimension
     tdto = tree.tokenDto
     tokenLib = tdto.tokenLib
     point_operations = tdto.point_operations
@@ -761,13 +1163,12 @@ function calculate_vector_dimension!(tree::TempComputeTree)
     dims = map(elem -> elem isa TempComputeTree ? calculate_vector_dimension!(elem) : get_physical_dimension(tokenLib, elem), tree.depend_on)
     tree.vector_dimension = function_op(dims...)
 
-
     #needs to be revised
-    if length(dims) == 2 && has_inf16(tree.vector_dimension)
-        tree.symbol = rand(point_operations)
-        function_op = tokenLib.physical_operation_dict[][tree.symbol]
-        tree.vector_dimension = function_op(dims...)
-    end
+    #if length(dims) == 2 && has_inf16(tree.vector_dimension)
+    #    tree.symbol = rand(point_operations)
+    #    function_op = tokenLib.physical_operation_dict[][tree.symbol]
+    #    tree.vector_dimension = function_op(dims...)
+    #end
     tree.modified = false
     return tree.vector_dimension
 end
@@ -782,7 +1183,7 @@ end
 function check_crit_up!(len_rest::Int, expected_dim::Vector{Float16}, tree::TempComputeTree)
     @inbounds for elem in len_rest:-1:SMALLEST_TREE_SEGMENT
         if haskey(tree.tokenDto.lib[], (expected_dim, elem))
-            tree.exchange_len=elem
+            tree.exchange_len = elem
             return true
         end
     end
@@ -860,21 +1261,21 @@ end
 See also: [`TempComputeTree`](@ref)
 """
 function enforce_changes!(tree::TempComputeTree, expected_dim::Vector{Float16}; flexible::Bool=true)
-    extraction_len = tree.exchange_len > -1 ? tree.exchange_len : tree.depend_on_total_number+1
-        exchange = retrieve_exchange_from_lib(tree,
-            expected_dim,
-            extraction_len,
-            flexible)
-        isnothing(exchange) && return false
-        exchange = reverse(exchange)
-        new_tree = create_compute_tree(exchange, tree.tokenDto)
-        if new_tree isa TempComputeTree
-            tree.symbol = new_tree.symbol
-            tree.depend_on = new_tree.depend_on
-            tree.modified = true
-            calculate_vector_dimension!(tree)
-        end
-        return calculate_distance(tree.vector_dimension, expected_dim) < F16_LOWER_BOUND
+    extraction_len = tree.exchange_len > -1 ? tree.exchange_len : tree.depend_on_total_number + 1
+    exchange = retrieve_exchange_from_lib(tree,
+        expected_dim,
+        extraction_len,
+        flexible)
+    isnothing(exchange) && return false
+    exchange = reverse(exchange)
+    new_tree = create_compute_tree(exchange, tree.tokenDto)
+    if new_tree isa TempComputeTree
+        tree.symbol = new_tree.symbol
+        tree.depend_on = new_tree.depend_on
+        tree.modified = true
+        calculate_vector_dimension!(tree)
+    end
+    return calculate_distance(tree.vector_dimension, expected_dim) < F16_LOWER_BOUND
 end
 
 
@@ -892,8 +1293,14 @@ function retrieve_exchange_from_lib(tree::TempComputeTree,
     end
 end
 
+
 function calculate_distance(k1::Vector{Float16}, k2::Vector{Float16})
-    return sqrt(sum((k1 .- k2) .^ 2))
+    sum_sq = 0.0f0
+    @inbounds for i in eachindex(k1, k2)
+        diff = k1[i] - k2[i]
+        sum_sq += diff * diff
+    end
+    return sqrt(sum_sq)
 end
 
 
@@ -905,22 +1312,47 @@ function find_closest(distance::Vector{Float16},
 
     exact_key = (distance, expression_len)
     haskey(lib, exact_key) && return rand(lib[exact_key])
-    matching_length_keys = filter(key -> key[2] == expression_len, collect(keys(lib)))
 
-    if !isempty(matching_length_keys)
-        _, closest_key = findmin(key -> calculate_distance(distance, key[1]), matching_length_keys)
-        return rand(lib[matching_length_keys[closest_key]])
-    end
-
-    if flexible
-        all_keys = sort!(collect(keys(lib)), by=key -> abs(key[2] - expression_len))
-        for key in all_keys
-            if min_len <= key[2] <= expression_len
-                sim = calculate_darityistance(distance, key[1])
-                sim < F16_LOWER_BOUND && return rand(lib[key])
+    if !flexible
+        matching_keys = Tuple{Vector{Float16},Int8}[]
+        for key in keys(lib)
+            if key[2] == expression_len
+                push!(matching_keys, key)
             end
         end
+
+        if !isempty(matching_keys)
+            min_dist = typemax(Float16)
+            closest_key = first(matching_keys)
+
+            for key in matching_keys
+                dist = calculate_distance(distance, key[1])
+                if dist < min_dist
+                    min_dist = dist
+                    closest_key = key
+                end
+            end
+
+            return rand(lib[closest_key])
+        end
+    else
+        viable_keys = Tuple{Vector{Float16},Int8,Float16}[]
+
+        for key in keys(lib)
+            if min_len <= key[2] <= expression_len
+                dist = calculate_distance(distance, key[1])
+                if dist < F16_LOWER_BOUND
+                    push!(viable_keys, (key[1], key[2], dist))
+                end
+            end
+        end
+
+        if !isempty(viable_keys)
+            sort!(viable_keys, by=x -> x[3])
+            return rand(lib[(viable_keys[1][1], viable_keys[1][2])])
+        end
     end
+
     return nothing
 end
 
@@ -1015,11 +1447,11 @@ function propagate_necessary_changes!(
         return false
     end
 
-    if !has_inf16(tree.vector_dimension) && isapprox(tree.vector_dimension, expected_dim, atol=F16_LOWER_BOUND) 
+    if !has_inf16(tree.vector_dimension) && isapprox(tree.vector_dimension, expected_dim, atol=F16_LOWER_BOUND)
         return true
     end
 
-    if check_crit_up!(tree.depend_on_total_number+1, expected_dim, tree) && distance_to_change <= 0 && rand() > 0.05
+    if check_crit_up!(tree.depend_on_total_number + 1, expected_dim, tree) && distance_to_change <= 0 && rand() > 0.05
         return enforce_changes!(tree, expected_dim)
     end
 
@@ -1042,6 +1474,9 @@ function handle_binary_operation(
     residuals = calculate_contribution(tree, expected_dim)
     if isempty(residuals[1]) || isempty(residuals[2])
         return true
+
+    elseif has_inf16(residuals[1]) && has_inf16(residuals[2])
+        return enforce_changes!(tree, expected_dim)
     end
 
     ret_val = true
@@ -1063,7 +1498,10 @@ function handle_unary_operation(
     if tree.depend_on[1] isa TempComputeTree && tree.symbol in keys(tree.tokenDto.inverse_operation)
         inverse_op = tree.tokenDto.inverse_operation[tree.symbol]
         expected_dim_new = inverse_op(tree.vector_dimension)
-        return propagate_necessary_changes!(tree.depend_on[1], convert.(Float16,expected_dim_new), distance_to_change - 1)
+        if has_inf16(expected_dim_new)
+            return enforce_changes!(tree, expected_dim; flexible=false)
+        end
+        return propagate_necessary_changes!(tree.depend_on[1], convert.(Float16, expected_dim_new), distance_to_change - 1)
     else
         return enforce_changes!(tree, expected_dim)
     end
@@ -1221,12 +1659,12 @@ See also: [`TempComputeTree`](@ref), [`SBPUtils.propagate_necessary_changes!`](@
     tree = create_compute_tree(expression, token_dto, true)
     for _ in 1:cycles
         try
-            if propagate_necessary_changes!(tree, target_dimension, gene_count-1)
+            if propagate_necessary_changes!(tree, target_dimension, gene_count - 1)
                 break
             end
             calculate_vector_dimension!(tree)
-        catch 
-            tree = nothing 
+        catch
+            tree = nothing
             return Inf16, false
         end
     end

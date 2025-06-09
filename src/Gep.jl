@@ -126,7 +126,7 @@ Returns the computed fitness value (loss) or crash_value if computation fails
 end
 
 @inline function compute_fitness(elem::Chromosome, evalArgs::GenericRegressionStrategy; validate::Bool=false)
-    return evalArgs.loss_function(elem, validate)
+    evalArgs.loss_function(elem, validate)
 end
 
 
@@ -364,7 +364,8 @@ The evolution process stops when either:
             prev_best = fits_representation[1]
         end
 
-        val_loss = compute_fitness(population[1], evalStrategy; validate=true)
+        compute_fitness(population[1], evalStrategy; validate=true)
+        val_loss = population[1].fitness
         record!(recorder, epoch, fits_representation[1], val_loss)
 
 
