@@ -249,25 +249,29 @@ Dictionary containing default probabilities and parameters for genetic algorithm
 - `fusion_prob`: Probability of general fusion (0.0)
 - `fusion_rate`: Rate of general fusion (0.0)
 - `inversion_prob`: Probability of inversion (0.1)
+- `gene_averaging_prob`: Probability for a chromosome to be considered for averaging (1.0)
+- `gene_averaging_rate`: Rate of positions in the chromosome for beeing averaged
 - `mating_size`: Relative size of mating pool (0.5)
 
 These values can be adjusted to fine-tune the genetic algorithm's behavior.
 """
 const GENE_COMMON_PROBS = Dict{String,AbstractFloat}(
-    "one_point_cross_over_prob" => 0.4,
-    "two_point_cross_over_prob" => 0.3,
+    "one_point_cross_over_prob" => 0.5,
+    "two_point_cross_over_prob" => 0.4,
     "mutation_prob" => 1.0,
-    "mutation_rate" => 0.05,
+    "mutation_rate" => 0.1,
     "dominant_fusion_prob" => 0.0,
     "dominant_fusion_rate" => 0.1,
     "rezessiv_fusion_prob" => 0.0,
     "rezessiv_fusion_rate" => 0.1,
     "fusion_prob" => 0.0,
     "fusion_rate" => 0.0,
-    "inversion_prob" => 0.1,
+    "inversion_prob" => 0.0,
     "reverse_insertion" => 0.1,
-    "reverse_insertion_tail" => 0.1,
+    "reverse_insertion_tail" => 0.0,
     "gene_transposition" => 0.0,
+    "gene_averaging_prob" => 1.0,
+    "gene_averaging_rate" => 0.1,
     "mating_size" => 0.7)
 
 const SymbolDict = OrderedDict{Int8,Int8}
