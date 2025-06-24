@@ -198,3 +198,4 @@ Feel free to utilize it for your research, it would be nice __citing us__! Our [
 - [ ] constant node needs to be fixed
 - [ ] Clean Package Structure
 - [ ] LLM-interface
+- [ ] Python-interface
