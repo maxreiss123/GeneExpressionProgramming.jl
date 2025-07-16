@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Basic Regression · GeneExpressionProgramming.jl</title><meta name="title" content="Basic Regression · GeneExpressionProgramming.jl"/><meta property="og:title" content="Basic Regression · GeneExpressionProgramming.jl"/><meta property="twitter:title" content="Basic Regression · GeneExpressionProgramming.jl"/><meta name="description" content="Documentation for GeneExpressionProgramming.jl."/><meta property="og:description" content="Documentation for GeneExpressionProgramming.jl."/><meta property="twitter:description" content="Documentation for GeneExpressionProgramming.jl."/><meta property="og:url" content="https://maxreiss123.github.io/GeneExpressionProgramming.jl/examples/basic-regression.html"/><meta property="twitter:url" content="https://maxreiss123.github.io/GeneExpressionProgramming.jl/examples/basic-regression.html"/><link rel="canonical" href="https://maxreiss123.github.io/GeneExpressionProgramming.jl/examples/basic-regression.html"/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../index.html">GeneExpressionProgramming.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../index.html">Home</a></li><li><input class="collapse-toggle" id="menuitem-2" type="checkbox"/><label class="tocitem" for="menuitem-2"><span class="docs-label">User Guide</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../installation.html">Installation</a></li><li><a class="tocitem" href="../getting-started.html">Getting Started</a></li><li><a class="tocitem" href="../core-concepts.html">Core Concepts</a></li></ul></li><li><input class="collapse-toggle" id="menuitem-3" type="checkbox" checked/><label class="tocitem" for="menuitem-3"><span class="docs-label">Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li class="is-active"><a class="tocitem" href="basic-regression.html">Basic Regression</a><ul class="internal"><li><a class="tocitem" href="#Problem-Setup"><span>Problem Setup</span></a></li><li><a class="tocitem" href="#Complete-Example-Code"><span>Complete Example Code</span></a></li><li><a class="tocitem" href="#Detailed-Code-Explanation"><span>Detailed Code Explanation</span></a></li><li><a class="tocitem" href="#Visualization-and-Analysis"><span>Visualization and Analysis</span></a></li><li><a class="tocitem" href="#Parameter-Sensitivity"><span>Parameter Sensitivity</span></a></li><li><a class="tocitem" href="#Common-Issues-and-Solutions"><span>Common Issues and Solutions</span></a></li><li><a class="tocitem" href="#Advanced-Variations"><span>Advanced Variations</span></a></li><li><a class="tocitem" href="#Best-Practices-Summary"><span>Best Practices Summary</span></a></li></ul></li><li><a class="tocitem" href="multi-objective.html">Multi-Objective Optimization</a></li><li><a class="tocitem" href="physical-dimensions.html">Physical Dimensionality</a></li><li><a class="tocitem" href="tensor-regression.html">Tensor Regression</a></li></ul></li><li><input class="collapse-toggle" id="menuitem-4" type="checkbox"/><label class="tocitem" for="menuitem-4"><span class="docs-label">Reference</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../api-reference.html">API Reference</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Examples</a></li><li class="is-active"><a href="basic-regression.html">Basic Regression</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href="basic-regression.html">Basic Regression</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/maxreiss123/GeneExpressionProgramming.jl/blob/master/docs/src/examples/basic-regression.md#" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Basic-Symbolic-Regression"><a class="docs-heading-anchor" href="#Basic-Symbolic-Regression">Basic Symbolic Regression</a><a id="Basic-Symbolic-Regression-1"></a><a class="docs-heading-anchor-permalink" href="#Basic-Symbolic-Regression" title="Permalink"></a></h1><p>This example demonstrates the fundamental usage of GeneExpressionProgramming.jl for symbolic regression tasks. We&#39;ll walk through a complete workflow from data generation to result analysis, providing detailed explanations and best practices along the way.</p><h2 id="Problem-Setup"><a class="docs-heading-anchor" href="#Problem-Setup">Problem Setup</a><a id="Problem-Setup-1"></a><a class="docs-heading-anchor-permalink" href="#Problem-Setup" title="Permalink"></a></h2><p>For this example, we&#39;ll work with a synthetic dataset where we know the true underlying function. This allows us to evaluate how well the algorithm can rediscover the known mathematical relationship. The target function we&#39;ll use is:</p><pre><code class="nohighlight hljs">f(x₁, x₂) = x₁² + x₁ × x₂ - 2 × x₁ × x₂</code></pre><p>This function combines polynomial terms and demonstrates the algorithm&#39;s ability to discover both quadratic relationships and interaction terms between variables.</p><h2 id="Complete-Example-Code"><a class="docs-heading-anchor" href="#Complete-Example-Code">Complete Example Code</a><a id="Complete-Example-Code-1"></a><a class="docs-heading-anchor-permalink" href="#Complete-Example-Code" title="Permalink"></a></h2><pre><code class="language-julia hljs">using GeneExpressionProgramming
+using Random
+using Statistics
+using Plots
+
+# Set random seed for reproducibility
+Random.seed!(42)
+
+println(&quot;=== Basic Symbolic Regression Example ===&quot;)
+println(&quot;Target function: f(x₁, x₂) = x₁² + x₁×x₂ - 2×x₁×x₂&quot;)
+println()
+
+# Problem parameters
+number_features = 2
+n_samples = 200
+noise_level = 0.05
+
+# Generate training data
+println(&quot;Generating training data...&quot;)
+x_train = randn(Float64, n_samples, number_features)
+y_train = @. x_train[:,1]^2 + x_train[:,1] * x_train[:,2] - 2 * x_train[:,1] * x_train[:,2]
+
+# Add noise to make the problem more realistic
+y_train += noise_level * randn(n_samples)
+
+# Generate separate test data
+n_test = 50
+x_test = randn(Float64, n_test, number_features)
+y_test = @. x_test[:,1]^2 + x_test[:,1] * x_test[:,2] - 2 * x_test[:,1] * x_test[:,2]
+y_test += noise_level * randn(n_test)
+
+println(&quot;Training samples: $n_samples&quot;)
+println(&quot;Test samples: $n_test&quot;)
+println(&quot;Noise level: $noise_level&quot;)
+println()
+
+# Evolution parameters
+epochs = 1000
+population_size = 1000
+
+println(&quot;Evolution parameters:&quot;)
+println(&quot;  Epochs: $epochs&quot;)
+println(&quot;  Population size: $population_size&quot;)
+println()
+
+# Create and configure the regressor
+regressor = GepRegressor(number_features)
+
+println(&quot;Starting evolution...&quot;)
+start_time = time()
+
+# Train the model
+fit!(regressor, epochs, population_size, x_train&#39;, y_train; loss_fun=&quot;mse&quot;)
+
+training_time = time() - start_time
+println(&quot;Training completed in $(round(training_time, digits=2)) seconds&quot;)
+println()
+
+# Make predictions
+train_predictions = regressor(x_train&#39;)
+test_predictions = regressor(x_test&#39;)
+
+# Calculate performance metrics
+function calculate_metrics(y_true, y_pred)
+    mse = mean((y_true .- y_pred).^2)
+    mae = mean(abs.(y_true .- y_pred))
+    rmse = sqrt(mse)
+    
+    # R² score
+    ss_res = sum((y_true .- y_pred).^2)
+    ss_tot = sum((y_true .- mean(y_true)).^2)
+    r2 = 1 - ss_res / ss_tot
+    
+    return (mse=mse, mae=mae, rmse=rmse, r2=r2)
+end
+
+train_metrics = calculate_metrics(y_train, train_predictions)
+test_metrics = calculate_metrics(y_test, test_predictions)
+
+# Display results
+println(&quot;=== Results ===&quot;)
+println(&quot;Best evolved expression:&quot;)
+println(&quot;  &quot;, regressor.best_models_[1].compiled_function)
+println()
+
+println(&quot;Training Performance:&quot;)
+println(&quot;  MSE:  $(round(train_metrics.mse, digits=6))&quot;)
+println(&quot;  MAE:  $(round(train_metrics.mae, digits=6))&quot;)
+println(&quot;  RMSE: $(round(train_metrics.rmse, digits=6))&quot;)
+println(&quot;  R²:   $(round(train_metrics.r2, digits=6))&quot;)
+println()
+
+println(&quot;Test Performance:&quot;)
+println(&quot;  MSE:  $(round(test_metrics.mse, digits=6))&quot;)
+println(&quot;  MAE:  $(round(test_metrics.mae, digits=6))&quot;)
+println(&quot;  RMSE: $(round(test_metrics.rmse, digits=6))&quot;)
+println(&quot;  R²:   $(round(test_metrics.r2, digits=6))&quot;)
+println()
+
+# Fitness evolution plot
+if hasfield(typeof(regressor), :fitness_history_) &amp;&amp; 
+   !isnothing(regressor.fitness_history_) &amp;&amp; 
+   hasfield(typeof(regressor.fitness_history_), :train_loss)
+    
+    fitness_history = regressor.fitness_history_.train_loss
+    
+    p1 = plot(1:length(fitness_history), fitness_history,
+              xlabel=&quot;Generation&quot;,
+              ylabel=&quot;Best Fitness (MSE)&quot;,
+              title=&quot;Evolution Progress&quot;,
+              legend=false,
+              linewidth=2,
+              color=:blue)
+    
+    # Log scale for better visualization
+    p2 = plot(1:length(fitness_history), fitness_history,
+              xlabel=&quot;Generation&quot;,
+              ylabel=&quot;Best Fitness (MSE)&quot;,
+              title=&quot;Evolution Progress (Log Scale)&quot;,
+              legend=false,
+              linewidth=2,
+              color=:blue,
+              yscale=:log10)
+    
+    plot(p1, p2, layout=(1,2), size=(800, 300))
+    savefig(&quot;fitness_evolution.png&quot;)
+    println(&quot;Fitness evolution plot saved as &#39;fitness_evolution.png&#39;&quot;)
+end
+
+# Prediction accuracy plots
+p3 = scatter(y_train, train_predictions,
+             xlabel=&quot;Actual Values&quot;,
+             ylabel=&quot;Predicted Values&quot;,
+             title=&quot;Training Set: Actual vs Predicted&quot;,
+             alpha=0.6,
+             color=:blue,
+             label=&quot;Training Data&quot;)
+
+# Add perfect prediction line
+min_val = min(minimum(y_train), minimum(train_predictions))
+max_val = max(maximum(y_train), maximum(train_predictions))
+plot!(p3, [min_val, max_val], [min_val, max_val],
+      color=:red, linestyle=:dash, linewidth=2, label=&quot;Perfect Prediction&quot;)
+
+p4 = scatter(y_test, test_predictions,
+             xlabel=&quot;Actual Values&quot;,
+             ylabel=&quot;Predicted Values&quot;,
+             title=&quot;Test Set: Actual vs Predicted&quot;,
+             alpha=0.6,
+             color=:green,
+             label=&quot;Test Data&quot;)
+
+plot!(p4, [min_val, max_val], [min_val, max_val],
+      color=:red, linestyle=:dash, linewidth=2, label=&quot;Perfect Prediction&quot;)
+
+plot(p3, p4, layout=(1,2), size=(800, 300))
+savefig(&quot;prediction_accuracy.png&quot;)
+println(&quot;Prediction accuracy plot saved as &#39;prediction_accuracy.png&#39;&quot;)
+
+# Residual analysis
+train_residuals = y_train .- train_predictions
+test_residuals = y_test .- test_predictions
+
+p5 = scatter(train_predictions, train_residuals,
+             xlabel=&quot;Predicted Values&quot;,
+             ylabel=&quot;Residuals&quot;,
+             title=&quot;Training Residuals&quot;,
+             alpha=0.6,
+             color=:blue,
+             label=&quot;Training&quot;)
+hline!(p5, [0], color=:red, linestyle=:dash, linewidth=2, label=&quot;Zero Line&quot;)
+
+p6 = scatter(test_predictions, test_residuals,
+             xlabel=&quot;Predicted Values&quot;,
+             ylabel=&quot;Residuals&quot;,
+             title=&quot;Test Residuals&quot;,
+             alpha=0.6,
+             color=:green,
+             label=&quot;Test&quot;)
+hline!(p6, [0], color=:red, linestyle=:dash, linewidth=2, label=&quot;Zero Line&quot;)
+
+plot(p5, p6, layout=(1,2), size=(800, 300))
+savefig(&quot;residual_analysis.png&quot;)
+println(&quot;Residual analysis plot saved as &#39;residual_analysis.png&#39;&quot;)
+
+println()
+println(&quot;=== Analysis Complete ===&quot;)</code></pre><h2 id="Detailed-Code-Explanation"><a class="docs-heading-anchor" href="#Detailed-Code-Explanation">Detailed Code Explanation</a><a id="Detailed-Code-Explanation-1"></a><a class="docs-heading-anchor-permalink" href="#Detailed-Code-Explanation" title="Permalink"></a></h2><h3 id="Data-Generation"><a class="docs-heading-anchor" href="#Data-Generation">Data Generation</a><a id="Data-Generation-1"></a><a class="docs-heading-anchor-permalink" href="#Data-Generation" title="Permalink"></a></h3><p>The example begins by generating synthetic data with a known mathematical relationship. This approach allows us to evaluate the algorithm&#39;s performance objectively since we know the ground truth.</p><pre><code class="language-julia hljs">x_train = randn(Float64, n_samples, number_features)
+y_train = @. x_train[:,1]^2 + x_train[:,1] * x_train[:,2] - 2 * x_train[:,1] * x_train[:,2]
+y_train += noise_level * randn(n_samples)</code></pre><p>The input features are drawn from a standard normal distribution, which provides a good range of values for testing the algorithm. The target function combines:</p><ul><li>A quadratic term: <code>x₁²</code></li><li>An interaction term: <code>x₁ × x₂</code></li><li>A scaled interaction term: <code>-2 × x₁ × x₂</code></li></ul><p>Adding noise makes the problem more realistic and tests the algorithm&#39;s robustness to measurement errors.</p><h3 id="Regressor-Configuration"><a class="docs-heading-anchor" href="#Regressor-Configuration">Regressor Configuration</a><a id="Regressor-Configuration-1"></a><a class="docs-heading-anchor-permalink" href="#Regressor-Configuration" title="Permalink"></a></h3><pre><code class="language-julia hljs">regressor = GepRegressor(number_features)</code></pre><p>The <code>GepRegressor</code> is initialized with the number of input features. By default, it uses sensible parameter values that work well for most problems:</p><ul><li>Population size: 1000</li><li>Gene count: 2</li><li>Head length: 7</li><li>Function set: Basic arithmetic operations (+, -, *, /)</li></ul><h3 id="Training-Process"><a class="docs-heading-anchor" href="#Training-Process">Training Process</a><a id="Training-Process-1"></a><a class="docs-heading-anchor-permalink" href="#Training-Process" title="Permalink"></a></h3><pre><code class="language-julia hljs">fit!(regressor, epochs, population_size, x_train&#39;, y_train; loss_fun=&quot;mse&quot;)</code></pre><p>The training process uses the <code>fit!</code> function with:</p><ul><li><strong>epochs</strong>: Number of generations for evolution</li><li><strong>population_size</strong>: Number of individuals in each generation</li><li><strong>x_train&#39;</strong>: Transposed feature matrix (features as rows)</li><li><strong>y_train</strong>: Target values</li><li><strong>loss_fun</strong>: Loss function (&quot;mse&quot; for mean squared error)</li></ul><h3 id="Performance-Evaluation"><a class="docs-heading-anchor" href="#Performance-Evaluation">Performance Evaluation</a><a id="Performance-Evaluation-1"></a><a class="docs-heading-anchor-permalink" href="#Performance-Evaluation" title="Permalink"></a></h3><p>The example includes comprehensive performance evaluation:</p><pre><code class="language-julia hljs">function calculate_metrics(y_true, y_pred)
+    mse = mean((y_true .- y_pred).^2)
+    mae = mean(abs.(y_true .- y_pred))
+    rmse = sqrt(mse)
+    
+    ss_res = sum((y_true .- y_pred).^2)
+    ss_tot = sum((y_true .- mean(y_true)).^2)
+    r2 = 1 - ss_res / ss_tot
+    
+    return (mse=mse, mae=mae, rmse=rmse, r2=r2)
+end</code></pre><p>This function calculates multiple metrics:</p><ul><li><strong>MSE</strong>: Mean Squared Error - penalizes large errors more heavily</li><li><strong>MAE</strong>: Mean Absolute Error - robust to outliers</li><li><strong>RMSE</strong>: Root Mean Squared Error - in the same units as the target</li><li><strong>R²</strong>: Coefficient of determination - proportion of variance explained</li></ul><h2 id="Visualization-and-Analysis"><a class="docs-heading-anchor" href="#Visualization-and-Analysis">Visualization and Analysis</a><a id="Visualization-and-Analysis-1"></a><a class="docs-heading-anchor-permalink" href="#Visualization-and-Analysis" title="Permalink"></a></h2><p>The example generates several plots for analysis:</p><h3 id="1.-Fitness-Evolution"><a class="docs-heading-anchor" href="#1.-Fitness-Evolution">1. Fitness Evolution</a><a id="1.-Fitness-Evolution-1"></a><a class="docs-heading-anchor-permalink" href="#1.-Fitness-Evolution" title="Permalink"></a></h3><p>Shows how the best fitness improves over generations, helping you understand convergence behavior.</p><h3 id="2.-Prediction-Accuracy"><a class="docs-heading-anchor" href="#2.-Prediction-Accuracy">2. Prediction Accuracy</a><a id="2.-Prediction-Accuracy-1"></a><a class="docs-heading-anchor-permalink" href="#2.-Prediction-Accuracy" title="Permalink"></a></h3><p>Scatter plots comparing actual vs. predicted values, with a perfect prediction line for reference.</p><h3 id="3.-Residual-Analysis"><a class="docs-heading-anchor" href="#3.-Residual-Analysis">3. Residual Analysis</a><a id="3.-Residual-Analysis-1"></a><a class="docs-heading-anchor-permalink" href="#3.-Residual-Analysis" title="Permalink"></a></h3><p>Plots residuals (prediction errors) against predicted values to identify patterns in the errors.</p><h2 id="Parameter-Sensitivity"><a class="docs-heading-anchor" href="#Parameter-Sensitivity">Parameter Sensitivity</a><a id="Parameter-Sensitivity-1"></a><a class="docs-heading-anchor-permalink" href="#Parameter-Sensitivity" title="Permalink"></a></h2><h3 id="Population-Size-Effects"><a class="docs-heading-anchor" href="#Population-Size-Effects">Population Size Effects</a><a id="Population-Size-Effects-1"></a><a class="docs-heading-anchor-permalink" href="#Population-Size-Effects" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Small population (fast but limited exploration)
+regressor_small = GepRegressor(number_features)
+fit!(regressor_small, 500, 100, x_train&#39;, y_train; loss_fun=&quot;mse&quot;)
+
+# Large population (thorough exploration but slower)
+regressor_large = GepRegressor(number_features)
+fit!(regressor_large, 200, 2000, x_train&#39;, y_train; loss_fun=&quot;mse&quot;)</code></pre><h3 id="Function-Set-Customization"><a class="docs-heading-anchor" href="#Function-Set-Customization">Function Set Customization</a><a id="Function-Set-Customization-1"></a><a class="docs-heading-anchor-permalink" href="#Function-Set-Customization" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Extended function set
+regressor_extended = GepRegressor(number_features; 
+                                 function_set=[:+, :-, :*, :/, :sin, :cos, :exp])
+fit!(regressor_extended, epochs, population_size, x_train&#39;, y_train; loss_fun=&quot;mse&quot;)</code></pre><h2 id="Common-Issues-and-Solutions"><a class="docs-heading-anchor" href="#Common-Issues-and-Solutions">Common Issues and Solutions</a><a id="Common-Issues-and-Solutions-1"></a><a class="docs-heading-anchor-permalink" href="#Common-Issues-and-Solutions" title="Permalink"></a></h2><h3 id="Issue-1:-Poor-Convergence"><a class="docs-heading-anchor" href="#Issue-1:-Poor-Convergence">Issue 1: Poor Convergence</a><a id="Issue-1:-Poor-Convergence-1"></a><a class="docs-heading-anchor-permalink" href="#Issue-1:-Poor-Convergence" title="Permalink"></a></h3><p><strong>Symptoms</strong>: High MSE, low R², fitness plateaus early</p><p><strong>Solutions</strong>:</p><ul><li>Increase population size or number of generations</li><li>Adjust mutation/crossover rates</li><li>Try different random seeds</li><li>Check data quality and scaling</li></ul><h3 id="Issue-2:-Overfitting"><a class="docs-heading-anchor" href="#Issue-2:-Overfitting">Issue 2: Overfitting</a><a id="Issue-2:-Overfitting-1"></a><a class="docs-heading-anchor-permalink" href="#Issue-2:-Overfitting" title="Permalink"></a></h3><p><strong>Symptoms</strong>: Good training performance, poor test performance</p><p><strong>Solutions</strong>:</p><ul><li>Use cross-validation</li><li>Reduce expression complexity (shorter head length)</li><li>Add regularization through multi-objective optimization</li><li>Increase training data size</li></ul><h3 id="Issue-3:-Slow-Convergence"><a class="docs-heading-anchor" href="#Issue-3:-Slow-Convergence">Issue 3: Slow Convergence</a><a id="Issue-3:-Slow-Convergence-1"></a><a class="docs-heading-anchor-permalink" href="#Issue-3:-Slow-Convergence" title="Permalink"></a></h3><p><strong>Symptoms</strong>: Fitness improves very slowly</p><p><strong>Solutions</strong>:</p><ul><li>Increase mutation rate for more exploration</li><li>Use larger population size</li><li>Check for proper data scaling</li><li>Consider different loss functions</li></ul><h2 id="Advanced-Variations"><a class="docs-heading-anchor" href="#Advanced-Variations">Advanced Variations</a><a id="Advanced-Variations-1"></a><a class="docs-heading-anchor-permalink" href="#Advanced-Variations" title="Permalink"></a></h2><h3 id="Custom-Loss-Function"><a class="docs-heading-anchor" href="#Custom-Loss-Function">Custom Loss Function</a><a id="Custom-Loss-Function-1"></a><a class="docs-heading-anchor-permalink" href="#Custom-Loss-Function" title="Permalink"></a></h3><pre><code class="language-julia hljs">function custom_loss(y_true, y_pred)
+    # Huber loss (robust to outliers)
+    delta = 1.0
+    residual = abs.(y_true .- y_pred)
+    return mean(ifelse.(residual .&lt;= delta, 
+                       0.5 * residual.^2, 
+                       delta * (residual .- 0.5 * delta)))
+end
+
+# Use custom loss function
+fit!(regressor, epochs, population_size, x_train&#39;, y_train; loss_fun=custom_loss)</code></pre><h3 id="Early-Stopping"><a class="docs-heading-anchor" href="#Early-Stopping">Early Stopping</a><a id="Early-Stopping-1"></a><a class="docs-heading-anchor-permalink" href="#Early-Stopping" title="Permalink"></a></h3><pre><code class="language-julia hljs">function fit_with_early_stopping!(regressor, max_epochs, population_size, x_train, y_train;
+                                  patience=50, min_improvement=1e-6)
+    best_fitness = Inf
+    patience_counter = 0
+    
+    for epoch in 1:max_epochs
+        fit!(regressor, 1, population_size, x_train, y_train; loss_fun=&quot;mse&quot;)
+        current_fitness = regressor.best_models_[1].fitness[1]
+        
+        if current_fitness &lt; best_fitness - min_improvement
+            best_fitness = current_fitness
+            patience_counter = 0
+        else
+            patience_counter += 1
+        end
+        
+        if patience_counter &gt;= patience
+            println(&quot;Early stopping at epoch $epoch&quot;)
+            break
+        end
+    end
+end</code></pre><h3 id="Cross-Validation"><a class="docs-heading-anchor" href="#Cross-Validation">Cross-Validation</a><a id="Cross-Validation-1"></a><a class="docs-heading-anchor-permalink" href="#Cross-Validation" title="Permalink"></a></h3><pre><code class="language-julia hljs">function cross_validate(X, y, k_folds=5)
+    n_samples = size(X, 1)
+    fold_size = div(n_samples, k_folds)
+    scores = Float64[]
+    
+    for fold in 1:k_folds
+        # Create train/validation split
+        val_start = (fold - 1) * fold_size + 1
+        val_end = min(fold * fold_size, n_samples)
+        
+        val_indices = val_start:val_end
+        train_indices = setdiff(1:n_samples, val_indices)
+        
+        X_train_fold = X[train_indices, :]
+        y_train_fold = y[train_indices]
+        X_val_fold = X[val_indices, :]
+        y_val_fold = y[val_indices]
+        
+        # Train model
+        regressor_fold = GepRegressor(size(X, 2))
+        fit!(regressor_fold, 500, 500, X_train_fold&#39;, y_train_fold; loss_fun=&quot;mse&quot;)
+        
+        # Evaluate
+        y_pred_fold = regressor_fold(X_val_fold&#39;)
+        mse_fold = mean((y_val_fold .- y_pred_fold).^2)
+        push!(scores, mse_fold)
+        
+        println(&quot;Fold $fold MSE: $(round(mse_fold, digits=6))&quot;)
+    end
+    
+    println(&quot;Mean CV MSE: $(round(mean(scores), digits=6)) ± $(round(std(scores), digits=6))&quot;)
+    return scores
+end
+
+# Perform cross-validation
+cv_scores = cross_validate(x_train, y_train)</code></pre><h2 id="Best-Practices-Summary"><a class="docs-heading-anchor" href="#Best-Practices-Summary">Best Practices Summary</a><a id="Best-Practices-Summary-1"></a><a class="docs-heading-anchor-permalink" href="#Best-Practices-Summary" title="Permalink"></a></h2><ol><li><strong>Always use separate test data</strong> for unbiased performance evaluation</li><li><strong>Monitor convergence</strong> through fitness evolution plots</li><li><strong>Analyze residuals</strong> to identify systematic errors</li><li><strong>Use appropriate metrics</strong> for your specific problem type</li><li><strong>Consider cross-validation</strong> for robust performance estimates</li><li><strong>Visualize results</strong> to gain insights into model behavior</li><li><strong>Start with simple parameters</strong> and gradually increase complexity</li></ol><p>This basic example provides a solid foundation for understanding GeneExpressionProgramming.jl. The principles and techniques demonstrated here apply to more complex scenarios covered in the advanced examples.</p><hr/><p><em>Next: <a href="multi-objective.html">Multi-Objective Optimization</a></em></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../core-concepts.html">« Core Concepts</a><a class="docs-footer-nextpage" href="multi-objective.html">Multi-Objective Optimization »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.14.1 on <span class="colophon-date" title="Wednesday 16 July 2025 15:21">Wednesday 16 July 2025</span>. Using Julia version 1.11.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
