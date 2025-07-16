@@ -738,7 +738,7 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, x_trai
         y_train,
         !isnothing(x_test) ? x_test : x_train,
         !isnothing(y_test) ? y_test : y_train,
-        get_loss_function(loss_fun);
+        loss_fun isa String ? get_loss_function(loss_fun) : loss_fun;
         secOptimizer=optimizer_wrapper,
         break_condition=break_condition
     )

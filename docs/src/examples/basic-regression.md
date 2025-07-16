@@ -119,7 +119,7 @@ if hasfield(typeof(regressor), :fitness_history_) &&
    !isnothing(regressor.fitness_history_) && 
    hasfield(typeof(regressor.fitness_history_), :train_loss)
     
-    fitness_history = regressor.fitness_history_.train_loss
+    fitness_history = [elem[1] for elem in regressor.fitness_history_.train_loss]
     
     p1 = plot(1:length(fitness_history), fitness_history,
               xlabel="Generation",
