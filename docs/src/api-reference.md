@@ -1,0 +1,649 @@
+# API Reference
+
+This comprehensive API reference provides detailed documentation for all public functions, types, and modules in GeneExpressionProgramming.jl. The API is organized by functionality to help you quickly find the components you need.
+
+## Core Types
+
+### GepRegressor
+
+The main regressor for scalar symbolic regression tasks.
+
+```julia
+GepRegressor(number_features::Int; kwargs...)
+```
+
+**Parameters:**
+- `number_features::Int`: Number of input features
+- `population_size::Int = 1000`: Size of the population
+- `gene_count::Int = 2`: Number of genes per chromosome
+- `head_len::Int = 7`: Head length of each gene
+- `max_arity::Int = 2`: Maximum arity of functions
+- `mutation_rate::Float64 = 0.1`: Probability of mutation
+- `crossover_rate::Float64 = 0.7`: Probability of crossover
+- `selection_method::String = "tournament"`: Selection method
+- `tournament_size::Int = 3`: Tournament size for selection
+- `function_set::Vector{Symbol} = [:+, :-, :*, :/]`: Available functions
+- `number_of_objectives::Int = 1`: Number of objectives (1 for single-objective)
+- `considered_dimensions::Dict{Symbol,Vector{Float16}} = Dict()`: Physical dimensions
+- `max_permutations_lib::Int = 1000`: Maximum permutations for dimensional analysis
+- `rounds::Int = 5`: Tree depth for dimensional checking
+
+**Fields:**
+- `best_models_::Vector`: Best evolved models
+- `fitness_history_`: Training history (if available)
+
+**Example:**
+```julia
+regressor = GepRegressor(3; 
+                        population_size=500,
+                        gene_count=3,
+                        head_len=5,
+                        function_set=[:+, :-, :*, :/, :sin, :cos])
+```
+
+### GepTensorRegressor
+
+Specialized regressor for tensor (vector/matrix) symbolic regression.
+
+```julia
+GepTensorRegressor(number_features::Int, gene_count::Int, head_len::Int; kwargs...)
+```
+
+**Parameters:**
+- `number_features::Int`: Number of input features
+- `gene_count::Int`: Number of genes per chromosome
+- `head_len::Int`: Head length of each gene
+- `feature_names::Vector{String} = []`: Names for features (for interpretability)
+
+**Example:**
+```julia
+regressor = GepTensorRegressor(5, 2, 3; 
+                              feature_names=["x1", "x2", "U1", "U2", "U3"])
+```
+
+## Core Functions
+
+### fit!
+
+Train the GEP regressor on data.
+
+```julia
+fit!(regressor, epochs::Int, population_size::Int, x_data, y_data; kwargs...)
+fit!(regressor, epochs::Int, population_size::Int, loss_function)
+```
+
+**Parameters:**
+- `regressor`: GepRegressor or GepTensorRegressor instance
+- `epochs::Int`: Number of generations to evolve
+- `population_size::Int`: Population size for evolution
+- `x_data`: Input features (features as rows, samples as columns)
+- `y_data`: Target values
+- `loss_function`: Custom loss function (for tensor regression)
+
+**Keyword Arguments:**
+- `x_test = nothing`: Test features for validation
+- `y_test = nothing`: Test targets for validation
+- `loss_fun::String = "mse"`: Loss function ("mse", "mae", "rmse")
+- `target_dimension = nothing`: Target physical dimension
+
+**Examples:**
+```julia
+# Basic regression
+fit!(regressor, 1000, 1000, x_train', y_train; loss_fun="mse")
+
+# With validation data
+fit!(regressor, 1000, 1000, x_train', y_train; 
+     x_test=x_test', y_test=y_test, loss_fun="rmse")
+
+# With physical dimensions
+fit!(regressor, 1000, 1000, x_train', y_train; 
+     target_dimension=target_dim)
+
+# Tensor regression with custom loss
+fit!(regressor, 100, 500, custom_loss_function)
+```
+
+### Prediction
+
+Make predictions using trained regressor.
+
+```julia
+(regressor::GepRegressor)(x_data)
+(regressor::GepTensorRegressor)(input_data)
+```
+
+**Parameters:**
+- `x_data`: Input features (features as rows, samples as columns)
+- `input_data`: Input data tuple for tensor regression
+
+**Returns:**
+- Predictions as vector (scalar regression) or vector of tensors (tensor regression)
+
+**Examples:**
+```julia
+# Scalar predictions
+predictions = regressor(x_test')
+
+# Tensor predictions
+tensor_predictions = tensor_regressor(input_tuple)
+```
+
+## Utility Functions
+
+### Physical Constants
+
+Functions for working with physical constants and dimensions.
+
+#### get_constant
+
+```julia
+get_constant(name::String)
+```
+
+Retrieve a physical constant by name.
+
+**Parameters:**
+- `name::String`: Name of the constant (e.g., "speed_of_light", "planck_constant")
+
+**Returns:**
+- Constant value
+
+**Example:**
+```julia
+c = get_constant("speed_of_light")
+h = get_constant("planck_constant")
+```
+
+#### get_constant_value
+
+```julia
+get_constant_value(constant)
+```
+
+Get the numerical value of a constant.
+
+#### get_constant_dims
+
+```julia
+get_constant_dims(constant)
+```
+
+Get the physical dimensions of a constant.
+
+### Data Utilities
+
+#### train_test_split
+
+```julia
+train_test_split(X, y; test_ratio=0.2, random_state=42)
+```
+
+Split data into training and testing sets.
+
+**Parameters:**
+- `X`: Feature matrix
+- `y`: Target vector
+- `test_ratio::Float64 = 0.2`: Proportion of data for testing
+- `random_state::Int = 42`: Random seed
+
+**Returns:**
+- `(X_train, X_test, y_train, y_test)`: Split data
+
+**Example:**
+```julia
+X_train, X_test, y_train, y_test = train_test_split(X, y; test_ratio=0.3)
+```
+
+### Expression Utilities
+
+#### print_karva_strings
+
+```julia
+print_karva_strings(solution)
+```
+
+Print the Karva notation representation of an evolved solution.
+
+**Parameters:**
+- `solution`: Evolved solution from `best_models_`
+
+**Example:**
+```julia
+best_solution = regressor.best_models_[1]
+print_karva_strings(best_solution)
+```
+
+## Loss Functions
+
+### Built-in Loss Functions
+
+The package provides several built-in loss functions accessible via string names:
+
+#### "mse" - Mean Squared Error
+```julia
+mse(y_true, y_pred) = mean((y_true .- y_pred).^2)
+```
+
+#### "mae" - Mean Absolute Error
+```julia
+mae(y_true, y_pred) = mean(abs.(y_true .- y_pred))
+```
+
+#### "rmse" - Root Mean Squared Error
+```julia
+rmse(y_true, y_pred) = sqrt(mean((y_true .- y_pred).^2))
+```
+
+### Custom Loss Functions
+
+For advanced applications, you can define custom loss functions:
+
+#### Single-Objective Custom Loss
+```julia
+function custom_loss(y_true, y_pred)
+    # Your custom loss calculation
+    return loss_value::Float64
+end
+
+# Use with fit!
+fit!(regressor, epochs, population_size, x_data', y_data; loss_fun=custom_loss)
+```
+
+#### Multi-Objective Custom Loss
+```julia
+@inline function multi_objective_loss(elem, validate::Bool)
+    if isnan(mean(elem.fitness)) || validate
+        model = elem.compiled_function
+        
+        try
+            y_pred = model(x_data')
+            
+            # Objective 1: Accuracy
+            mse = mean((y_true .- y_pred).^2)
+            
+            # Objective 2: Complexity
+            complexity = expression_complexity(model)
+            
+            elem.fitness = (mse, complexity)
+        catch
+            elem.fitness = (typemax(Float64), typemax(Float64))
+        end
+    end
+end
+
+# Use with multi-objective regressor
+regressor = GepRegressor(n_features; number_of_objectives=2)
+fit!(regressor, epochs, population_size, multi_objective_loss)
+```
+
+#### Tensor Custom Loss
+```julia
+@inline function tensor_loss(elem, validate::Bool)
+    if isnan(mean(elem.fitness)) || validate
+        model = elem.compiled_function
+        
+        try
+            predictions = model(input_data)
+            
+            # Calculate tensor-specific loss
+            total_error = 0.0
+            for i in 1:length(target_tensors)
+                error = norm(predictions[i] - target_tensors[i])^2
+                total_error += error
+            end
+            
+            elem.fitness = (total_error / length(target_tensors),)
+        catch
+            elem.fitness = (typemax(Float64),)
+        end
+    end
+end
+```
+
+## Selection Methods
+
+### Tournament Selection
+
+Default selection method that chooses the best individual from a random tournament.
+
+**Configuration:**
+```julia
+regressor = GepRegressor(n_features; 
+                        selection_method="tournament",
+                        tournament_size=3)
+```
+
+### NSGA-II Selection
+
+Multi-objective selection using Non-dominated Sorting Genetic Algorithm II.
+
+**Configuration:**
+```julia
+regressor = GepRegressor(n_features; 
+                        number_of_objectives=2,
+                        selection_method="nsga2")
+```
+
+## Genetic Operators
+
+### Mutation Operators
+
+The package implements several mutation operators:
+
+- **Point Mutation**: Random symbol replacement
+- **Inversion**: Sequence reversal
+- **IS Transposition**: Insertion sequence transposition
+- **RIS Transposition**: Root insertion sequence transposition
+- **Gene Transposition**: Whole gene movement
+
+**Configuration:**
+```julia
+regressor = GepRegressor(n_features; mutation_rate=0.15)
+```
+
+### Crossover Operators
+
+Available crossover operators:
+
+- **One-Point Crossover**: Single crossover point
+- **Two-Point Crossover**: Two crossover points
+- **Gene Crossover**: Whole gene exchange
+- **Uniform Crossover**: Symbol-wise exchange
+
+**Configuration:**
+```julia
+regressor = GepRegressor(n_features; crossover_rate=0.8)
+```
+
+## Function Sets
+
+### Basic Arithmetic
+```julia
+basic_functions = [:+, :-, :*, :/]
+```
+
+### Extended Mathematical Functions
+```julia
+extended_functions = [:+, :-, :*, :/, :sin, :cos, :tan, :exp, :log, :sqrt, :abs]
+```
+
+### Power Functions
+```julia
+power_functions = [:+, :-, :*, :/, :^, :sqrt, :cbrt]
+```
+
+### Trigonometric Functions
+```julia
+trig_functions = [:sin, :cos, :tan, :asin, :acos, :atan, :sinh, :cosh, :tanh]
+```
+
+### Custom Function Sets
+```julia
+# Define your own function set
+custom_functions = [:+, :-, :*, :/, :sin, :exp, :custom_function]
+
+regressor = GepRegressor(n_features; function_set=custom_functions)
+```
+
+## Physical Dimensionality
+
+### Dimension Representation
+
+Physical dimensions are represented as 7-element vectors corresponding to SI base units:
+
+```julia
+# [Mass, Length, Time, Current, Temperature, Amount, Luminosity]
+velocity_dim = Float16[0, 1, -1, 0, 0, 0, 0]    # [L T⁻¹]
+force_dim = Float16[1, 1, -2, 0, 0, 0, 0]       # [M L T⁻²]
+energy_dim = Float16[1, 2, -2, 0, 0, 0, 0]      # [M L² T⁻²]
+```
+
+### Dimensional Constraints
+
+```julia
+feature_dims = Dict{Symbol,Vector{Float16}}(
+    :x1 => Float16[1, 0, 0, 0, 0, 0, 0],    # Mass
+    :x2 => Float16[0, 1, 0, 0, 0, 0, 0],    # Length
+    :x3 => Float16[0, 0, 1, 0, 0, 0, 0],    # Time
+)
+
+target_dim = Float16[0, 1, -1, 0, 0, 0, 0]  # Velocity
+
+regressor = GepRegressor(3; 
+                        considered_dimensions=feature_dims,
+                        max_permutations_lib=10000)
+
+fit!(regressor, epochs, population_size, x_data', y_data; 
+     target_dimension=target_dim)
+```
+
+## Tensor Operations
+
+### Supported Tensor Types
+
+The tensor regression module supports various tensor types through Tensors.jl:
+
+```julia
+using Tensors
+
+# Vectors (rank-1 tensors)
+vector_3d = Tensor{1,3}(randn(3))
+
+# Matrices (rank-2 tensors)  
+matrix_2x2 = Tensor{2,2}(randn(2,2))
+
+# Higher-order tensors
+tensor_3x3x3 = Tensor{3,3}(randn(3,3,3))
+```
+
+### Tensor Operations
+
+Available tensor operations include:
+
+- **Element-wise operations**: `+`, `-`, `*`, `/`
+- **Tensor products**: `⊗` (outer product)
+- **Contractions**: `⋅` (dot product), `⊡` (double contraction)
+- **Norms**: `norm()`, `tr()` (trace)
+- **Decompositions**: `eigen()`, `svd()`
+
+## Error Handling
+
+### Common Exceptions
+
+#### DimensionalError
+Thrown when dimensional constraints are violated.
+
+```julia
+try
+    fit!(regressor, epochs, population_size, x_data', y_data; 
+         target_dimension=invalid_dim)
+catch e
+    if isa(e, DimensionalError)
+        println("Dimensional constraint violation: ", e.message)
+    end
+end
+```
+
+#### ConvergenceError
+Thrown when evolution fails to converge.
+
+```julia
+try
+    fit!(regressor, epochs, population_size, x_data', y_data)
+catch e
+    if isa(e, ConvergenceError)
+        println("Evolution failed to converge: ", e.message)
+    end
+end
+```
+
+#### TensorShapeError
+Thrown when tensor shapes are incompatible.
+
+```julia
+try
+    predictions = tensor_regressor(incompatible_input)
+catch e
+    if isa(e, TensorShapeError)
+        println("Tensor shape mismatch: ", e.message)
+    end
+end
+```
+
+## Performance Tuning
+
+### Memory Management
+
+```julia
+# Monitor memory usage
+using Profile
+
+@profile fit!(regressor, epochs, population_size, x_data', y_data)
+Profile.print()
+
+# Force garbage collection
+GC.gc()
+```
+
+### Parallel Processing
+
+```julia
+using Distributed
+
+# Add worker processes
+addprocs(4)
+
+# Parallel evaluation is automatically used when available
+fit!(regressor, epochs, population_size, x_data', y_data)
+```
+
+### GPU Acceleration (Tensor Regression)
+
+```julia
+using CUDA
+
+if CUDA.functional()
+    # GPU acceleration for tensor operations
+    gpu_regressor = GepTensorRegressor(n_features, 2, 3; device=:gpu)
+    fit!(gpu_regressor, epochs, population_size, tensor_loss)
+end
+```
+
+## Configuration Examples
+
+### Basic Configuration
+```julia
+regressor = GepRegressor(3)
+fit!(regressor, 1000, 1000, x_data', y_data)
+```
+
+### Advanced Configuration
+```julia
+regressor = GepRegressor(
+    5;                                    # 5 input features
+    population_size = 2000,               # Large population
+    gene_count = 3,                       # 3 genes per chromosome
+    head_len = 8,                         # Longer expressions
+    mutation_rate = 0.12,                 # Higher mutation
+    crossover_rate = 0.85,                # Higher crossover
+    function_set = [:+, :-, :*, :/, :sin, :cos, :exp],
+    selection_method = "tournament",
+    tournament_size = 5
+)
+
+fit!(regressor, 1500, 2000, x_train', y_train;
+     x_test = x_test', 
+     y_test = y_test,
+     loss_fun = "rmse")
+```
+
+### Multi-Objective Configuration
+```julia
+regressor = GepRegressor(
+    3;
+    number_of_objectives = 2,
+    population_size = 1500,
+    gene_count = 2,
+    head_len = 6
+)
+
+fit!(regressor, 1000, 1500, multi_objective_loss)
+```
+
+### Physical Dimensionality Configuration
+```julia
+feature_dims = Dict{Symbol,Vector{Float16}}(
+    :x1 => Float16[1, 0, 0, 0, 0, 0, 0],  # Mass
+    :x2 => Float16[0, 1, 0, 0, 0, 0, 0],  # Length
+    :x3 => Float16[0, 0, 1, 0, 0, 0, 0],  # Time
+)
+
+regressor = GepRegressor(
+    3;
+    considered_dimensions = feature_dims,
+    max_permutations_lib = 15000,
+    rounds = 8
+)
+
+target_dim = Float16[1, 1, -2, 0, 0, 0, 0]  # Force
+
+fit!(regressor, 1200, 1200, x_data', y_data;
+     target_dimension = target_dim)
+```
+
+### Tensor Regression Configuration
+```julia
+regressor = GepTensorRegressor(
+    5,                                    # 5 features
+    3,                                    # 3 genes
+    4;                                    # Head length 4
+    feature_names = ["scalar1", "scalar2", "vector1", "vector2", "matrix1"]
+)
+
+fit!(regressor, 150, 800, tensor_loss_function)
+```
+
+## Version Information
+
+```julia
+# Get package version
+using Pkg
+Pkg.status("GeneExpressionProgramming")
+
+# Check for updates
+Pkg.update("GeneExpressionProgramming")
+```
+
+## Debugging and Diagnostics
+
+### Verbose Output
+```julia
+# Enable verbose output during training
+fit!(regressor, epochs, population_size, x_data', y_data; verbose=true)
+```
+
+### Fitness History
+```julia
+# Access fitness evolution
+if hasfield(typeof(regressor), :fitness_history_)
+    history = regressor.fitness_history_
+    plot(history.train_loss)
+end
+```
+
+### Expression Analysis
+```julia
+# Analyze best expressions
+for (i, model) in enumerate(regressor.best_models_)
+    println("Model $i: $(model.compiled_function)")
+    println("Fitness: $(model.fitness)")
+    println("Complexity: $(expression_complexity(model))")
+end
+```
+
+This API reference provides comprehensive coverage of all public interfaces in GeneExpressionProgramming.jl. For additional examples and use cases, refer to the [Examples](./examples/).
+
+---
+
+*For the most up-to-date API documentation, always refer to the package source code and docstrings.*
+

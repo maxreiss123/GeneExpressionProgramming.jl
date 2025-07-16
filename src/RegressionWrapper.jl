@@ -270,8 +270,8 @@ const GENE_COMMON_PROBS = Dict{String,AbstractFloat}(
     "reverse_insertion" => 0.1,
     "reverse_insertion_tail" => 0.0,
     "gene_transposition" => 0.0,
-    "gene_averaging_prob" => 1.0,
-    "gene_averaging_rate" => 0.1,
+    "gene_averaging_prob" => 0.0,
+    "gene_averaging_rate" => 0.05,
     "mating_size" => 0.7)
 
 const SymbolDict = OrderedDict{Int8,Int8}
