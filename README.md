@@ -190,7 +190,7 @@ Feel free to utilize it for your research, it would be nice __citing us__! Our [
 ```
 
 # Todo 
-- [ ] Documentation
+- [x] Documentation - first draft
 - [x] Naming conventions!
 - [x] Improve usability for user interaction
 - [ ] staggered exploration
@@ -198,3 +198,5 @@ Feel free to utilize it for your research, it would be nice __citing us__! Our [
 - [ ] constant node needs to be fixed
 - [ ] Clean Package Structure
 - [ ] considering Tullio.jl for faster tensor ops
+- [ ] LLM-interface
+- [ ] Python-interface
