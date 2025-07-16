@@ -190,12 +190,13 @@ Feel free to utilize it for your research, it would be nice __citing us__! Our [
 ```
 
 # Todo 
-- [ ] Documentation
+- [x] Documentation - first draft
 - [x] Naming conventions!
 - [x] Improve usability for user interaction
-- [ ] Next operations: Tail flip, Connection symbol flip, wrapper class for easy usage, config class for predefinition, staggered exploration
-- [ ] nice print flux
+- [ ] staggered exploration
+- [x] nice print flux
 - [ ] constant node needs to be fixed
 - [ ] Clean Package Structure
+- [ ] considering Tullio.jl for faster tensor ops
 - [ ] LLM-interface
 - [ ] Python-interface
