@@ -18,10 +18,6 @@ GepRegressor(number_features::Int; kwargs...)
 - `gene_count::Int = 2`: Number of genes per chromosome
 - `head_len::Int = 7`: Head length of each gene
 - `max_arity::Int = 2`: Maximum arity of functions
-- `mutation_rate::Float64 = 0.1`: Probability of mutation
-- `crossover_rate::Float64 = 0.7`: Probability of crossover
-- `selection_method::String = "tournament"`: Selection method
-- `tournament_size::Int = 3`: Tournament size for selection
 - `function_set::Vector{Symbol} = [:+, :-, :*, :/]`: Available functions
 - `number_of_objectives::Int = 1`: Number of objectives (1 for single-objective)
 - `considered_dimensions::Dict{Symbol,Vector{Float16}} = Dict()`: Physical dimensions
@@ -78,7 +74,7 @@ fit!(regressor, epochs::Int, population_size::Int, loss_function)
 - `population_size::Int`: Population size for evolution
 - `x_data`: Input features (features as rows, samples as columns)
 - `y_data`: Target values
-- `loss_function`: Custom loss function (for tensor regression)
+- `loss_function`: Custom loss function (for tensor regression or multi objective)
 
 **Keyword Arguments:**
 - `x_test = nothing`: Test features for validation
@@ -129,46 +125,6 @@ tensor_predictions = tensor_regressor(input_tuple)
 ```
 
 ## Utility Functions
-
-### Physical Constants
-
-Functions for working with physical constants and dimensions.
-
-#### get_constant
-
-```julia
-get_constant(name::String)
-```
-
-Retrieve a physical constant by name.
-
-**Parameters:**
-- `name::String`: Name of the constant (e.g., "speed_of_light", "planck_constant")
-
-**Returns:**
-- Constant value
-
-**Example:**
-```julia
-c = get_constant("speed_of_light")
-h = get_constant("planck_constant")
-```
-
-#### get_constant_value
-
-```julia
-get_constant_value(constant)
-```
-
-Get the numerical value of a constant.
-
-#### get_constant_dims
-
-```julia
-get_constant_dims(constant)
-```
-
-Get the physical dimensions of a constant.
 
 ### Data Utilities
 
@@ -304,13 +260,11 @@ end
 
 ### Tournament Selection
 
-Default selection method that chooses the best individual from a random tournament.
+Default selection method that chooses the best individul based on the tournament selections.
 
 **Configuration:**
 ```julia
-regressor = GepRegressor(n_features; 
-                        selection_method="tournament",
-                        tournament_size=3)
+regressor = GepRegressor(n_features)
 ```
 
 ### NSGA-II Selection
@@ -320,39 +274,49 @@ Multi-objective selection using Non-dominated Sorting Genetic Algorithm II.
 **Configuration:**
 ```julia
 regressor = GepRegressor(n_features; 
-                        number_of_objectives=2,
-                        selection_method="nsga2")
+                        number_of_objectives=2)
 ```
 
 ## Genetic Operators
 
-### Mutation Operators
+### Genetic Operators
 
-The package implements several mutation operators:
+The package implements several genetic operators. Here the can be adjusted in advance using the dictinary `GENE_COMMON_PROBS`, which is available after loading the `GeneExpressionProgramming.jl`
 
 - **Point Mutation**: Random symbol replacement
 - **Inversion**: Sequence reversal
 - **IS Transposition**: Insertion sequence transposition
 - **RIS Transposition**: Root insertion sequence transposition
-- **Gene Transposition**: Whole gene movement
 
 **Configuration:**
 ```julia
-regressor = GepRegressor(n_features; mutation_rate=0.15)
+using GeneExpressionProgramming
+
+GENE_COMMON_PROBS["mutation_prob"] = 1.0 # Probability for a chromosome of facing a mutation
+GENE_COMMON_PROBS["mutation_rate"] = 0.1 # Proportion of the gene beeing changed
+
+
+GENE_COMMON_PROBS["inversion_prob"] = 0.1 # Setting the prob. for the operation to take place 
+GENE_COMMON_PROBS["reverse_insertion_tail"] = 0.1 # Setting  IS 
+GENE_COMMON_PROBS["reverse_insertion"] = 0.1 # Setting RIS
+GENE_COMMON_PROBS["gene_transposition"] = 0.0  # Setting Transposition
+
+
 ```
 
 ### Crossover Operators
 
-Available crossover operators:
+Available crossover operators: Similar to the gene
 
 - **One-Point Crossover**: Single crossover point
 - **Two-Point Crossover**: Two crossover points
-- **Gene Crossover**: Whole gene exchange
-- **Uniform Crossover**: Symbol-wise exchange
 
 **Configuration:**
 ```julia
-regressor = GepRegressor(n_features; crossover_rate=0.8)
+using GeneExpressionProgramming
+
+GENE_COMMON_PROBS["one_point_cross_over_prob"] = 0.5 # Setting the one-point crossover
+GENE_COMMON_PROBS["two_point_cross_over_prob"] = 0.3 # Setting the two-point crossover
 ```
 
 ## Function Sets
@@ -369,20 +333,12 @@ extended_functions = [:+, :-, :*, :/, :sin, :cos, :tan, :exp, :log, :sqrt, :abs]
 
 ### Power Functions
 ```julia
-power_functions = [:+, :-, :*, :/, :^, :sqrt, :cbrt]
+power_functions = [:^, :sqrt]
 ```
 
 ### Trigonometric Functions
 ```julia
 trig_functions = [:sin, :cos, :tan, :asin, :acos, :atan, :sinh, :cosh, :tanh]
-```
-
-### Custom Function Sets
-```julia
-# Define your own function set
-custom_functions = [:+, :-, :*, :/, :sin, :exp, :custom_function]
-
-regressor = GepRegressor(n_features; function_set=custom_functions)
 ```
 
 ## Physical Dimensionality
@@ -392,7 +348,7 @@ regressor = GepRegressor(n_features; function_set=custom_functions)
 Physical dimensions are represented as 7-element vectors corresponding to SI base units:
 
 ```julia
-# [Mass, Length, Time, Current, Temperature, Amount, Luminosity]
+# [Mass, Length, Time, Temperature, Current, Amount, Luminosity]
 velocity_dim = Float16[0, 1, -1, 0, 0, 0, 0]    # [L T⁻¹]
 force_dim = Float16[1, 1, -2, 0, 0, 0, 0]       # [M L T⁻²]
 energy_dim = Float16[1, 2, -2, 0, 0, 0, 0]      # [M L² T⁻²]
@@ -417,7 +373,7 @@ fit!(regressor, epochs, population_size, x_data', y_data;
      target_dimension=target_dim)
 ```
 
-## Tensor Operations
+## Tensor Operations (under constructions)
 
 ### Supported Tensor Types
 
@@ -427,13 +383,13 @@ The tensor regression module supports various tensor types through Tensors.jl:
 using Tensors
 
 # Vectors (rank-1 tensors)
-vector_3d = Tensor{1,3}(randn(3))
+vector_3d = rand(Tensor{1,3})
 
 # Matrices (rank-2 tensors)  
-matrix_2x2 = Tensor{2,2}(randn(2,2))
+matrix_2x2 = rand(Tensor{2,2})
 
 # Higher-order tensors
-tensor_3x3x3 = Tensor{3,3}(randn(3,3,3))
+tensor_3x3x3 = rand(Tensor{3,3})
 ```
 
 ### Tensor Operations
@@ -448,47 +404,10 @@ Available tensor operations include:
 
 ## Error Handling
 
-### Common Exceptions
+### Common Error
 
-#### DimensionalError
-Thrown when dimensional constraints are violated.
-
-```julia
-try
-    fit!(regressor, epochs, population_size, x_data', y_data; 
-         target_dimension=invalid_dim)
-catch e
-    if isa(e, DimensionalError)
-        println("Dimensional constraint violation: ", e.message)
-    end
-end
-```
-
-#### ConvergenceError
-Thrown when evolution fails to converge.
-
-```julia
-try
-    fit!(regressor, epochs, population_size, x_data', y_data)
-catch e
-    if isa(e, ConvergenceError)
-        println("Evolution failed to converge: ", e.message)
-    end
-end
-```
-
-#### TensorShapeError
-Thrown when tensor shapes are incompatible.
-
-```julia
-try
-    predictions = tensor_regressor(incompatible_input)
-catch e
-    if isa(e, TensorShapeError)
-        println("Tensor shape mismatch: ", e.message)
-    end
-end
-```
+#### ArgumentError: collection must be non-empty
+Thrown when the argument vector for the selection process is empty. This happens, when all the loss returns `Inf` for all fit values. 
 
 ## Performance Tuning
 
@@ -503,30 +422,6 @@ Profile.print()
 
 # Force garbage collection
 GC.gc()
-```
-
-### Parallel Processing
-
-```julia
-using Distributed
-
-# Add worker processes
-addprocs(4)
-
-# Parallel evaluation is automatically used when available
-fit!(regressor, epochs, population_size, x_data', y_data)
-```
-
-### GPU Acceleration (Tensor Regression)
-
-```julia
-using CUDA
-
-if CUDA.functional()
-    # GPU acceleration for tensor operations
-    gpu_regressor = GepTensorRegressor(n_features, 2, 3; device=:gpu)
-    fit!(gpu_regressor, epochs, population_size, tensor_loss)
-end
 ```
 
 ## Configuration Examples
@@ -544,11 +439,7 @@ regressor = GepRegressor(
     population_size = 2000,               # Large population
     gene_count = 3,                       # 3 genes per chromosome
     head_len = 8,                         # Longer expressions
-    mutation_rate = 0.12,                 # Higher mutation
-    crossover_rate = 0.85,                # Higher crossover
-    function_set = [:+, :-, :*, :/, :sin, :cos, :exp],
-    selection_method = "tournament",
-    tournament_size = 5
+    function_set = [:+, :-, :*, :/, :sin, :cos, :exp]
 )
 
 fit!(regressor, 1500, 2000, x_train', y_train;
@@ -567,7 +458,7 @@ regressor = GepRegressor(
     head_len = 6
 )
 
-fit!(regressor, 1000, 1500, multi_objective_loss)
+fit!(regressor, 1000, 1500, loss_function=multi_objective_loss)
 ```
 
 ### Physical Dimensionality Configuration
