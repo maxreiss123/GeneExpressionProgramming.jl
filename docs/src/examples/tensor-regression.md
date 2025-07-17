@@ -102,7 +102,6 @@ println("Tensor regressor configuration:")
 println("  Features: $number_features")
 println("  Gene count: 2")
 println("  Head length: 3")
-println("  Feature names: $(regressor.feature_names)")
 println()
 
 # Define custom loss function for tensor regression

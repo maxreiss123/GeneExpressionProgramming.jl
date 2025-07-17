@@ -87,48 +87,6 @@ using DynamicExpressions
 using StatsBase
 
 
-"""
-    Memory Buffer for reducing allocation during runtime! 
-"""
-struct GeneticBuffers
-    alpha_operator::Vector{Int8}
-    beta_operator::Vector{Int8}
-    child_1_genes::Vector{Int8}
-    child_2_genes::Vector{Int8}
-    rolled_indices::Vector{Any}
-    arity_gene::Vector{Int8}
-end
-
-
-let
-    default_size = 256
-    global THREAD_BUFFERS = [GeneticBuffers(
-        zeros(Int8, default_size),
-        zeros(Int8, default_size),
-        Vector{Int8}(undef, default_size),
-        Vector{Int8}(undef, default_size),
-        Vector{Any}(undef, default_size),
-        Vector{Int8}(undef, default_size)
-    ) for _ in 1:50]
-end
-
-
-function ensure_buffer_size!(head_len::Int, gene_count::Int)
-    gene_len = head_len * 2 + 1
-    total_gene_length = gene_count - 1 + gene_count * gene_len
-
-    for buffer in THREAD_BUFFERS
-        if length(buffer.alpha_operator) < total_gene_length
-            resize!(buffer.alpha_operator, total_gene_length)
-            resize!(buffer.beta_operator, total_gene_length)
-            resize!(buffer.child_1_genes, total_gene_length)
-            resize!(buffer.child_2_genes, total_gene_length)
-            resize!(buffer.rolled_indices, gene_count + 1)
-            resize!(buffer.arity_gene, gene_count * gene_len)
-        end
-    end
-end
-
 abstract type EvaluationStrategy end
 
 struct StandardRegressionStrategy{T<:AbstractFloat} <: EvaluationStrategy
@@ -757,6 +715,10 @@ Modifies chromosomes in place applying various genetic operations based on proba
     gene_dominant_fusion!(chromosome1::Chromosome, chromosome2::Chromosome, pb::Real=0.2)
     gen_rezessiv!(chromosome1::Chromosome, chromosome2::Chromosome, pb::Real=0.2)
     gene_fussion!(chromosome1::Chromosome, chromosome2::Chromosome, pb::Real=0.2)
+    gene_insertion!(chromosome1::Chromosome)
+    reverse_insertion!(chromosome1::Chromosome)
+    reverse_insertion_tail!(chromosome1::Chromosome)
+    
 
 Genetic operators for chromosome modification.
 

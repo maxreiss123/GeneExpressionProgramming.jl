@@ -8,12 +8,12 @@ GeneExpressionProgramming.jl is a state-of-the-art symbolic regression package t
 
 ### Key Features
 
-**Gene Expression Programming**: Advanced evolutionary algorithm for symbolic regression  
-**Multi-Objective Optimization**: Balance accuracy, complexity, and other objectives using NSGA-II  
-**Physical Dimensionality**: Ensure dimensional consistency in evolved expressions  
-**Tensor Regression**: Work with vector and matrix data using Flux.jl backend  
-**High Performance**: Optimized Julia implementation with parallel processing support  
-**Scientific Applications**: Specialized features for physics, engineering, and scientific computing  
+- **Gene Expression Programming**: Advanced evolutionary algorithm for symbolic regression  
+- **Multi-Objective Optimization**: Balance accuracy, complexity, and other objectives using NSGA-II  
+- **Physical Dimensionality**: Ensure dimensional consistency in evolved expressions  
+- **Tensor Regression**: Work with vector and matrix data using Flux.jl backend  
+- **High Performance**: Optimized Julia implementation with parallel processing support  
+- **Scientific Applications**: Specialized features for physics, engineering, and scientific computing  
 
 ## Quick Start
 
