@@ -70,7 +70,7 @@ epochs = 1000
 population_size = 1000
 
 # Create multi-objective regressor
-regressor = GepRegressor(number_features; number_of_objectives=2)
+regressor = GepRegressor(number_features; number_of_objectives=2, entered_non_terminals=[:+,:*,:-,:sin,:cos])
 
 println("Multi-objective evolution parameters:")
 println("  Epochs: $epochs")
@@ -100,7 +100,7 @@ println()
             
             # Objective 2: Expression complexity (number of nodes)
             # This is a proxy for interpretability
-            complexity = length(string(model))  # Simple complexity measure
+            complexity = length(elem.expression_raw)  # Simple complexity measure
             
             # Store both objectives (both to be minimized)
             elem.fitness = (mse_val, Float64(complexity))
@@ -116,7 +116,7 @@ println("Starting multi-objective evolution...")
 start_time = time()
 
 # Train with custom multi-objective loss
-fit!(regressor, epochs, population_size, multi_objective_loss)
+fit!(regressor, epochs, population_size, multi_objective_loss, hof=20)
 
 training_time = time() - start_time
 println("Training completed in $(round(training_time, digits=2)) seconds")
@@ -313,7 +313,7 @@ println()
 
 for result in detailed_results
     println("$(result.label):")
-    println("  - Best for: ", end="")
+    println("  - Best for: ")
     if result.label == "Simplest"
         println("Interpretability and fast evaluation")
     elseif result.label == "Balanced"
