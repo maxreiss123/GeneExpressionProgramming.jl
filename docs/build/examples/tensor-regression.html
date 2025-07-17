@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Tensor Regression · GeneExpressionProgramming.jl</title><meta name="title" content="Tensor Regression · GeneExpressionProgramming.jl"/><meta property="og:title" content="Tensor Regression · GeneExpressionProgramming.jl"/><meta property="twitter:title" content="Tensor Regression · GeneExpressionProgramming.jl"/><meta name="description" content="Documentation for GeneExpressionProgramming.jl."/><meta property="og:description" content="Documentation for GeneExpressionProgramming.jl."/><meta property="twitter:description" content="Documentation for GeneExpressionProgramming.jl."/><meta property="og:url" content="https://maxreiss123.github.io/GeneExpressionProgramming.jl/examples/tensor-regression.html"/><meta property="twitter:url" content="https://maxreiss123.github.io/GeneExpressionProgramming.jl/examples/tensor-regression.html"/><link rel="canonical" href="https://maxreiss123.github.io/GeneExpressionProgramming.jl/examples/tensor-regression.html"/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../index.html">GeneExpressionProgramming.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../index.html">Home</a></li><li><input class="collapse-toggle" id="menuitem-2" type="checkbox"/><label class="tocitem" for="menuitem-2"><span class="docs-label">User Guide</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../installation.html">Installation</a></li><li><a class="tocitem" href="../getting-started.html">Getting Started</a></li><li><a class="tocitem" href="../core-concepts.html">Core Concepts</a></li></ul></li><li><input class="collapse-toggle" id="menuitem-3" type="checkbox" checked/><label class="tocitem" for="menuitem-3"><span class="docs-label">Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="basic-regression.html">Basic Regression</a></li><li><a class="tocitem" href="multi-objective.html">Multi-Objective Optimization</a></li><li><a class="tocitem" href="physical-dimensions.html">Physical Dimensionality</a></li><li class="is-active"><a class="tocitem" href="tensor-regression.html">Tensor Regression</a><ul class="internal"><li><a class="tocitem" href="#Understanding-Tensor-Operations"><span>Understanding Tensor Operations</span></a></li><li><a class="tocitem" href="#Tensor-Regression-Example"><span>Tensor Regression Example</span></a></li><li><a class="tocitem" href="#Best-Practices-Summary"><span>Best Practices Summary</span></a></li></ul></li></ul></li><li><input class="collapse-toggle" id="menuitem-4" type="checkbox"/><label class="tocitem" for="menuitem-4"><span class="docs-label">Reference</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../api-reference.html">API Reference</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Examples</a></li><li class="is-active"><a href="tensor-regression.html">Tensor Regression</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href="tensor-regression.html">Tensor Regression</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/maxreiss123/GeneExpressionProgramming.jl/blob/master/docs/src/examples/tensor-regression.md#" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Tensor-Regression"><a class="docs-heading-anchor" href="#Tensor-Regression">Tensor Regression</a><a id="Tensor-Regression-1"></a><a class="docs-heading-anchor-permalink" href="#Tensor-Regression" title="Permalink"></a></h1><p>Hint: This topic is currently under development. The next update will include an improvement in performance and dimension handling. </p><p>Tensor regression is an advanced feature of GeneExpressionProgramming.jl that enables symbolic regression with vector and matrix data. This capability is particularly valuable for applications in computational mechanics, fluid dynamics, computer vision, medical data from (MRI), and other fields where the relationships involve higher-dimensional mathematical objects.</p><h2 id="Understanding-Tensor-Operations"><a class="docs-heading-anchor" href="#Understanding-Tensor-Operations">Understanding Tensor Operations</a><a id="Understanding-Tensor-Operations-1"></a><a class="docs-heading-anchor-permalink" href="#Understanding-Tensor-Operations" title="Permalink"></a></h2><h3 id="Mathematical-Background"><a class="docs-heading-anchor" href="#Mathematical-Background">Mathematical Background</a><a id="Mathematical-Background-1"></a><a class="docs-heading-anchor-permalink" href="#Mathematical-Background" title="Permalink"></a></h3><p>Tensors are generalizations of scalars, vectors, and matrices to higher dimensions:</p><ul><li><strong>Rank 0 (Scalar)</strong>: Single number</li><li><strong>Rank 1 (Vector)</strong>: Array of numbers with direction</li><li><strong>Rank 2 (Matrix)</strong>: 2D array of numbers</li><li><strong>Rank n (Tensor)</strong>: n-dimensional array</li></ul><p>In the context of symbolic regression, tensor operations allow us to discover relationships involving:</p><ul><li>Vector addition and subtraction</li><li>Dot products and cross products</li><li>Matrix multiplication and operations</li><li>Element-wise operations on tensors</li><li>Contraction</li><li>Norms and other tensor properties</li></ul><h3 id="Tensor-Operations-in-GeneExpressionProgramming.jl"><a class="docs-heading-anchor" href="#Tensor-Operations-in-GeneExpressionProgramming.jl">Tensor Operations in GeneExpressionProgramming.jl</a><a id="Tensor-Operations-in-GeneExpressionProgramming.jl-1"></a><a class="docs-heading-anchor-permalink" href="#Tensor-Operations-in-GeneExpressionProgramming.jl" title="Permalink"></a></h3><p>The package supports tensor operations through the <code>GepTensorRegressor</code>, which uses Flux.jl as the backend for efficient tensor computations. This enables the evolution of expressions that can handle complex mathematical structures while maintaining the interpretability of symbolic expressions.</p><h2 id="Tensor-Regression-Example"><a class="docs-heading-anchor" href="#Tensor-Regression-Example">Tensor Regression Example</a><a id="Tensor-Regression-Example-1"></a><a class="docs-heading-anchor-permalink" href="#Tensor-Regression-Example" title="Permalink"></a></h2><p>This example demonstrates how to use tensor regression to discover relationships involving vector operations, simulating a scenario from computational fluid dynamics where we want to find a relationship between velocity vectors.</p><pre><code class="language-julia hljs">using GeneExpressionProgramming
+using Random
+using Tensors
+using LinearAlgebra
+using Statistics
+using Plots
+
+# Set random seed for reproducibility
+Random.seed!(789)
+
+println(&quot;=== Tensor Regression Example ===&quot;)
+println(&quot;Discovering vector relationships in 3D space&quot;)
+println(&quot;Target: a = 0.5*u1 + x2*u2 + 2*u3&quot;)
+println(&quot;where u1, u2, u3 are 3D vectors and x2 is a scalar&quot;)
+println()
+
+# Problem setup
+number_features = 5  # x1, x2, u1, u2, u3
+n_samples = 1000
+
+println(&quot;Generating tensor data...&quot;)
+
+# Generate scalar features
+x1 = [2.0 for _ in 1:n_samples]  # Constant scalar
+x2 = randn(n_samples)            # Variable scalar
+
+# Generate 3D vector features using Tensors.jl
+u1 = [Tensor{1,3}(randn(3)) for _ in 1:n_samples]
+u2 = [Tensor{1,3}(randn(3)) for _ in 1:n_samples]  
+u3 = [Tensor{1,3}(randn(3)) for _ in 1:n_samples]
+
+# Define the true relationship: a = 0.5*u1 + x2*u2 + 2*u3
+a_true = [0.5 * u1[i] + x2[i] * u2[i] + 2.0 * u3[i] for i in 1:n_samples]
+
+# Add small amount of noise to make it more realistic
+noise_level = 0.01
+a_noisy = [a_true[i] + noise_level * Tensor{1,3}(randn(3)) for i in 1:n_samples]
+
+println(&quot;Data characteristics:&quot;)
+println(&quot;  Samples: $n_samples&quot;)
+println(&quot;  Scalar features: x1 (constant=2.0), x2 (variable)&quot;)
+println(&quot;  Vector features: u1, u2, u3 (3D vectors)&quot;)
+println(&quot;  Target: a (3D vector)&quot;)
+println(&quot;  Noise level: $noise_level&quot;)
+println()
+
+# Organize input data
+inputs = (x1, x2, u1, u2, u3)
+
+println(&quot;Input data structure:&quot;)
+println(&quot;  x1: $(length(x1)) scalars&quot;)
+println(&quot;  x2: $(length(x2)) scalars&quot;) 
+println(&quot;  u1: $(length(u1)) 3D vectors&quot;)
+println(&quot;  u2: $(length(u2)) 3D vectors&quot;)
+println(&quot;  u3: $(length(u3)) 3D vectors&quot;)
+println()
+
+# Create tensor regressor
+regressor = GepTensorRegressor(
+    number_features,
+    gene_count=2,           # Number of genes (complexity control)
+    head_len=3;             # Head length (expression depth control)
+    feature_names=[&quot;x1&quot;, &quot;x2&quot;, &quot;U1&quot;, &quot;U2&quot;, &quot;U3&quot;]  # Names for interpretability
+)
+
+println(&quot;Tensor regressor configuration:&quot;)
+println(&quot;  Features: $number_features&quot;)
+println(&quot;  Gene count: 2&quot;)
+println(&quot;  Head length: 3&quot;)
+println()
+
+# Define custom loss function for tensor regression
+@inline function tensor_loss(elem, validate::Bool)
+    if isnan(mean(elem.fitness)) || validate
+        try
+            # Get the compiled model
+            model = elem.compiled_function
+            
+            # Make predictions
+            a_pred = model(inputs)
+            
+            # Check for valid predictions
+            if !isfinite(norm(a_pred)) || size(a_pred) != size(a_noisy)
+                elem.fitness = (typemax(Float64),)
+                return
+            end
+            
+            # Check individual vector sizes
+            if length(a_pred) != length(a_noisy) || 
+               (length(a_pred) &gt; 0 &amp;&amp; size(a_pred[1]) != size(a_noisy[1]))
+                elem.fitness = (typemax(Float64),)
+                return
+            end
+            
+            # Calculate loss as norm of difference
+            total_error = 0.0
+            for i in 1:length(a_noisy)
+                error_vec = a_pred[i] - a_noisy[i]
+                total_error += norm(error_vec)^2
+            end
+            
+            loss = total_error / length(a_noisy)  # Mean squared error
+            elem.fitness = (loss,)
+            
+        catch e
+            # Handle any evaluation errors
+            elem.fitness = (typemax(Float64),)
+        end
+    end
+end
+
+# Evolution parameters
+epochs = 100  # Reduced for tensor regression (computationally intensive)
+population_size = 1000
+
+println(&quot;Evolution parameters:&quot;)
+println(&quot;  Epochs: $epochs&quot;)
+println(&quot;  Population size: $population_size&quot;)
+println(&quot;  Loss function: Custom tensor MSE&quot;)
+println()
+
+println(&quot;Starting tensor evolution...&quot;)
+println(&quot;Note: Tensor operations are computationally intensive&quot;)
+start_time = time()
+
+# Train the tensor regressor
+fit!(regressor, epochs, population_size, tensor_loss)
+
+training_time = time() - start_time
+println(&quot;Training completed in $(round(training_time, digits=2)) seconds&quot;)
+println()
+
+# Analyze results
+println(&quot;=== Results Analysis ===&quot;)
+
+# Get the best evolved solution
+best_solution = regressor.best_models_[1]
+best_model = best_solution.compiled_function
+best_fitness = best_solution.fitness[1]
+
+println(&quot;Best evolved expression:&quot;)
+print_karva_strings(best_solution)  # Print in Karva notation
+println()
+println(&quot;Best fitness (MSE): $best_fitness&quot;)
+println()
+
+# Make predictions with the best model
+println(&quot;Making predictions...&quot;)
+try
+    a_pred = best_model(inputs)
+    
+    # Calculate comprehensive metrics
+    println(&quot;Prediction analysis:&quot;)
+    println(&quot;  Predicted vectors: $(length(a_pred))&quot;)
+    println(&quot;  Expected vectors: $(length(a_noisy))&quot;)
+    
+    if length(a_pred) == length(a_noisy)
+        # Calculate vector-wise metrics
+        vector_errors = [norm(a_pred[i] - a_noisy[i]) for i in 1:length(a_noisy)]
+        component_errors = []
+        
+        for i in 1:length(a_noisy)
+            for j in 1:3  # 3D vectors
+                push!(component_errors, abs(a_pred[i][j] - a_noisy[i][j]))
+            end
+        end
+        
+        println(&quot;  Mean vector error: $(round(mean(vector_errors), digits=6))&quot;)
+        println(&quot;  Max vector error: $(round(maximum(vector_errors), digits=6))&quot;)
+        println(&quot;  Mean component error: $(round(mean(component_errors), digits=6))&quot;)
+        println(&quot;  Max component error: $(round(maximum(component_errors), digits=6))&quot;)
+        
+        # Calculate R² equivalent for vectors
+        total_variance = sum([norm(a_noisy[i] - mean(a_noisy))^2 for i in 1:length(a_noisy)])
+        residual_variance = sum([norm(a_pred[i] - a_noisy[i])^2 for i in 1:length(a_noisy)])
+        r2_equivalent = 1 - residual_variance / total_variance
+        
+        println(&quot;  R² equivalent: $(round(r2_equivalent, digits=6))&quot;)
+        println()
+        
+        # Detailed component analysis
+        println(&quot;Component-wise analysis:&quot;)
+        for comp in 1:3
+            true_comp = [a_noisy[i][comp] for i in 1:length(a_noisy)]
+            pred_comp = [a_pred[i][comp] for i in 1:length(a_pred)]
+            
+            comp_correlation = cor(true_comp, pred_comp)
+            comp_mse = mean((true_comp .- pred_comp).^2)
+            
+            println(&quot;  Component $comp:&quot;)
+            println(&quot;    Correlation: $(round(comp_correlation, digits=4))&quot;)
+            println(&quot;    MSE: $(round(comp_mse, digits=6))&quot;)
+        end
+        println()
+        
+        # Visualization
+        println(&quot;Creating visualizations...&quot;)
+        
+        # 1. Component-wise accuracy plots
+        p_components = plot(layout=(1,3), size=(1200, 300))
+        
+        for comp in 1:3
+            true_comp = [a_noisy[i][comp] for i in 1:length(a_noisy)]
+            pred_comp = [a_pred[i][comp] for i in 1:length(a_pred)]
+            
+            scatter!(p_components[comp], true_comp, pred_comp,
+                     xlabel=&quot;True Component $comp&quot;,
+                     ylabel=&quot;Predicted Component $comp&quot;,
+                     title=&quot;Component $comp Accuracy&quot;,
+                     alpha=0.6,
+                     markersize=2,
+                     legend=false)
+            
+            # Perfect prediction line
+            min_val = min(minimum(true_comp), minimum(pred_comp))
+            max_val = max(maximum(true_comp), maximum(pred_comp))
+            plot!(p_components[comp], [min_val, max_val], [min_val, max_val],
+                  color=:red, linestyle=:dash, linewidth=2)
+        end
+        
+        savefig(p_components, &quot;tensor_component_accuracy.png&quot;)
+        println(&quot;Component accuracy plot saved as &#39;tensor_component_accuracy.png&#39;&quot;)
+        
+        # 2. Vector magnitude comparison
+        true_magnitudes = [norm(a_noisy[i]) for i in 1:length(a_noisy)]
+        pred_magnitudes = [norm(a_pred[i]) for i in 1:length(a_pred)]
+        
+        p_magnitude = scatter(true_magnitudes, pred_magnitudes,
+                             xlabel=&quot;True Vector Magnitude&quot;,
+                             ylabel=&quot;Predicted Vector Magnitude&quot;,
+                             title=&quot;Vector Magnitude Accuracy&quot;,
+                             alpha=0.6,
+                             markersize=3,
+                             legend=false)
+        
+        min_mag = min(minimum(true_magnitudes), minimum(pred_magnitudes))
+        max_mag = max(maximum(true_magnitudes), maximum(pred_magnitudes))
+        plot!(p_magnitude, [min_mag, max_mag], [min_mag, max_mag],
+              color=:red, linestyle=:dash, linewidth=2)
+        
+        savefig(p_magnitude, &quot;tensor_magnitude_accuracy.png&quot;)
+        println(&quot;Vector magnitude plot saved as &#39;tensor_magnitude_accuracy.png&#39;&quot;)
+        
+        # 3. Error distribution
+        p_error = histogram(vector_errors,
+                           xlabel=&quot;Vector Error (L2 Norm)&quot;,
+                           ylabel=&quot;Frequency&quot;,
+                           title=&quot;Distribution of Vector Errors&quot;,
+                           bins=30,
+                           alpha=0.7,
+                           legend=false)
+        
+        savefig(p_error, &quot;tensor_error_distribution.png&quot;)
+        println(&quot;Error distribution plot saved as &#39;tensor_error_distribution.png&#39;&quot;)
+        
+        # 4. 3D visualization of a subset of vectors
+        n_viz = min(50, length(a_noisy))  # Visualize subset for clarity
+        indices = 1:n_viz
+        
+        p_3d = plot(layout=(1,2), size=(1000, 400))
+        
+        # True vectors
+        for i in indices
+            vec = a_noisy[i]
+            plot!(p_3d[1], [0, vec[1]], [0, vec[2]], [0, vec[3]],
+                  color=:blue, alpha=0.6, linewidth=1, legend=false)
+        end
+        plot!(p_3d[1], title=&quot;True Vectors (Sample)&quot;, xlabel=&quot;X&quot;, ylabel=&quot;Y&quot;, zlabel=&quot;Z&quot;)
+        
+        # Predicted vectors
+        for i in indices
+            vec = a_pred[i]
+            plot!(p_3d[2], [0, vec[1]], [0, vec[2]], [0, vec[3]],
+                  color=:red, alpha=0.6, linewidth=1, legend=false)
+        end
+        plot!(p_3d[2], title=&quot;Predicted Vectors (Sample)&quot;, xlabel=&quot;X&quot;, ylabel=&quot;Y&quot;, zlabel=&quot;Z&quot;)
+        
+        savefig(p_3d, &quot;tensor_3d_visualization.png&quot;)
+        println(&quot;3D vector visualization saved as &#39;tensor_3d_visualization.png&#39;&quot;)
+        
+    else
+        println(&quot;Warning: Prediction size mismatch&quot;)
+        println(&quot;Expected: $(length(a_noisy)) vectors&quot;)
+        println(&quot;Got: $(length(a_pred)) vectors&quot;)
+    end
+    
+catch e
+    println(&quot;Error during prediction analysis: $e&quot;)
+end
+
+println()
+
+# Compare with true relationship
+println(&quot;=== Comparison with True Relationship ===&quot;)
+println(&quot;True relationship: a = 0.5*u1 + x2*u2 + 2*u3&quot;)
+
+# Calculate predictions using true relationship
+a_true_clean = [0.5 * u1[i] + x2[i] * u2[i] + 2.0 * u3[i] for i in 1:n_samples]
+
+try
+    a_pred = best_model(inputs)
+    
+    if length(a_pred) == length(a_true_clean)
+        # Compare evolved expression with true relationship
+        agreement_errors = [norm(a_pred[i] - a_true_clean[i]) for i in 1:length(a_true_clean)]
+        mean_agreement_error = mean(agreement_errors)
+        
+        println(&quot;Agreement with true relationship:&quot;)
+        println(&quot;  Mean error: $(round(mean_agreement_error, digits=6))&quot;)
+        println(&quot;  Max error: $(round(maximum(agreement_errors), digits=6))&quot;)
+        
+        # Component-wise agreement
+        for comp in 1:3
+            true_comp = [a_true_clean[i][comp] for i in 1:length(a_true_clean)]
+            pred_comp = [a_pred[i][comp] for i in 1:length(a_pred)]
+            agreement_corr = cor(true_comp, pred_comp)
+            println(&quot;  Component $comp correlation: $(round(agreement_corr, digits=4))&quot;)
+        end
+    end
+catch e
+    println(&quot;Error in true relationship comparison: $e&quot;)
+end
+
+println()
+
+# Performance analysis
+println(&quot;=== Performance Analysis ===&quot;)
+println(&quot;Computational considerations:&quot;)
+println(&quot;  Training time: $(round(training_time, digits=2)) seconds&quot;)
+println(&quot;  Time per epoch: $(round(training_time/epochs, digits=2)) seconds&quot;)
+println(&quot;  Population evaluations: $(epochs * population_size)&quot;)
+
+# Memory usage estimation
+vector_size = 3 * 8  # 3 components × 8 bytes per Float64
+total_vector_memory = n_samples * 3 * vector_size  # 3 vector features
+println(&quot;  Estimated vector memory: $(round(total_vector_memory/1024/1024, digits=2)) MB&quot;)
+
+println()
+
+# Advanced tensor operations example
+println(&quot;=== Advanced Tensor Operations Example ===&quot;)
+println(&quot;Demonstrating additional tensor capabilities...&quot;)
+
+# Example with matrix operations
+println(&quot;Matrix operation example:&quot;)
+n_matrix_samples = 100
+
+# Generate 2x2 matrices
+M1 = [randn(2, 2) for _ in 1:n_matrix_samples]
+M2 = [randn(2, 2) for _ in 1:n_matrix_samples]
+scalars = randn(n_matrix_samples)
+
+# True relationship: Result = scalar * M1 * M2
+true_matrices = [scalars[i] * M1[i] * M2[i] for i in 1:n_matrix_samples]
+
+println(&quot;  Generated $n_matrix_samples 2x2 matrices&quot;)
+println(&quot;  Relationship: R = s * M1 * M2&quot;)
+println(&quot;  This demonstrates matrix multiplication capabilities&quot;)
+
+# Example with cross products
+println()
+println(&quot;Cross product example:&quot;)
+v1_cross = [randn(3) for _ in 1:100]
+v2_cross = [randn(3) for _ in 1:100]
+cross_results = [cross(v1_cross[i], v2_cross[i]) for i in 1:100]
+
+println(&quot;  Generated 100 3D vector pairs&quot;)
+println(&quot;  Relationship: c = v1 × v2 (cross product)&quot;)
+println(&quot;  This demonstrates vector cross product capabilities&quot;)</code></pre><h3 id="Acceleration"><a class="docs-heading-anchor" href="#Acceleration">Acceleration</a><a id="Acceleration-1"></a><a class="docs-heading-anchor-permalink" href="#Acceleration" title="Permalink"></a></h3><ul><li>[ ] Under developement!</li></ul><h2 id="Best-Practices-Summary"><a class="docs-heading-anchor" href="#Best-Practices-Summary">Best Practices Summary</a><a id="Best-Practices-Summary-1"></a><a class="docs-heading-anchor-permalink" href="#Best-Practices-Summary" title="Permalink"></a></h2><h3 id="1.-Problem-Formulation"><a class="docs-heading-anchor" href="#1.-Problem-Formulation">1. Problem Formulation</a><a id="1.-Problem-Formulation-1"></a><a class="docs-heading-anchor-permalink" href="#1.-Problem-Formulation" title="Permalink"></a></h3><ul><li>Start with simple tensor operations before moving to complex ones</li><li>Ensure tensor dimensions are consistent throughout the problem</li><li>Consider the physical or mathematical meaning of tensor operations</li></ul><h3 id="2.-Data-Preparation"><a class="docs-heading-anchor" href="#2.-Data-Preparation">2. Data Preparation</a><a id="2.-Data-Preparation-1"></a><a class="docs-heading-anchor-permalink" href="#2.-Data-Preparation" title="Permalink"></a></h3><ul><li>Normalize tensor components to similar scales</li><li>Handle tensor symmetries appropriately (e.g., stress/strain tensors)</li><li>Validate tensor data for physical plausibility</li></ul><h3 id="3.-Algorithm-Configuration"><a class="docs-heading-anchor" href="#3.-Algorithm-Configuration">3. Algorithm Configuration</a><a id="3.-Algorithm-Configuration-1"></a><a class="docs-heading-anchor-permalink" href="#3.-Algorithm-Configuration" title="Permalink"></a></h3><ul><li>Use smaller populations initially due to computational cost</li><li>Reduce gene count and head length for faster convergence</li><li>Monitor memory usage and use batch processing if needed</li></ul><h3 id="4.-Performance-Optimization"><a class="docs-heading-anchor" href="#4.-Performance-Optimization">4. Performance Optimization</a><a id="4.-Performance-Optimization-1"></a><a class="docs-heading-anchor-permalink" href="#4.-Performance-Optimization" title="Permalink"></a></h3><ul><li>Consider GPU acceleration for large problems</li><li>Use parallel processing when available</li><li>Implement efficient tensor operations</li></ul><h3 id="5.-Result-Validation"><a class="docs-heading-anchor" href="#5.-Result-Validation">5. Result Validation</a><a id="5.-Result-Validation-1"></a><a class="docs-heading-anchor-permalink" href="#5.-Result-Validation" title="Permalink"></a></h3><ul><li>Validate results on independent test data</li><li>Check component-wise accuracy</li><li>Verify tensor properties (symmetry, positive definiteness, etc.)</li><li>Compare with known analytical solutions when available</li></ul><p>Tensor regression in GeneExpressionProgramming.jl opens up new possibilities for discovering complex mathematical relationships involving higher-dimensional data structures. While computationally more demanding than scalar regression, it provides unique capabilities for applications in physics, engineering, and computer science where tensor operations are fundamental.</p><hr/></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="physical-dimensions.html">« Physical Dimensionality</a><a class="docs-footer-nextpage" href="../api-reference.html">API Reference »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.14.1 on <span class="colophon-date" title="Thursday 17 July 2025 13:27">Thursday 17 July 2025</span>. Using Julia version 1.11.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
