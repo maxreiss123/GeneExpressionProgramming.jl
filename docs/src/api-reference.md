@@ -14,15 +14,16 @@ GepRegressor(number_features::Int; kwargs...)
 
 **Parameters:**
 - `number_features::Int`: Number of input features
-- `population_size::Int = 1000`: Size of the population
 - `gene_count::Int = 2`: Number of genes per chromosome
 - `head_len::Int = 7`: Head length of each gene
-- `max_arity::Int = 2`: Maximum arity of functions
-- `function_set::Vector{Symbol} = [:+, :-, :*, :/]`: Available functions
+- `rnd_count::Int = 5`: Amount of rondom numbers beeing considered  
+- `entered_non_terminals::Vector{Symbol} = [:+, :-, :*, :/]`: Available functions
+- `gene_connections::Vector{Symbol} = [:+, :-, :*, :/]`: Functions for connecting the genes
 - `number_of_objectives::Int = 1`: Number of objectives (1 for single-objective)
 - `considered_dimensions::Dict{Symbol,Vector{Float16}} = Dict()`: Physical dimensions
 - `max_permutations_lib::Int = 1000`: Maximum permutations for dimensional analysis
 - `rounds::Int = 5`: Tree depth for dimensional checking
+
 
 **Fields:**
 - `best_models_::Vector`: Best evolved models
@@ -31,10 +32,9 @@ GepRegressor(number_features::Int; kwargs...)
 **Example:**
 ```julia
 regressor = GepRegressor(3; 
-                        population_size=500,
                         gene_count=3,
                         head_len=5,
-                        function_set=[:+, :-, :*, :/, :sin, :cos])
+                        entered_non_terminals=[:+, :-, :*, :/, :sin, :cos])
 ```
 
 ### GepTensorRegressor
@@ -79,7 +79,7 @@ fit!(regressor, epochs::Int, population_size::Int, loss_function)
 **Keyword Arguments:**
 - `x_test = nothing`: Test features for validation
 - `y_test = nothing`: Test targets for validation
-- `loss_fun::String = "mse"`: Loss function ("mse", "mae", "rmse")
+- `loss_fun::Function = "function"`: Loss function self defined by the user to guide the search
 - `target_dimension = nothing`: Target physical dimension
 
 **Examples:**
@@ -218,7 +218,7 @@ fit!(regressor, epochs, population_size, x_data', y_data; loss_fun=custom_loss)
             mse = mean((y_true .- y_pred).^2)
             
             # Objective 2: Complexity
-            complexity = expression_complexity(model)
+            complexity = expression_complexity(model) # expression complexity needs to be defined by the user
             
             elem.fitness = (mse, complexity)
         catch
