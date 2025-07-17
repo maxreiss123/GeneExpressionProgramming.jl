@@ -404,36 +404,7 @@ println("  Relationship: c = v1 × v2 (cross product)")
 println("  This demonstrates vector cross product capabilities")
 ```
 
-## Performance Optimization for Tensor Regression
 
-### Memory Management
-
-```julia
-# Efficient memory management for large tensor datasets
-function optimize_tensor_memory(data, batch_size=100)
-    # Process data in batches to manage memory
-    n_samples = length(data)
-    n_batches = ceil(Int, n_samples / batch_size)
-    
-    results = []
-    
-    for batch in 1:n_batches
-        start_idx = (batch - 1) * batch_size + 1
-        end_idx = min(batch * batch_size, n_samples)
-        
-        batch_data = data[start_idx:end_idx]
-        
-        # Process batch
-        batch_result = process_tensor_batch(batch_data)
-        push!(results, batch_result)
-        
-        # Force garbage collection
-        GC.gc()
-    end
-    
-    return vcat(results...)
-end
-```
 
 ### Acceleration
  - [ ] Under developement!
