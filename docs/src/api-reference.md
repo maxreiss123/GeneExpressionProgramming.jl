@@ -292,14 +292,14 @@ The package implements several genetic operators. Here the can be adjusted in ad
 ```julia
 using GeneExpressionProgramming
 
-GENE_COMMON_PROBS["mutation_prob"] = 1.0 # Probability for a chromosome of facing a mutation
-GENE_COMMON_PROBS["mutation_rate"] = 0.1 # Proportion of the gene beeing changed
+GeneExpressionProgramming.RegressionWrapper.GENE_COMMON_PROBS["mutation_prob"] = 1.0 # Probability for a chromosome of facing a mutation
+GeneExpressionProgramming.RegressionWrapper.GENE_COMMON_PROBS["mutation_rate"] = 0.1 # Proportion of the gene beeing changed
 
 
-GENE_COMMON_PROBS["inversion_prob"] = 0.1 # Setting the prob. for the operation to take place 
-GENE_COMMON_PROBS["reverse_insertion_tail"] = 0.1 # Setting  IS 
-GENE_COMMON_PROBS["reverse_insertion"] = 0.1 # Setting RIS
-GENE_COMMON_PROBS["gene_transposition"] = 0.0  # Setting Transposition
+GeneExpressionProgramming.RegressionWrapper.GENE_COMMON_PROBS["inversion_prob"] = 0.1 # Setting the prob. for the operation to take place 
+GeneExpressionProgramming.RegressionWrapper.GENE_COMMON_PROBS["reverse_insertion_tail"] = 0.1 # Setting  IS 
+GeneExpressionProgramming.RegressionWrapper.GENE_COMMON_PROBS["reverse_insertion"] = 0.1 # Setting RIS
+GeneExpressionProgramming.RegressionWrapper.GENE_COMMON_PROBS["gene_transposition"] = 0.0  # Setting Transposition
 
 
 ```
@@ -315,8 +315,8 @@ Available crossover operators: Similar to the gene
 ```julia
 using GeneExpressionProgramming
 
-GENE_COMMON_PROBS["one_point_cross_over_prob"] = 0.5 # Setting the one-point crossover
-GENE_COMMON_PROBS["two_point_cross_over_prob"] = 0.3 # Setting the two-point crossover
+GeneExpressionProgramming.RegressionWrapper.GENE_COMMON_PROBS["one_point_cross_over_prob"] = 0.5 # Setting the one-point crossover
+GeneExpressionProgramming.RegressionWrapper.GENE_COMMON_PROBS["two_point_cross_over_prob"] = 0.3 # Setting the two-point crossover
 ```
 
 ## Function Sets

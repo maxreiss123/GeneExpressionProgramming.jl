@@ -262,8 +262,8 @@ println("Analysis plot saved as 'physical_dimensionality_analysis.png'")
 println("=== Detailed Comparison with True Relationship ===")
 
 # Calculate predictions using the true relationship
-true_predictions_train = -x_train[:, 1] .* x_train[:, 2] .* x_train[:, 3] .* x_train[:, 4]
-true_predictions_test = -x_test[:, 1] .* x_test[:, 2] .* x_test[:, 3] .* x_test[:, 4]
+true_predictions_train = -x_train[:, 1] .* x_train[:, 2] .* x_train[:, 3] ./ x_train[:, 4]
+true_predictions_test = -x_test[:, 1] .* x_test[:, 2] .* x_test[:, 3] ./ x_test[:, 4]
 
 # Compare evolved vs true relationship
 comparison_plot = plot(layout=(1,2), size=(1000, 400))
