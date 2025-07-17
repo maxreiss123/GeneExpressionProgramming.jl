@@ -76,11 +76,11 @@ using ProgressMeter
 using OrderedCollections
 using DynamicExpressions
 using Logging
+using Distributions
 using Printf
+using LRUCache
 using Base.Threads: SpinLock
 using .Threads
-using Distributions
-using LRUCache
 
 export runGep
 
@@ -125,7 +125,7 @@ Returns the computed fitness value (loss) or crash_value if computation fails
     end
 end
 
-@inline function compute_fitness(elem::Chromosome, evalArgs::GenericRegressionStrategy; validate::Bool=false)
+@inline function compute_fitness(elem::Chromosome, evalArgs::Union{GenericRegressionStrategy}; validate::Bool=false)
     evalArgs.loss_function(elem, validate)
 end
 
@@ -203,12 +203,13 @@ Applies correction operations to ensure dimensional homogeneity in chromosomes.
     if !isnothing(correction_callback) && epoch % correction_epochs == 0
         pop_amount = Int(ceil(length(population) * correction_amount))
         Threads.@threads for i in 1:pop_amount
-            if !(population[i].dimension_homogene) && population[i].compiled
+            if !(population[i].dimension_homogene) && population[i].compiled && isnan(mean(population[i].fitness))
                 distance, correction = correction_callback(population[i].genes, population[i].toolbox.gen_start_indices,
                     population[i].expression_raw)
                 if correction
                     compile_expression!(population[i]; force_compile=true)
                     population[i].dimension_homogene = true
+                    @debug "Dimension correction successful"
                 else
                     #population[i].fitness += distance
                 end
@@ -216,40 +217,6 @@ Applies correction operations to ensure dimensional homogeneity in chromosomes.
         end
     end
 end
-
-
-"""
-    equation_characterization_default(population::Vector, n_samples::Int)
-
-    Employs latin hyperqube sampling on a population
-"""
-@inline function equation_characterization_default(population::Vector{Chromosome}, n_samples::Int; inputs_::Int=0)
-    len_extented_pop = length(population)
-    coeff_count = isempty(population[1].toolbox.preamble_syms) ? 1 : length(population[1].toolbox.preamble_syms)
-    features = zeros(coeff_count, len_extented_pop)
-    prob_dataset = rand(Uniform(-1, 1), 100, inputs_ == 0 ? 10 : inputs_)
-    for p_index in eachindex(population)
-        if population[p_index].compiled
-            try
-                if coeff_count > 1
-                    for e_index in 1:coeff_count
-                        features[e_index, p_index] = mean(population[p_index].compiled_function[e_index](prob_dataset,
-                            population[p_index].toolbox.operators_))
-                    end
-                else
-                    features[coeff_count, p_index] = mean(population[p_index].compiled_function(prob_dataset, population[p_index].toolbox.operators_))
-                end
-            catch
-                features[:, p_index] .= Inf
-            end
-
-        else
-            features[:, p_index] .= Inf
-        end
-    end
-    return select_n_samples_lhs(features, n_samples)
-end
-
 
 """
     runGep(epochs::Int, population_size::Int, toolbox::Toolbox, evalStrategy::EvaluationStrategy;
@@ -309,9 +276,10 @@ The evolution process stops when either:
     file_logger_callback::Union{Function,Nothing}=nothing,
     save_state_callback::Union{Function,Nothing}=nothing,
     load_state_callback::Union{Function,Nothing}=nothing,
-    update_surrogate_callback::Union{Function,Nothing}=nothing,
-    population_sampling_multiplier::Int=1,
-    cache_size::Int=10000)
+    population_sampling_multiplier::Int=100,
+    inputs_::Int=0,
+    cache_size::Int=10000,
+    duplicate_penalty::Real=10.0)
 
     recorder = HistoryRecorder(epochs, Tuple)
     mating_ = toolbox.gep_probs["mating_size"]
@@ -321,17 +289,16 @@ The evolution process stops when either:
     fit_cache = LRU{String,Tuple}(maxsize=cache_size)
     cache_lock = SpinLock()
 
-    initial_size = population_size + mating_size
+    initial_size = population_sampling_multiplier <= 1 ? population_size + mating_size : population_size * population_sampling_multiplier
     population, start_epoch = isnothing(load_state_callback) ? (generate_population(initial_size, toolbox), 1) : load_state_callback()
-    if start_epoch <= 1 & !isnothing(toolbox.operators_) & population_sampling_multiplier > 1
-        temp_pop = generate_population(initial_size * population_sampling_multiplier, toolbox)
-        population = population[equation_characterization_default(temp_pop, population_size + mating_size)]
+    if start_epoch <= 1 && population_sampling_multiplier > 1
+        prob_dataset = rand(1000, inputs_ == 0 ? 10 : inputs_)'
+        population = population[equation_characterization_default(population, population_size + mating_size, prob_dataset')]
     end
 
     next_gen = Vector{eltype(population)}(undef, mating_size)
     progBar = Progress(epochs; showspeed=true, desc="Training: ")
     prev_best = toolbox.fitness_reset[1]
-
 
     for epoch in start_epoch:epochs
         same = Atomic{Int}(0)
@@ -353,7 +320,10 @@ The evolution process stops when either:
             end
         end
 
+        #employing only perm sort to mating size -> 
+        #second half of population is also determinded by a competition
         sort!(population, by=x -> mean(x.fitness))
+
         Threads.@threads for index in eachindex(population[1:population_size])
             fits_representation[index] = population[index].fitness
         end
@@ -368,7 +338,6 @@ The evolution process stops when either:
         val_loss = population[1].fitness
         record!(recorder, epoch, fits_representation[1], val_loss)
 
-
         ProgressMeter.update!(progBar, epoch, showvalues=[
             (:epoch_, @sprintf("%.0f", epoch)),
             (:duplicates_per_epoch, @sprintf("%.0f", same[])),
@@ -376,12 +345,11 @@ The evolution process stops when either:
             (:validation_loss, @sprintf("%.6e", mean(val_loss)))
         ])
 
-        !isnothing(update_surrogate_callback) && update_surrogate_callback(evalStrategy)
         !isnothing(evalStrategy.break_condition) && evalStrategy.break_condition(population[1:population_size], epoch) && break
 
 
         if length(fits_representation[1]) == 1
-            selectedMembers = tournament_selection(fits_representation[1:mating_size], mating_size, tourni_size)
+            selectedMembers = tournament_selection(fits_representation, mating_size, tourni_size)
         else
             selectedMembers = nsga_selection(fits_representation)
         end
@@ -395,6 +363,12 @@ The evolution process stops when either:
         end
 
     end
+
+    for i in eachindex(population[1:hof])
+        population[i].fitness = compute_fitness(population[i], evalStrategy, validate=true)
+    end
+
+    sort!(population, by=x -> mean(x.fitness))
 
     best = population[1:hof]
     close_recorder!(recorder)
