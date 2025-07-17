@@ -439,7 +439,7 @@ regressor = GepRegressor(
     population_size = 2000,               # Large population
     gene_count = 3,                       # 3 genes per chromosome
     head_len = 8,                         # Longer expressions
-    function_set = [:+, :-, :*, :/, :sin, :cos, :exp]
+    entered_non_terminals = [:+, :-, :*, :/, :sin, :cos, :exp]
 )
 
 fit!(regressor, 1500, 2000, x_train', y_train;
@@ -486,8 +486,8 @@ fit!(regressor, 1200, 1200, x_data', y_data;
 ```julia
 regressor = GepTensorRegressor(
     5,                                    # 5 features
-    3,                                    # 3 genes
-    4;                                    # Head length 4
+    gene_count = 2,			  # Inserting the number of genes
+    head_len = 5, 			  # Inserting the head_len for each gene
     feature_names = ["scalar1", "scalar2", "vector1", "vector2", "matrix1"]
 )
 
@@ -507,18 +507,15 @@ Pkg.update("GeneExpressionProgramming")
 
 ## Debugging and Diagnostics
 
-### Verbose Output
-```julia
-# Enable verbose output during training
-fit!(regressor, epochs, population_size, x_data', y_data; verbose=true)
-```
+
 
 ### Fitness History
 ```julia
 # Access fitness evolution
 if hasfield(typeof(regressor), :fitness_history_)
     history = regressor.fitness_history_
-    plot(history.train_loss)
+    train_loss = [elem[1] for elem in history.train_loss]
+    plot(train_loss)
 end
 ```
 
@@ -528,7 +525,6 @@ end
 for (i, model) in enumerate(regressor.best_models_)
     println("Model $i: $(model.compiled_function)")
     println("Fitness: $(model.fitness)")
-    println("Complexity: $(expression_complexity(model))")
 end
 ```
 

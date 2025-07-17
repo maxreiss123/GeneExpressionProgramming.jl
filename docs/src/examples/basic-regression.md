@@ -304,7 +304,7 @@ fit!(regressor_large, 200, 2000, x_train', y_train; loss_fun="mse")
 ```julia
 # Extended function set
 regressor_extended = GepRegressor(number_features; 
-                                 function_set=[:+, :-, :*, :/, :sin, :cos, :exp])
+                                 entered_non_terminals=[:+, :-, :*, :/, :sin, :cos, :exp])
 fit!(regressor_extended, epochs, population_size, x_train', y_train; loss_fun="mse")
 ```
 
