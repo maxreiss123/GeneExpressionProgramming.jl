@@ -701,7 +701,7 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, x_trai
     save_state_callback::Union{Function,Nothing}=nothing,
     load_state_callback::Union{Function,Nothing}=nothing, 
     population_sampling_multiplier::Int=1, 
-    penalty::AbstractFloat = 1.0
+    penalty::AbstractFloat = 2.0
 )
 
     correction_callback = if !isnothing(target_dimension)
@@ -778,7 +778,7 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, loss_f
     file_logger_callback::Union{Function,Nothing}=nothing,
     save_state_callback::Union{Function,Nothing}=nothing,
     load_state_callback::Union{Function,Nothing}=nothing,
-    penalty::AbstractFloat = 1.0
+    penalty::AbstractFloat = 2.0
 )
 
     correction_callback = if !isnothing(target_dimension)
