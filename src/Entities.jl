@@ -140,8 +140,9 @@ struct GenericRegressionStrategy <: EvaluationStrategy
     break_condition::Union{Function,Nothing}
 
     function GenericRegressionStrategy(operators::Union{OperatorEnum,Nothing}, number_of_objectives::Int, loss_function::Function;
-        validation_loss_function::Union{Function,Nothing},
-        secOptimizer::Union{Function,Nothing}, break_condition::Union{Function,Nothing})
+        validation_loss_function::Union{Function,Nothing}=nothing,
+        secOptimizer::Union{Function,Nothing}=nothing, 
+        break_condition::Union{Function,Nothing}=nothing)
         new(operators, number_of_objectives, loss_function, isnothing(validation_loss_function) ? loss_function : validation_loss_function,
             secOptimizer, break_condition)
     end
