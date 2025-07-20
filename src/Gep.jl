@@ -287,7 +287,7 @@ The evolution process stops when either:
     population_sampling_multiplier::Int=100,
     inputs_::Int=0,
     cache_size::Int=10000,
-    duplicate_penalty::Real=10.0)
+    penalty::AbstractFloat=10.0)
 
     recorder = HistoryRecorder(epochs, Tuple)
     mating_ = toolbox.gep_probs["mating_size"]

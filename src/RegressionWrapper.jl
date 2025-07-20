@@ -700,7 +700,8 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, x_trai
     file_logger_callback::Union{Function,Nothing}=nothing,
     save_state_callback::Union{Function,Nothing}=nothing,
     load_state_callback::Union{Function,Nothing}=nothing, 
-    population_sampling_multiplier::Int=1
+    population_sampling_multiplier::Int=1, 
+    penalty::AbstractFloat = 1.0
 )
 
     correction_callback = if !isnothing(target_dimension)
@@ -756,7 +757,8 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, x_trai
         file_logger_callback=file_logger_callback,
         save_state_callback=save_state_callback,
         load_state_callback=load_state_callback,
-        population_sampling_multiplier=population_sampling_multiplier
+        population_sampling_multiplier=population_sampling_multiplier,
+        penalty = penalty
     )
 
     regressor.best_models_ = best
@@ -775,7 +777,8 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, loss_f
     break_condition::Union{Function,Nothing}=nothing,
     file_logger_callback::Union{Function,Nothing}=nothing,
     save_state_callback::Union{Function,Nothing}=nothing,
-    load_state_callback::Union{Function,Nothing}=nothing
+    load_state_callback::Union{Function,Nothing}=nothing,
+    penalty::AbstractFloat = 1.0
 )
 
     correction_callback = if !isnothing(target_dimension)
@@ -823,7 +826,8 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, loss_f
         optimization_epochs=optimization_epochs,
         file_logger_callback=file_logger_callback,
         save_state_callback=save_state_callback,
-        load_state_callback=load_state_callback
+        load_state_callback=load_state_callback,
+        penalty = penalty
     )
 
     regressor.best_models_ = best
