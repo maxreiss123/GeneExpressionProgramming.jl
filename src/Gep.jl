@@ -221,7 +221,7 @@ Applies correction operations to ensure dimensional homogeneity in chromosomes.
                     population[i].dimension_homogene = true
                     @debug "Dimension correction successful"
                 else
-                    population[i].fitness  = modify_fitness(population[i].fitness, distance+penalty)
+                    population[i].fitness = modify_fitness(population[i].fitness, distance + penalty)
                 end
             end
         end
@@ -345,7 +345,7 @@ The evolution process stops when either:
         end
 
         compute_fitness(population[1], evalStrategy; validate=true)
-        val_loss = compute_fitness_validation(population[1], evalStrategy; validate=true)
+        val_loss = isnothing(evalStrategy.validation_loss_function) ? population[1].fitness : compute_fitness_validation(population[1], evalStrategy; validate=true)
         record!(recorder, epoch, fits_representation[1], val_loss)
 
         ProgressMeter.update!(progBar, epoch, showvalues=[

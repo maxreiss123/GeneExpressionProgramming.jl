@@ -682,16 +682,19 @@ Train the GEP regressor model.
 - `optimization_epochs::Int=500`: Number of epochs for constant optimization
 - `hof::Int=3`: Number of best models to keep
 - `loss_fun::Union{String,Function}="mse"`: Loss function ("mse", "mae", or custom function)
+- `loss_fun_validation::Union{String,Function}="mse"`: Loss function utilized for validation ("mse", "mae", or custom function)
 - `correction_epochs::Int=1`: Epochs between dimension corrections
 - `correction_amount::Real=1.0`: Fraction of population to correct for the dimensioal homogeneity
 - `tourni_size::Int=3`: Tournament selection size
 - `opt_method_const::Symbol=:cg`: Optimization method for constants
 - `target_dimension::Union{Vector{Float16},Nothing}=nothing`: Target physical dimension
+- `penalty::AbstractFloat = 2.0`: intruces a penalty for identical functions
 """
 function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, x_train::AbstractArray,
     y_train::AbstractArray; x_test::Union{AbstractArray,Nothing}=nothing, y_test::Union{AbstractArray,Nothing}=nothing,
     optimization_epochs::Int=100,
     hof::Int=3, loss_fun::Union{String,Function}="mse",
+    loss_fun_validation::Union{String, Function}="mse",
     correction_epochs::Int=1, correction_amount::Real=0.05,
     opt_method_const::Symbol=:cg,
     target_dimension::Union{Vector{Float16},Nothing}=nothing,
@@ -740,6 +743,7 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, x_trai
         !isnothing(x_test) ? x_test : x_train,
         !isnothing(y_test) ? y_test : y_train,
         loss_fun isa String ? get_loss_function(loss_fun) : loss_fun;
+        validation_loss_function = loss_fun_validation isa String ? get_loss_function(loss_fun_validation) : loss_fun_validation, 
         secOptimizer=optimizer_wrapper,
         break_condition=break_condition
     )
@@ -767,6 +771,7 @@ end
 
 function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, loss_function::Function;
     optimizer_function_::Union{Function,Nothing}=nothing,
+    loss_function_validation::Union{Function, Nothing}=nothing,
     optimization_epochs::Int=100,
     hof::Int=3,
     correction_epochs::Int=1,
@@ -810,6 +815,7 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, loss_f
         regressor.operators_,
         length(regressor.toolbox_.fitness_reset[1]),
         loss_function;
+        validation_loss_function = loss_function_validation,
         secOptimizer=nothing,
         break_condition=break_condition
     )
