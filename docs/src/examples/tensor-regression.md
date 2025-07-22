@@ -1,4 +1,4 @@
-# Template based regression
+# Tensor Regression
 
 Hint: This topic is currently under development. The next update will include an improvement in performance and dimension handling. 
 
@@ -438,7 +438,6 @@ println("  This demonstrates vector cross product capabilities")
 - Compare with known analytical solutions when available
 
 Tensor regression in GeneExpressionProgramming.jl opens up new possibilities for discovering complex mathematical relationships involving higher-dimensional data structures. While computationally more demanding than scalar regression, it provides unique capabilities for applications in physics, engineering, and computer science where tensor operations are fundamental.
-
 
 ---
 

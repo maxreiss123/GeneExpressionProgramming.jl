@@ -268,7 +268,7 @@ const GENE_COMMON_PROBS = Dict{String,AbstractFloat}(
     "fusion_rate" => 0.0,
     "inversion_prob" => 0.1,
     "insertion_prob" => 0.1,
-    "reverse_insertion" => 0.1,
+    "reverse_insertion" => 0.0,
     "reverse_insertion_tail" => 0.0,
     "gene_transposition" => 0.1,
     "gene_averaging_prob" => 0.0,
@@ -865,7 +865,8 @@ function fit!(regressor::GepTensorRegressor, epochs::Int, population_size::Int, 
         tourni_size=max(Int(ceil(population_size * 0.003)), 3),
         file_logger_callback=file_logger_callback,
         save_state_callback=save_state_callback,
-        load_state_callback=load_state_callback
+        load_state_callback=load_state_callback,
+        population_sampling_multiplier=1
     )
 
     regressor.best_models_ = best
