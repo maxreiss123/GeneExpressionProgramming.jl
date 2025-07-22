@@ -726,7 +726,6 @@ Modifies chromosomes in place applying various genetic operations based on proba
     reverse_insertion!(chromosome1::Chromosome)
     reverse_insertion_tail!(chromosome1::Chromosome)
     
-
 Genetic operators for chromosome modification.
 
 # Arguments
@@ -778,11 +777,11 @@ Modify chromosome genes in place
         gene_inversion!(space_next[i+1])
     end
 
-    if rand_space[10] < toolbox.gep_probs["inversion_prob"]
+    if rand_space[10] < toolbox.gep_probs["insertion_prob"]
         gene_insertion!(space_next[i])
     end
 
-    if rand_space[11] < toolbox.gep_probs["inversion_prob"]
+    if rand_space[11] < toolbox.gep_probs["insertion_prob"]
         gene_insertion!(space_next[i+1])
     end
 

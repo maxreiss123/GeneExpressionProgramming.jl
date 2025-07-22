@@ -267,6 +267,7 @@ const GENE_COMMON_PROBS = Dict{String,AbstractFloat}(
     "fusion_prob" => 0.0,
     "fusion_rate" => 0.0,
     "inversion_prob" => 0.1,
+    "insertion_prob" => 0.0,
     "reverse_insertion" => 0.1,
     "reverse_insertion_tail" => 0.0,
     "gene_transposition" => 0.0,
