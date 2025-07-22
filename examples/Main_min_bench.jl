@@ -15,8 +15,14 @@ population_size = 100
 number_features = 2
 
 x_data = randn(Float64, 1000, number_features)
-y_data = @. x_data[:,1] * x_data[:,1] + x_data[:,1] * x_data[:,2] - 2 * x_data[:,2] * x_data[:,2]
+y_data = @. x_data[:, 1] * x_data[:, 1] + x_data[:, 1] * x_data[:, 2] - 2 * x_data[:, 2] * x_data[:, 2]
+
+x_data_test = randn(Float64, 200, number_features)
+y_data_test = @. x_data_test[:, 1] * x_data_test[:, 1] + x_data_test[:, 1] * x_data_test[:, 2] - 2 * x_data_test[:, 2] * x_data_test[:, 2]
 
 #define the 
 regressor = GepRegressor(number_features)
-@btime fit!(regressor, epochs, population_size, x_data', y_data; loss_fun="mse", population_sampling_multiplier=10)
+@btime fit!(regressor, epochs, population_size, x_data', y_data; loss_fun="mse",
+    x_test = x_data_test',
+    y_test = y_data_test,
+    population_sampling_multiplier=10)

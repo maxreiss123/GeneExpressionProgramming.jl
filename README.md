@@ -14,8 +14,11 @@ The repository contains an implementation of the Gene Expression Programming [1]
   ```julia
     using Pkg
     
-    Pkg.add(url="https://github.com/maxreiss123/GeneExpressionProgramming.jl.git")
-
+    Pkg.add("GeneExpressionProgramming")
+    
+    # or to get the latest version
+    # Pkg.add(url="https://github.com/maxreiss123/GeneExpressionProgramming.jl.git") 
+    
   ```
 
   ```julia

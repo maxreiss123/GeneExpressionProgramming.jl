@@ -85,17 +85,12 @@ using .Threads
 export runGep
 
 
-#const Chromosome = GepEntities.Chromosome
-#const Toolbox = GepEntities.Toolbox
-#const EvaluationStrategy = GepEntities.EvaluationStrategy
-
-#redesign -> compute fitness should return fitness and crash, we just need to insert the chromosome
 """
     compute_fitness(elem::Chromosome, operators::OperatorEnum, x_data::AbstractArray{T},
         y_data::AbstractArray{T}, loss_function::Function, crash_value::T; 
         validate::Bool=false) where {T<:AbstractFloat}
 
-Computes the fitness score for a chromosome using the specified loss function.
+Computes and sets the fitness score for a chromosome using the specified loss function.
 
 # Arguments
 - `elem::Chromosome`: The chromosome whose fitness needs to be computed
@@ -105,9 +100,6 @@ Computes the fitness score for a chromosome using the specified loss function.
 - `loss_function::Function`: The loss function used to compute fitness
 - `crash_value::T`: Default value returned if computation fails
 - `validate::Bool=false`: If true, forces recomputation of fitness even if already calculated
-
-# Returns
-Returns the computed fitness value (loss) or crash_value if computation fails
 
 # Details
 - Checks if fitness needs to be computed (if NaN or validate=true)
@@ -125,8 +117,27 @@ Returns the computed fitness value (loss) or crash_value if computation fails
     end
 end
 
+@inline function compute_fitness_validation(elem::Chromosome, evalArgs::StandardRegressionStrategy; validate::Bool=false)
+    try
+        if isnan(mean(elem.fitness)) || validate
+            y_pred = elem.compiled_function(evalArgs.x_data_test, evalArgs.operators)
+            return (evalArgs.validation_loss_function(evalArgs.y_data_test, y_pred),)
+        end
+    catch e
+        return (evalArgs.crash_value,)
+    end
+end
+
 @inline function compute_fitness(elem::Chromosome, evalArgs::Union{GenericRegressionStrategy}; validate::Bool=false)
     evalArgs.loss_function(elem, validate)
+end
+
+@inline function compute_fitness_validation(elem::Chromosome, evalArgs::Union{GenericRegressionStrategy}; validate::Bool=false)
+    evalArgs.validation_loss_function(elem, validate)
+end
+
+@inline function modify_fitness(t::Tuple, penalty::AbstractFloat)
+    return ntuple(i -> t[i] * penalty, length(t))
 end
 
 
@@ -168,7 +179,6 @@ Performs one evolutionary step in the GEP algorithm, creating and evaluating new
         try
             population[end-i] = population[end-mating_size-i]
             population[end-mating_size-i] = next_gen[i]
-            #@show ("Position $i - new insert $(length(population)-mating_size-i) - $(pointer_from_objref(next_gen[i]))")
         catch e
             error_message = sprint(showerror, e, catch_backtrace())
             @error "Error in perform_step!: $error_message"
@@ -198,7 +208,7 @@ Applies correction operations to ensure dimensional homogeneity in chromosomes.
 - Updates chromosome compilation and dimensional homogeneity flags
 """
 @inline function perform_correction_callback!(population::Vector{Chromosome}, epoch::Int, correction_epochs::Int, correction_amount::Real,
-    correction_callback::Union{Function,Nothing})
+    correction_callback::Union{Function,Nothing}; penalty::AbstractFloat=1.0)
 
     if !isnothing(correction_callback) && epoch % correction_epochs == 0
         pop_amount = Int(ceil(length(population) * correction_amount))
@@ -211,7 +221,7 @@ Applies correction operations to ensure dimensional homogeneity in chromosomes.
                     population[i].dimension_homogene = true
                     @debug "Dimension correction successful"
                 else
-                    #population[i].fitness += distance
+                    population[i].fitness = modify_fitness(population[i].fitness, distance + penalty)
                 end
             end
         end
@@ -279,7 +289,7 @@ The evolution process stops when either:
     population_sampling_multiplier::Int=100,
     inputs_::Int=0,
     cache_size::Int=10000,
-    duplicate_penalty::Real=10.0)
+    penalty::AbstractFloat=2.0)
 
     recorder = HistoryRecorder(epochs, Tuple)
     mating_ = toolbox.gep_probs["mating_size"]
@@ -311,11 +321,11 @@ The evolution process stops when either:
                 if !(cache_value)
                     compute_fitness(population[i], evalStrategy)
                     lock(cache_lock)
-                        fit_cache[key] = population[i].fitness
+                    fit_cache[key] = population[i].fitness
                     unlock(cache_lock)
                 else
                     atomic_add!(same, 1)
-                    population[i].fitness = toolbox.fitness_reset[1]
+                    population[i].fitness = modify_fitness(population[i].fitness, penalty)
                 end
             end
         end
@@ -335,7 +345,7 @@ The evolution process stops when either:
         end
 
         compute_fitness(population[1], evalStrategy; validate=true)
-        val_loss = population[1].fitness
+        val_loss = isnothing(evalStrategy.validation_loss_function) ? population[1].fitness : compute_fitness_validation(population[1], evalStrategy; validate=true)
         record!(recorder, epoch, fits_representation[1], val_loss)
 
         ProgressMeter.update!(progBar, epoch, showvalues=[

@@ -97,6 +97,7 @@ struct StandardRegressionStrategy{T<:AbstractFloat} <: EvaluationStrategy
     x_data_test::AbstractArray{T}
     y_data_test::AbstractArray{T}
     loss_function::Function
+    validation_loss_function::Function
     secOptimizer::Union{Function,Nothing}
     break_condition::Union{Function,Nothing}
     penalty::T
@@ -108,6 +109,7 @@ struct StandardRegressionStrategy{T<:AbstractFloat} <: EvaluationStrategy
         x_data_test::AbstractArray,
         y_data_test::AbstractArray,
         loss_function::Function;
+        validation_loss_function::Union{Nothing,Function}=nothing,
         secOptimizer::Union{Function,Nothing}=nothing,
         break_condition::Union{Function,Nothing}=nothing,
         penalty::T=zero(T),
@@ -119,6 +121,7 @@ struct StandardRegressionStrategy{T<:AbstractFloat} <: EvaluationStrategy
             x_data_test,
             y_data_test,
             loss_function,
+            isnothing(validation_loss_function) ? loss_function : validation_loss_function,
             secOptimizer,
             break_condition,
             penalty,
@@ -132,12 +135,16 @@ struct GenericRegressionStrategy <: EvaluationStrategy
     operators::Union{OperatorEnum,Nothing}
     number_of_objectives::Int
     loss_function::Function
+    validation_loss_function::Union{Function,Nothing}
     secOptimizer::Union{Function,Nothing}
     break_condition::Union{Function,Nothing}
 
     function GenericRegressionStrategy(operators::Union{OperatorEnum,Nothing}, number_of_objectives::Int, loss_function::Function;
-        secOptimizer::Union{Function,Nothing}, break_condition::Union{Function,Nothing})
-        new(operators, number_of_objectives, loss_function, secOptimizer, break_condition)
+        validation_loss_function::Union{Function,Nothing}=nothing,
+        secOptimizer::Union{Function,Nothing}=nothing,
+        break_condition::Union{Function,Nothing}=nothing)
+        new(operators, number_of_objectives, loss_function, validation_loss_function,
+            secOptimizer, break_condition)
     end
 end
 
@@ -209,7 +216,7 @@ struct Toolbox
         gene_len = head_len * 2 + 1
         headsyms = [key for (key, arity) in symbols if arity == 2]
         unary_syms = [key for (key, arity) in symbols if arity == 1]
-        up = isempty(unary_syms) ?  0 : unary_prob
+        up = isempty(unary_syms) ? 0 : unary_prob
 
         tailsyms = [key for (key, arity) in symbols if arity < 1 && !(key in preamble_syms)]
         len_preamble = length(preamble_syms)
@@ -222,7 +229,7 @@ struct Toolbox
             tail_weights .* (1 - head_tail_balance - up)
         ])
 
-        
+
         #ensure_buffer_size!(head_len, gene_count)
         head_syms = vcat([headsyms, unary_syms, tailsyms]...)
         new(gene_count, head_len, symbols, gene_connections, head_syms, tailsyms, symbols,
@@ -473,7 +480,7 @@ New Chromosome instance
     genes = vcat([generate_gene(toolbox.headsyms, toolbox.tailsyms, toolbox.head_len, toolbox.tail_weights,
         toolbox.head_weights) for _ in 1:toolbox.gene_count]...)
     if !isempty(toolbox.preamble_syms)
-        return Chromosome(vcat(connectors, genes, sample(toolbox.preamble_syms,toolbox.gene_count)), toolbox, true)
+        return Chromosome(vcat(connectors, genes, sample(toolbox.preamble_syms, toolbox.gene_count)), toolbox, true)
     end
     return Chromosome(vcat(connectors, genes), toolbox, true)
 end
@@ -584,7 +591,7 @@ end
     end
 
     chromosome1.genes = child_1_genes
-    chromosome2.genes = child_2_genes    
+    chromosome2.genes = child_2_genes
 end
 
 @inline function gen_rezessiv!(chromosome1::Chromosome, chromosome2::Chromosome, pb::Real=0.2)
@@ -601,7 +608,7 @@ end
     end
 
     chromosome1.genes = child_1_genes
-    chromosome2.genes = child_2_genes   
+    chromosome2.genes = child_2_genes
 end
 
 @inline function gene_fussion!(chromosome1::Chromosome, chromosome2::Chromosome, pb::Real=0.2)
@@ -618,7 +625,7 @@ end
     end
 
     chromosome1.genes = child_1_genes
-    chromosome2.genes = child_2_genes  
+    chromosome2.genes = child_2_genes
 end
 
 @inline function gene_one_point_cross_over!(chromosome1::Chromosome, chromosome2::Chromosome)
@@ -635,7 +642,7 @@ end
     end
 
     chromosome1.genes = child_1_genes
-    chromosome2.genes = child_2_genes  
+    chromosome2.genes = child_2_genes
 end
 
 @inline function gene_two_point_cross_over!(chromosome1::Chromosome, chromosome2::Chromosome)
@@ -652,7 +659,7 @@ end
     end
 
     chromosome1.genes = child_1_genes
-    chromosome2.genes = child_2_genes 
+    chromosome2.genes = child_2_genes
 end
 
 @inline function gene_mutation!(chromosome1::Chromosome, pb::Real=0.25)
@@ -662,7 +669,7 @@ end
 
     @inbounds @simd for i in eachindex(gene_seq_alpha)
         gene_seq_alpha[i] = alpha_operator[i] == 1 ? mutation_seq_1.genes[i] : gene_seq_alpha[i]
-    end  
+    end
 end
 
 @inline function gene_inversion!(chromosome1::Chromosome)
@@ -684,7 +691,7 @@ end
 end
 
 @inline function reverse_insertion_tail!(chromosome::Chromosome)
-    start_1 = rand(chromosome.toolbox.gen_start_indices)+chromosome.toolbox.head_len+1
+    start_1 = rand(chromosome.toolbox.gen_start_indices) + chromosome.toolbox.head_len + 1
     rolled_array = circshift(chromosome.genes[start_1:start_1+chromosome.toolbox.head_len-1], rand(1:chromosome.toolbox.head_len-1))
     chromosome.genes[start_1:start_1+chromosome.toolbox.head_len-1] = rolled_array
 end
