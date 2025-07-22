@@ -698,6 +698,40 @@ end
 
 
 """
+    gene_transposition!(chromosome::Chromosome, len::Int=5)
+
+Swaps two small segments of genes between two positions within the same chromosome, preserving their order but changing their context. This implements a swap to achieve transposition by exchanging the source and target regions.
+
+# Arguments
+- `chromosome::Chromosome`: Target chromosome (mutable struct)
+- `len::Int=3`: Length of segment to transpose (default: 5)
+
+"""
+@inline function gene_transposition!(chromosome::Chromosome, len::Int=5)
+    toolbox = chromosome.toolbox
+    head_len = toolbox.head_len
+    gene_len = head_len * 2 + 1
+    gen_start_indices = toolbox.gen_start_indices
+
+    # Get start positions
+    source_start = rand(gen_start_indices)
+    target_start = rand(gen_start_indices)
+
+    # Ensure segment length is valid
+    segment_len = min(len, gene_len - 1)
+
+    # Randomly select source and target positions within gene bounds
+    source_pos = rand(source_start+head_len:(source_start + gene_len-segment_len))
+    target_pos = rand(target_start+head_len:(target_start + gene_len-segment_len))
+
+    # Perform in-place swap to avoid allocations
+    for i in 0:(segment_len - 1)
+        chromosome.genes[source_pos + i], chromosome.genes[target_pos + i] = deepcopy(chromosome.genes[target_pos + i]), deepcopy(chromosome.genes[source_pos + i])
+    end
+end
+
+
+"""
     genetic_operations!(space_next::Vector{Chromosome}, i::Int, toolbox::Toolbox)
 
 Apply genetic operations to chromosomes.
@@ -738,7 +772,7 @@ Modify chromosome genes in place
 @inline function genetic_operations!(space_next::Vector{Chromosome}, i::Int, toolbox::Toolbox; generation::Int64, max_generation::Int64, parents::Vector{Chromosome})
     #allocate them within the space - create them once instead of n time 
     space_next[i:i+1] = replicate(space_next[i], space_next[i+1], toolbox)
-    rand_space = rand(15)
+    rand_space = rand(20)
 
 
     if rand_space[1] < toolbox.gep_probs["one_point_cross_over_prob"]
@@ -794,10 +828,18 @@ Modify chromosome genes in place
     end
 
     if rand_space[14] < toolbox.gep_probs["reverse_insertion_tail"]
-        reverse_insertion_tail!(space_next[i+1])
+        reverse_insertion_tail!(space_next[i])
     end
 
     if rand_space[15] < toolbox.gep_probs["reverse_insertion_tail"]
+        reverse_insertion_tail!(space_next[i+1])
+    end
+
+    if rand_space[16] < toolbox.gep_probs["gene_transposition"]
+        reverse_insertion_tail!(space_next[i])
+    end
+
+    if rand_space[18] < toolbox.gep_probs["gene_transposition"]
         reverse_insertion_tail!(space_next[i+1])
     end
 
