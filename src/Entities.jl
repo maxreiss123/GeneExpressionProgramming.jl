@@ -684,7 +684,7 @@ end
     chromosome.genes[insert_pos] = insert_sym
 end
 
-@inline function reverse_insertion!(chromosome::Chromosome)
+@inline function root_insertion!(chromosome::Chromosome)
     start_1 = rand(chromosome.toolbox.gen_start_indices)
     rolled_array = circshift(chromosome.genes[start_1:start_1+chromosome.toolbox.head_len-1], rand(1:chromosome.toolbox.head_len-1))
     chromosome.genes[start_1:start_1+chromosome.toolbox.head_len-1] = rolled_array
@@ -749,7 +749,7 @@ Modifies chromosomes in place applying various genetic operations based on proba
     gene_mutation!(chromosome1::Chromosome, pb::Real=0.25)
     gene_inversion!(chromosome1::Chromosome)
     gene_insertion!(chromosome::Chromosome)
-    reverse_insertion!(chromosome::Chromosome)
+    root_insertion!(chromosome::Chromosome)
     reverse_insertion_tail!(chromosome::Chromosome)
     gene_one_point_cross_over!(chromosome1::Chromosome, chromosome2::Chromosome)
     gene_two_point_cross_over!(chromosome1::Chromosome, chromosome2::Chromosome)
@@ -757,8 +757,6 @@ Modifies chromosomes in place applying various genetic operations based on proba
     gen_rezessiv!(chromosome1::Chromosome, chromosome2::Chromosome, pb::Real=0.2)
     gene_fussion!(chromosome1::Chromosome, chromosome2::Chromosome, pb::Real=0.2)
     gene_insertion!(chromosome1::Chromosome)
-    reverse_insertion!(chromosome1::Chromosome)
-    reverse_insertion_tail!(chromosome1::Chromosome)
     
 Genetic operators for chromosome modification.
 
@@ -819,12 +817,12 @@ Modify chromosome genes in place
         gene_insertion!(space_next[i+1])
     end
 
-    if rand_space[12] < toolbox.gep_probs["reverse_insertion"]
-        reverse_insertion!(space_next[i])
+    if rand_space[12] < toolbox.gep_probs["root_insertion_prob"]
+        root_insertion!(space_next[i])
     end
 
-    if rand_space[13] < toolbox.gep_probs["reverse_insertion"]
-        reverse_insertion!(space_next[i+1])
+    if rand_space[13] < toolbox.gep_probs["root_insertion_prob"]
+        root_insertion!(space_next[i+1])
     end
 
     if rand_space[14] < toolbox.gep_probs["reverse_insertion_tail"]
@@ -835,11 +833,11 @@ Modify chromosome genes in place
         reverse_insertion_tail!(space_next[i+1])
     end
 
-    if rand_space[16] < toolbox.gep_probs["gene_transposition"]
+    if rand_space[16] < toolbox.gep_probs["gene_transposition_prob"]
         reverse_insertion_tail!(space_next[i])
     end
 
-    if rand_space[18] < toolbox.gep_probs["gene_transposition"]
+    if rand_space[18] < toolbox.gep_probs["gene_transposition_prob"]
         reverse_insertion_tail!(space_next[i+1])
     end
 
