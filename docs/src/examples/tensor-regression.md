@@ -3,7 +3,7 @@
 Hint: This topic is currently under development. The next update will include an improvement in performance and dimension handling. 
 
 
-Tensor regression is an advanced feature of GeneExpressionProgramming.jl that enables symbolic regression with vector and matrix data. This capability is particularly valuable for applications in computational mechanics, fluid dynamics, computer vision, medical data from (MRI), and other fields where the relationships involve higher-dimensional mathematical objects.
+Tensor regression is an advanced feature of GeneExpressionProgramming.jl that enables symbolic regression with vector and matrix data. This capability is particularly valuable for applications in computational mechanics, fluid dynamics, computer vision, medical data from (MRI), and other fields where the relationships involve higher-dimensional mathematical objects. The GeneExpressionProgramming.jl provides this capability either by the implementation of the M-GEP[1] or a general exploration. 
 
 ## Understanding Tensor Operations
 
@@ -437,7 +437,14 @@ println("  This demonstrates vector cross product capabilities")
 - Verify tensor properties (symmetry, positive definiteness, etc.)
 - Compare with known analytical solutions when available
 
-Tensor regression in GeneExpressionProgramming.jl opens up new possibilities for discovering complex mathematical relationships involving higher-dimensional data structures. While computationally more demanding than scalar regression, it provides unique capabilities for applications in physics, engineering, and computer science where tensor operations are fundamental.
+Tensor regression in GeneExpressionProgramming.jl opens up further possibilities for discovering complex mathematical relationships involving higher-dimensional data structures. While computationally more demanding than scalar regression, it provides unique capabilities for applications in physics, engineering, and computer science where tensor operations are fundamental.
+
+## References
+ 
+[1] Weatheritt, J., Sandberg, R. D. (2016)  A novel evolutionary algorithm applied to algebraic modifications of the RANS stress–strain relationship. Journal of Computational Physics, 325, 22-37
 
 ---
+
+
+
 

@@ -1,6 +1,6 @@
 # Multi-Objective Optimization
 
-Multi-objective optimization is a powerful feature of GeneExpressionProgramming.jl that allows you to balance multiple competing objectives simultaneously. This is particularly useful in symbolic regression where you often want to find expressions that are both accurate and simple, or when you need to optimize for multiple performance criteria.
+Multi-objective optimization is a powerful feature of GeneExpressionProgramming.jl that allows you to balance multiple competing objectives simultaneously. This is particularly useful in symbolic regression where you often want to find expressions that are both accurate and simple, or when you need to optimize for multiple performance criteria, as demonstrated in [1].
 
 ## Understanding Multi-Objective Optimization
 
@@ -11,7 +11,7 @@ In traditional single-objective optimization, the goal is to find the single bes
 - **Speed vs. Accuracy**: Faster evaluation vs. more precise predictions
 - **Robustness vs. Precision**: Stable performance across different conditions vs. optimal performance in specific scenarios
 
-Multi-objective optimization using NSGA-II (Non-dominated Sorting Genetic Algorithm II) finds a set of Pareto-optimal solutions, allowing you to choose the best trade-off for your specific needs.
+Multi-objective optimization using NSGA-II (Non-dominated Sorting Genetic Algorithm II)[2] finds a set of Pareto-optimal solutions, allowing you to choose the best trade-off for your specific needs.
 
 ## Complete Multi-Objective Example
 
@@ -98,8 +98,7 @@ println()
             # Objective 1: Mean Squared Error on validation set
             mse_val = mean((y_val .- y_pred_val).^2)
             
-            # Objective 2: Expression complexity (number of nodes)
-            # This is a proxy for interpretability
+            # Objective 2: Expression complexity
             complexity = length(elem.expression_raw)  # Simple complexity measure
             
             # Store both objectives (both to be minimized)
@@ -448,7 +447,7 @@ three_objective_pop = 1500  # 3x for 3 objectives
 function plot_convergence(regressor)
     # Extract fitness history for all objectives
     if hasfield(typeof(regressor), :fitness_history_)
-        history = regressor.fitness_history_
+        history = regressor.fitness_history_.train_loss
         
         # Plot evolution of best solutions for each objective
         generations = 1:length(history)
@@ -583,6 +582,14 @@ end
 ### Pitfall 4: Expensive Evaluation
 **Problem**: Multi-objective evaluation is computationally expensive
 **Solution**: Use surrogate models, parallel evaluation, or approximation methods
+
+
+
+## References
+
+[1] Waschkowski, F., Zhao, Y., Sandberg R. D., Klewicki J., (2022), Multi-objective CFD-driven development of coupled turbulence closure models. Journal of Computational Physics, vol. 452, 
+
+[2] K. Deb, A. Pratap, S. Agarwal and T. Meyarivan, (2002) "A fast and elitist multiobjective genetic algorithm: NSGA-II," in IEEE Transactions on Evolutionary Computation, vol. 6, no. 2, pp. 182-197 
 
 ---
 
