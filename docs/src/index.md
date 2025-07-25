@@ -86,11 +86,19 @@ println(regressor.best_models_[1].compiled_function)
 
 ## Research Foundation
 
-GeneExpressionProgramming.jl is based on cutting-edge research in symbolic regression and evolutionary computation. The package implements novel techniques for constraining genetic symbolic regression via semantic backpropagation, as described in:
+GeneExpressionProgramming.jl is based on research in symbolic regression and evolutionary computation. The package implements novel techniques for constraining genetic symbolic regression via semantic backpropagation, as described in:
 
 > Reissmann, M., Fang, Y., Ooi, A. S. H., & Sandberg, R. D. (2025). Constraining genetic symbolic regression via semantic backpropagation. *Genetic Programming and Evolvable Machines*, 26(1), 12.
 
-This research introduces innovative methods for ensuring that evolved expressions respect physical constraints and dimensional consistency, making the package particularly valuable for scientific applications.
+This research introduces innovative methods for ensuring that evolved expressions respect physical constraints and dimensional consistency, making the package particularly valuable for scientific applications. Moreover, the implementation builds on top of concepts explored and developed in:
+
+> Ferreira, C. (2001). Gene Expression Programming: a New Adaptive Algorithm for Solving Problems. Complex Systems, 13.
+
+> K. Deb, A. Pratap, S. Agarwal and T. Meyarivan, (2002) "A fast and elitist multiobjective genetic algorithm: NSGA-II," in IEEE Transactions on Evolutionary Computation, vol. 6, no. 2, pp. 182-197 
+
+> Weatheritt, J., Sandberg, R. D. (2016)  A novel evolutionary algorithm applied to algebraic modifications of the RANS stress–strain relationship. Journal of Computational Physics, vol. 325, pp. 22-37
+
+> Waschkowski, F., Zhao, Y., Sandberg R. D., Klewicki J., (2022), Multi-objective CFD-driven development of coupled turbulence closure models. Journal of Computational Physics, vol. 452, 
 
 ## Community and Support
 
@@ -127,7 +135,6 @@ If you use GeneExpressionProgramming.jl in your research, please cite:
   url      = {https://doi.org/10.1007/s10710-025-09510-z}
 }
 ```
-
 
 ## Version Information
 
