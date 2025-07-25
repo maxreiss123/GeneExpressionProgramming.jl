@@ -138,7 +138,9 @@ If you use GeneExpressionProgramming.jl in your research, please cite:
 
 ## Version Information
 
-This documentation covers GeneExpressionProgramming.jl version 0.3.0 and later. The package is actively developed, with regular updates and improvements. Check the [GitHub repository](https://github.com/maxreiss123/GeneExpressionProgramming.jl) for the latest version and release notes.
+This documentation covers GeneExpressionProgramming.jl version 0.5.0 and later. The package is actively developed, with regular updates and improvements. Check the [GitHub repository](https://github.com/maxreiss123/GeneExpressionProgramming.jl) for the latest version and release notes.
 
 
+## Acknowledgement
+ - We employ the insane fast [DynamicExpressions.jl](https://github.com/SymbolicML/DynamicExpressions.jl) for evaluating our expressions
 ---
