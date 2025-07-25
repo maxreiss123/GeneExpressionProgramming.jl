@@ -68,7 +68,7 @@ println(regressor.best_models_[1].compiled_function)
 
 **Tensor Regression**: Native support for vector and matrix data through integration with Flux.jl, enabling discovery of relationships involving geometric and tensor quantities.
 
-**Scientific Rigor**: Developed by researchers for researchers, with features specifically designed for scientific computing and discovery.
+**Scientific Rigor**: Developed with features specifically designed for scientific computing and discovery.
 
 ### Performance Benefits
 
@@ -80,8 +80,8 @@ println(regressor.best_models_[1].compiled_function)
 ### Ease of Use
 
 - **Simple API**: Intuitive interface that's easy to learn
-- **Comprehensive Documentation**: Extensive examples and tutorials
-- **Active Development**: Regular updates and community support
+- **Comprehensive Documentation**: Examples and tutorials
+- **Active Development**: Regular updates
 - **Integration**: Works well with the Julia ML ecosystem
 
 ## Research Foundation
