@@ -212,14 +212,13 @@ The `GepRegressor` constructor accepts several parameters to customize the evolu
 ```julia
 regressor = GepRegressor(
     number_features;
-    population_size = 1000,      # Population size
-    gene_count = 2,              # Number of genes per chromosome
+    gene_count = 2,             # Number of genes per chromosome
     head_len = 7,                # Head length of genes
-    max_arity = 2,               # Maximum arity of functions
-    mutation_rate = 0.1,         # Mutation probability
-    crossover_rate = 0.7,        # Crossover probability
-    selection_method = "tournament", # Selection method
-    tournament_size = 3          # Tournament size for selection
+    rnd_count = 2, 		# assign the number of utilized random numbers
+    tail_weigths = [0.6,0.2,0.2],  # assign utlized prob. for the sampled symbols =>  [features, constants, random numbers]
+    gene_connections=[:+, :-, :*, :/], #defines how the genes can be connnected
+    entered_terminal_nums = [Symbol(0.0), Symbol(0.5)] # define some constant values
+    
 )
 ```
 
@@ -235,7 +234,7 @@ custom_functions = [
     :sqrt, :abs                  # Other functions
 ]
 
-regressor = GepRegressor(number_features; function_set=custom_functions)
+regressor = GepRegressor(number_features; entered_non_terminals=custom_functions)
 ```
 
 ### Loss Function Options
@@ -261,7 +260,7 @@ You can monitor the training progress by accessing the fitness history:
 
 ```julia
 # After training
-fitness_history = regressor.fitness_history_.train_loss
+fitness_history = [elem[1] for elem in regressor.fitness_history_.train_loss] # save as tuple within the history
 
 # Plot fitness over generations
 plot(1:length(fitness_history), fitness_history,

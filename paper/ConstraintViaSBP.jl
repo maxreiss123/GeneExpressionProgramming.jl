@@ -13,7 +13,7 @@ using Statistics
 
 
 function break_condition(population, epoch)
-    return isclose(mean(population[1].fitness), 0.0)
+    return isclose(mean(population[1].fitness[1]), 0.0)
 end
 
 function loss_new(eqn::Node, operators::OperatorEnum, x_data::AbstractArray, y_data::AbstractArray)
@@ -89,7 +89,7 @@ function main()
                 @show ("Current case: ", case_name)
                 #gep_params
                 epochs = 1000
-                population_size = 500
+                population_size = 1500
 
                 results = DataFrame(Seed=[],
                     Name=String[], NoiseLeve=String[], Fitness=Float64[], Equation=String[], R2_test=Float64[],
@@ -108,7 +108,7 @@ function main()
 
                 print(phy_dims)
 
-                x_train, y_train, x_test, y_test = train_test_split(data[:, 1:num_cols-1], data[:, num_cols]; consider=4)
+                x_train, y_train, x_test, y_test = train_test_split(data[:, 1:num_cols-1], data[:, num_cols]; consider=10)
 
                 x_test, y_test = get_or_create_test_data(
                     test_data_dict,
@@ -122,28 +122,25 @@ function main()
                 regressor = GepRegressor(num_cols - 1;
                     considered_dimensions=phy_dims,
                     entered_non_terminals=[:+, :-, :*, :/, :sqrt, :sin, :cos, :exp, :log],
-                    max_permutations_lib=10000, rounds=7, number_of_objectives=1)
+                    max_permutations_lib=5000, rounds=7, number_of_objectives=1)
 
 
                 @inline function loss_new_(elem, validate::Bool)
                     try
                         if isnan(mean(elem.fitness)) || validate
                             y_pred = elem.compiled_function(x_train', regressor.operators_)
-                            elem.fitness = (get_loss_function("mse")(y_train, y_pred),)
-                        else
-                            elem.fitness = (elem.fitness, length(elem.expression_raw) * elem.fitness)
-                            #return (elem.fitness,)
+                            fit = sqrt(get_loss_function("mse")(y_train, y_pred))
+                            elem.fitness =  (fit+length(elem.expression_raw)*0.1*fit,)
                         end
                     catch e
-                        elem.fitness = (typemax(Float64),typemax(Float64))
+                        elem.fitness = (typemax(Float64),)
                     end
                 end
 
 
                 #perform the regression by entering epochs, population_size, the feature cols, the target col and the loss function
-                fit!(regressor, epochs, population_size, x_train', y_train;
-                    x_test=x_test', y_test=y_test', target_dimension=target_dim,
-                    loss_fun="mse", break_condition=break_condition, correction_amount=0.5)
+                fit!(regressor, epochs, population_size, loss_new_; target_dimension=target_dim,
+                break_condition=break_condition)
 
                 end_time = (time_ns() - start_time) / 1e9
                 elem = regressor.best_models_[1]

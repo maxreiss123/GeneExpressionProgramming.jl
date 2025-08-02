@@ -236,5 +236,3 @@ For additional help, consult [GitHub repository](https://github.com/maxreiss123/
 
 ---
 
-*Last updated: January 2025*
-

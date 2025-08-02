@@ -1,7 +1,6 @@
 using Documenter
 using DocumenterTools
 
-# Push the parent directory to LOAD_PATH so we can load the package
 push!(LOAD_PATH, "../")
 
 # Try to load the actual package first
@@ -15,103 +14,6 @@ catch e
     @info "Will create mock module for documentation build"
 end
 
-# Create mock module if the real package couldn't be loaded
-if !package_loaded
-    @eval module GeneExpressionProgramming
-        """
-            GepRegressor(number_features::Int; kwargs...)
-        
-        Create a Gene Expression Programming regressor for symbolic regression.
-        
-        # Arguments
-        - `number_features::Int`: Number of input features
-        - `population_size::Int = 1000`: Size of the population
-        - `gene_count::Int = 2`: Number of genes per chromosome
-        - `head_len::Int = 7`: Head length of each gene
-        - `function_set::Vector{Symbol} = [:+, :-, :*, :/]`: Available functions
-        
-        # Examples
-        ```julia
-        regressor = GepRegressor(3; population_size=500, gene_count=2)
-        ```
-        """
-        struct GepRegressor
-            number_features::Int
-            population_size::Int
-            gene_count::Int
-            head_len::Int
-            function_set::Vector{Symbol}
-        end
-        
-        function GepRegressor(number_features::Int; 
-                             population_size::Int = 1000,
-                             gene_count::Int = 2,
-                             head_len::Int = 7,
-                             function_set::Vector{Symbol} = [:+, :-, :*, :/])
-            return GepRegressor(number_features, population_size, gene_count, head_len, function_set)
-        end
-        
-        """
-            fit!(regressor, epochs::Int, population_size::Int, x_data, y_data; kwargs...)
-        
-        Train the GEP regressor on data.
-        
-        # Arguments
-        - `regressor`: GepRegressor instance
-        - `epochs::Int`: Number of generations to evolve
-        - `population_size::Int`: Population size for evolution
-        - `x_data`: Input features (features as rows, samples as columns)
-        - `y_data`: Target values
-        
-        # Keyword Arguments
-        - `loss_fun::String = "mse"`: Loss function ("mse", "mae", "rmse")
-        - `x_test = nothing`: Test features for validation
-        - `y_test = nothing`: Test targets for validation
-        
-        # Examples
-        ```julia
-        fit!(regressor, 1000, 1000, x_train', y_train; loss_fun="mse")
-        ```
-        """
-        function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, x_data, y_data; kwargs...)
-            # Mock implementation
-            println("Training GEP regressor for $epochs epochs...")
-            return nothing
-        end
-        
-        """
-            GepTensorRegressor(number_features::Int, gene_count::Int, head_len::Int; kwargs...)
-        
-        Create a Gene Expression Programming regressor for tensor (vector/matrix) symbolic regression.
-        
-        # Arguments
-        - `number_features::Int`: Number of input features
-        - `gene_count::Int`: Number of genes per chromosome
-        - `head_len::Int`: Head length of each gene
-        
-        # Keyword Arguments
-        - `feature_names::Vector{String} = []`: Names for features (for interpretability)
-        
-        # Examples
-        ```julia
-        regressor = GepTensorRegressor(5, 2, 3; feature_names=["x1", "x2", "U1", "U2", "U3"])
-        ```
-        """
-        struct GepTensorRegressor
-            number_features::Int
-            gene_count::Int
-            head_len::Int
-            feature_names::Vector{String}
-        end
-        
-        function GepTensorRegressor(number_features::Int, gene_count::Int, head_len::Int; 
-                                   feature_names::Vector{String} = String[])
-            return GepTensorRegressor(number_features, gene_count, head_len, feature_names)
-        end
-        
-        export GepRegressor, GepTensorRegressor, fit!
-    end
-end
 
 # Configure Documenter
 makedocs(;

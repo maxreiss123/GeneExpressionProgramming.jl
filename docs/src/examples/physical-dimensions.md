@@ -98,47 +98,13 @@ n_samples = 500
 
 println("Generating synthetic data...")
 
-# Create realistic ranges for each variable
-rho_range = (1e-6, 1e-3)    # Charge density range
-q_range = (1e-19, 1e-16)    # Charge range (around elementary charge)
-A_range = (1e-6, 1e-3)      # Magnetic vector potential range  
-m_range = (1e-30, 1e-27)    # Mass range (around electron mass)
+# J = -ρ * q * A / m 
+n_samples = 5000
 
-# Generate random data within physical ranges
-rho = rho_range[1] .+ (rho_range[2] - rho_range[1]) .* rand(n_samples)
-q = q_range[1] .+ (q_range[2] - q_range[1]) .* rand(n_samples)
-A = A_range[1] .+ (A_range[2] - A_range[1]) .* rand(n_samples)
-m = m_range[1] .+ (m_range[2] - m_range[1]) .* rand(n_samples)
-
-# Combine into feature matrix
-x_data = hcat(rho, q, A, m)
-
-# Calculate target using the true relationship: J = -ρ * q * A / m
-y_data = -rho .* q .* A ./ m
-
-# Add small amount of noise (1% relative noise)
-noise_level = 0.01
-y_data += noise_level * abs.(y_data) .* randn(n_samples)
-
-println("Data ranges:")
-println("  ρ (charge density): $(minimum(rho)) to $(maximum(rho))")
-println("  q (electric charge): $(minimum(q)) to $(maximum(q))")
-println("  A (magnetic potential): $(minimum(A)) to $(maximum(A))")
-println("  m (mass): $(minimum(m)) to $(maximum(m))")
-println("  J (current density): $(minimum(y_data)) to $(maximum(y_data))")
-println("  Noise level: $(noise_level * 100)%")
-println()
-
-# Split data for training and testing
-train_ratio = 0.8
-n_train = round(Int, n_samples * train_ratio)
-train_indices = 1:n_train
-test_indices = (n_train+1):n_samples
-
-x_train = x_data[train_indices, :]
-y_train = y_data[train_indices]
-x_test = x_data[test_indices, :]
-y_test = y_data[test_indices]
+# Load the data from the file =>  rho_c_0,q,A_vec,m,target
+data = Matrix(CSV.read("./paper/srsd/feynman-III.21.20\$0.txt", DataFrame))
+num_cols = size(data, 2)
+x_train, y_train, x_test, y_test = train_test_split(data[:, 1:num_cols-1], data[:, num_cols]; consider=4)
 
 println("Training samples: $(length(y_train))")
 println("Test samples: $(length(y_test))")
@@ -147,7 +113,7 @@ println()
 # Evolution parameters
 epochs = 1000
 population_size = 1000
-num_features = size(x_data, 2)
+num_features = num_cols - 1 
 
 # Create regressor with dimensional constraints
 regressor = GepRegressor(
@@ -296,8 +262,8 @@ println("Analysis plot saved as 'physical_dimensionality_analysis.png'")
 println("=== Detailed Comparison with True Relationship ===")
 
 # Calculate predictions using the true relationship
-true_predictions_train = -x_train[:, 1] .* x_train[:, 2] .* x_train[:, 3] .* x_train[:, 4]
-true_predictions_test = -x_test[:, 1] .* x_test[:, 2] .* x_test[:, 3] .* x_test[:, 4]
+true_predictions_train = -x_train[:, 1] .* x_train[:, 2] .* x_train[:, 3] ./ x_train[:, 4]
+true_predictions_test = -x_test[:, 1] .* x_test[:, 2] .* x_test[:, 3] ./ x_test[:, 4]
 
 # Compare evolved vs true relationship
 comparison_plot = plot(layout=(1,2), size=(1000, 400))
