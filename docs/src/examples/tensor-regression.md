@@ -371,37 +371,6 @@ total_vector_memory = n_samples * 3 * vector_size  # 3 vector features
 println("  Estimated vector memory: $(round(total_vector_memory/1024/1024, digits=2)) MB")
 
 println()
-
-# Advanced tensor operations example
-println("=== Advanced Tensor Operations Example ===")
-println("Demonstrating additional tensor capabilities...")
-
-# Example with matrix operations
-println("Matrix operation example:")
-n_matrix_samples = 100
-
-# Generate 2x2 matrices
-M1 = [randn(2, 2) for _ in 1:n_matrix_samples]
-M2 = [randn(2, 2) for _ in 1:n_matrix_samples]
-scalars = randn(n_matrix_samples)
-
-# True relationship: Result = scalar * M1 * M2
-true_matrices = [scalars[i] * M1[i] * M2[i] for i in 1:n_matrix_samples]
-
-println("  Generated $n_matrix_samples 2x2 matrices")
-println("  Relationship: R = s * M1 * M2")
-println("  This demonstrates matrix multiplication capabilities")
-
-# Example with cross products
-println()
-println("Cross product example:")
-v1_cross = [randn(3) for _ in 1:100]
-v2_cross = [randn(3) for _ in 1:100]
-cross_results = [cross(v1_cross[i], v2_cross[i]) for i in 1:100]
-
-println("  Generated 100 3D vector pairs")
-println("  Relationship: c = v1 × v2 (cross product)")
-println("  This demonstrates vector cross product capabilities")
 ```
 
 
@@ -441,7 +410,7 @@ Tensor regression in GeneExpressionProgramming.jl opens up further possibilities
 
 ## References
  
-[1] Weatheritt, J., Sandberg, R. D. (2016)  A novel evolutionary algorithm applied to algebraic modifications of the RANS stress–strain relationship. Journal of Computational Physics, 325, 22-37
+[1] Weatheritt, J., Sandberg, R. D. (2016)  A novel evolutionary algorithm applied to algebraic modifications of the RANS stress–strain relationship. Journal of Computational Physics, vol. 325, pp. 22-37
 
 ---
 
