@@ -5,10 +5,10 @@ using Random
 using BenchmarkTools
 using Statistics
 
-Random.seed!(1)
+Random.seed!(0)
 
 #Define the iterations for the algorithm and the population size
-epochs = 99
+epochs = 100
 population_size = 100
 
 #Number of features which needs to be inserted

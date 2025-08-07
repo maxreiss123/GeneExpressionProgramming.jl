@@ -484,10 +484,9 @@ mutable struct GepRegressor
         max_permutations_lib::Int=10000, rounds::Int=4,
         number_of_objectives::Int=1,
         head_weigths::Union{Vector{<:AbstractFloat},Nothing}=nothing,
-        tail_weigths::Union{Vector{<:AbstractFloat},Nothing}=[0.6,0.2,0.2],
-        random_seed::Int=0
+        tail_weigths::Union{Vector{<:AbstractFloat},Nothing}=[0.6,0.2,0.2]
     )        
-        master_rng = Threefry4x(UInt64, (UInt64(random_seed), UInt64(0), UInt64(0), UInt64(0)))
+        master_rng = Threefry4x(UInt64, (UInt64(rand(0:2000)), UInt64(0), UInt64(0), UInt64(0)))
         tail_count = feature_amount + rnd_count + length(entered_terminal_nums)
         tail_weigths_ = [tail_weigths[1]/tail_count for _ in 1:feature_amount]
         append!(tail_weigths_, fill(tail_weigths[2]/tail_count, length(entered_terminal_nums)))
@@ -613,6 +612,7 @@ mutable struct GepTensorRegressor
         feature_names::Vector{String}=String[]
     )
         #Creating the feature Nodes -> asuming a data dict pointing to 
+        master_rng = Threefry4x(UInt64, (UInt64(rand(0:2000)), UInt64(0), UInt64(0), UInt64(0)))
         cur_idx = Int8(1)
         nodes = OrderedDict{Int8,Any}()
         utilized_symbols = SymbolDict()
@@ -641,7 +641,7 @@ mutable struct GepTensorRegressor
         end
 
         for _ in 1:rnd_count
-            nodes[cur_idx] = rand()
+            nodes[cur_idx] = rand(master_rng)
             utilized_symbols[cur_idx] = Int8(0)
             cur_idx += 1
         end
@@ -659,7 +659,7 @@ mutable struct GepTensorRegressor
 
         toolbox = Toolbox(gene_count, head_len, utilized_symbols, gene_connections_,
             callbacks, nodes, GENE_COMMON_PROBS; number_of_objectives=number_of_objectives,
-            operators_=nothing, function_complile=compile_to_flux_network)
+            operators_=nothing, function_complile=compile_to_flux_network, master_rng=master_rng)
 
         obj = new()
         obj.toolbox_ = toolbox
