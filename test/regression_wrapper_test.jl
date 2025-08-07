@@ -42,7 +42,7 @@ Random.seed!(1)
         dimensions = Dict{Symbol,Vector{Float16}}()
         
         syms, nodes, dims, idx = create_constants_entries(
-            constants, 2, dimensions, Float64, Int8(1)
+            constants, 2, dimensions, Float64, Int8(1), MersenneTwister()
         )
         
         @test length(syms) == 4  # 2 constants + 2 random

@@ -1,5 +1,6 @@
 module EvoSelection
 using LinearAlgebra
+using Random
 
 export tournament_selection, nsga_selection, dominates_, fast_non_dominated_sort, calculate_fronts, determine_ranks, assign_crowding_distance
 
@@ -8,7 +9,9 @@ struct SelectedMembers
     fronts::Dict{Int,Vector{Int}}
 end
 
-@inline function tournament_selection(population::AbstractArray{Tuple}, number_of_winners::Int, tournament_size::Int)
+const STD_RNG = MersenneTwister()
+
+@inline function tournament_selection(population::AbstractArray{Tuple}, number_of_winners::Int, tournament_size::Int; rng::AbstractRNG=STD_RNG)
     selected_indices = Vector{Int}(undef, number_of_winners)
     valid_indices_ = findall(x -> isfinite(x[1]), population)
     valid_indices = []
@@ -24,8 +27,8 @@ end
         if index == number_of_winners
             selected_indices[index] = 1
         else
-            contenders = rand(valid_indices, min(tournament_size, length(valid_indices)))
-            winner = reduce((best, contender) -> population[contender] < population[best] ? contender : best, contenders)
+            contenders = rand(rng, valid_indices, min(tournament_size, length(valid_indices)))
+            winner = reduce((best, contender) -> population[contender] <= population[best] ? contender : best, contenders)
             selected_indices[index] = winner
         end
     end
@@ -164,7 +167,8 @@ end
     return distances
 end
 
-function tournament_selection_nsga(pop_indices::Vector{Int}, ranks::Vector{Int}, crowding_distances::Dict{Int,Float64}, number_of_winners::Int, tournament_size::Int)
+function tournament_selection_nsga(pop_indices::Vector{Int}, ranks::Vector{Int},
+    crowding_distances::Dict{Int,Float64}, number_of_winners::Int, tournament_size::Int; rng::AbstractRNG=STD_RNG)
     selected_indices = Vector{Int}(undef, number_of_winners)
 
     finite_distances = [d for d in values(crowding_distances) if isfinite(d)]
@@ -185,7 +189,7 @@ function tournament_selection_nsga(pop_indices::Vector{Int}, ranks::Vector{Int},
     end
 
     for i in 1:number_of_winners
-        contenders = rand(pop_indices, tournament_size)
+        contenders = rand(rng, pop_indices, tournament_size)
         winner = reduce(contenders; init=contenders[1]) do best, contender
             if ranks[contender] < ranks[best]
                 contender
@@ -200,7 +204,7 @@ function tournament_selection_nsga(pop_indices::Vector{Int}, ranks::Vector{Int},
     return selected_indices
 end
 
-function nsga_selection(population::Vector{T}; tournament_size::Int=2) where {T<:Tuple}
+function nsga_selection(population::Vector{T}; tournament_size::Int=3, rng::AbstractRNG=STD_RNG) where {T<:Tuple}
     pop_size = length(population)
 
     ranks = determine_ranks(population)
@@ -214,7 +218,7 @@ function nsga_selection(population::Vector{T}; tournament_size::Int=2) where {T<
     end
 
     all_indices = collect(1:pop_size)
-    selected_indices = tournament_selection_nsga(all_indices, ranks, crowding_distances, pop_size, tournament_size)
+    selected_indices = tournament_selection_nsga(all_indices, ranks, crowding_distances, pop_size, tournament_size; rng=rng)
 
     return SelectedMembers(selected_indices, Dict(enumerate(fronts)))
 end

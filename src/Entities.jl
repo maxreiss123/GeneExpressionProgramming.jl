@@ -85,7 +85,10 @@ using ..TensorRegUtils
 using OrderedCollections
 using DynamicExpressions
 using StatsBase
+using Random
+using Random123
 
+const STD_RNG = MersenneTwister()
 
 abstract type EvaluationStrategy end
 
@@ -199,6 +202,7 @@ struct Toolbox
     compile_function_::Union{Function,Nothing}
     tail_weights::Union{Weights,Nothing}
     head_weights::Union{Weights,Nothing}
+    master_rng::AbstractRNG
 
 
     function Toolbox(gene_count::Int, head_len::Int, symbols::OrderedDict{Int8,Int8}, gene_connections::Vector{Int8},
@@ -207,7 +211,8 @@ struct Toolbox
         number_of_objectives::Int=1, operators_::Union{OperatorEnum,Nothing}=nothing,
         function_complile::Union{Function,Nothing}=compile_djl_datatype,
         tail_weights_::Union{Weights,Nothing}=nothing,
-        head_tail_balance::Real=0.5)
+        head_tail_balance::Real=0.5,
+        master_rng::AbstractRNG=STD_RNG)
 
         fitness_reset = (
             ntuple(_ -> Inf, number_of_objectives),
@@ -232,10 +237,11 @@ struct Toolbox
 
         #ensure_buffer_size!(head_len, gene_count)
         head_syms = vcat([headsyms, unary_syms, tailsyms]...)
+        
         new(gene_count, head_len, symbols, gene_connections, head_syms, tailsyms, symbols,
             callbacks, nodes, gen_start_indices, gep_probs, fitness_reset, preamble_syms, len_preamble, operators_,
             function_complile,
-            tail_weights, head_weights)
+            tail_weights, head_weights, master_rng)
     end
 end
 
@@ -459,9 +465,9 @@ Generate a single gene for GEP.
 Vector{Int8} representing gene
 """
 @inline function generate_gene(headsyms::Vector{Int8}, tailsyms::Vector{Int8}, headlen::Int,
-    tail_weights::Weights, head_weights::Weights)
-    head = sample(headsyms, head_weights, headlen)
-    tail = sample(tailsyms, tail_weights, headlen + 1)
+    tail_weights::Weights, head_weights::Weights; rng::AbstractRNG=STD_RNG)
+    head = sample(rng,headsyms, head_weights, headlen)
+    tail = sample(rng,tailsyms, tail_weights, headlen + 1)
     return vcat(head, tail)
 end
 
@@ -475,12 +481,12 @@ Generate a new chromosome using toolbox configuration.
 # Returns => need to be adapted for tensor gen
 New Chromosome instance
 """
-@inline function generate_chromosome(toolbox::Toolbox)
-    connectors = rand(toolbox.gene_connections, toolbox.gene_count - 1)
+@inline function generate_chromosome(toolbox::Toolbox; rng::AbstractRNG=STD_RNG)
+    connectors = rand(rng, toolbox.gene_connections, toolbox.gene_count - 1)
     genes = vcat([generate_gene(toolbox.headsyms, toolbox.tailsyms, toolbox.head_len, toolbox.tail_weights,
-        toolbox.head_weights) for _ in 1:toolbox.gene_count]...)
+        toolbox.head_weights; rng=rng) for _ in 1:toolbox.gene_count]...)
     if !isempty(toolbox.preamble_syms)
-        return Chromosome(vcat(connectors, genes, sample(toolbox.preamble_syms, toolbox.gene_count)), toolbox, true)
+        return Chromosome(vcat(connectors, genes, sample(rng, toolbox.preamble_syms, toolbox.gene_count)), toolbox, true)
     end
     return Chromosome(vcat(connectors, genes), toolbox, true)
 end
@@ -495,32 +501,34 @@ Generate initial population of chromosomes.
 # Arguments
 - `number::Int`: Population size
 - `toolbox::Toolbox`: Toolbox configuration
+- `rng::AbstractRNG`: rng_key to create the sample
 
 # Returns
 Vector of Chromosomes
 """
 @inline function generate_population(number::Int, toolbox::Toolbox)
     population = Vector{Chromosome}(undef, number)
-
+    subkeys = split_rng(toolbox.master_rng, number)
     Threads.@threads for i in 1:number
-        @inbounds population[i] = generate_chromosome(toolbox)
+        @inbounds population[i] = generate_chromosome(toolbox; rng=subkeys[i])
     end
-
     return population
 end
 
 
-@inline function create_operator_masks(gene_seq_alpha::Vector{Int8}, gene_seq_beta::Vector{Int8}, pb::Real=0.2)
+@inline function create_operator_masks(gene_seq_alpha::Vector{Int8}, gene_seq_beta::Vector{Int8}, pb::Real=0.2; 
+    rng::AbstractRNG=STD_RNG)
     alpha_operator = zeros(Int8, length(gene_seq_alpha))
     beta_operator = zeros(Int8, length(gene_seq_beta))
-    indices_alpha = rand(1:length(gene_seq_alpha), min(round(Int, (pb * length(gene_seq_alpha))), length(gene_seq_alpha)))
-    indices_beta = rand(1:length(gene_seq_beta), min(round(Int, (pb * length(gene_seq_beta))), length(gene_seq_beta)))
+    indices_alpha = rand(rng,1:length(gene_seq_alpha), min(round(Int, (pb * length(gene_seq_alpha))), length(gene_seq_alpha)))
+    indices_beta = rand(rng,1:length(gene_seq_beta), min(round(Int, (pb * length(gene_seq_beta))), length(gene_seq_beta)))
     alpha_operator[indices_alpha] .= Int8(1)
     beta_operator[indices_beta] .= Int8(1)
     return alpha_operator, beta_operator
 end
 
-@inline function create_operator_point_one_masks(gene_seq_alpha::Vector{Int8}, gene_seq_beta::Vector{Int8}, toolbox::Toolbox)
+@inline function create_operator_point_one_masks(gene_seq_alpha::Vector{Int8}, gene_seq_beta::Vector{Int8}, toolbox::Toolbox; 
+    rng::AbstractRNG=STD_RNG)
     alpha_operator = zeros(Int8, length(gene_seq_alpha))
     beta_operator = zeros(Int8, length(gene_seq_beta))
     head_len = toolbox.head_len
@@ -530,12 +538,12 @@ end
         ref = i
         mid = ref + gene_len ÷ 2
 
-        point1 = rand(ref:mid)
-        point2 = rand((mid+1):(ref+gene_len-1))
+        point1 = rand(rng,ref:mid)
+        point2 = rand(rng,(mid+1):(ref+gene_len-1))
         alpha_operator[point1:point2] .= Int8(1)
 
-        point1 = rand(ref:mid)
-        point2 = rand((mid+1):(ref+gene_len-1))
+        point1 = rand(rng,ref:mid)
+        point2 = rand(rng,(mid+1):(ref+gene_len-1))
         beta_operator[point1:point2] .= Int8(1)
     end
 
@@ -543,7 +551,8 @@ end
 end
 
 
-@inline function create_operator_point_two_masks(gene_seq_alpha::Vector{Int8}, gene_seq_beta::Vector{Int8}, toolbox::Toolbox)
+@inline function create_operator_point_two_masks(gene_seq_alpha::Vector{Int8}, gene_seq_beta::Vector{Int8}, toolbox::Toolbox; 
+    rng::AbstractRNG=STD_RNG)
     alpha_operator = zeros(Int8, length(gene_seq_alpha))
     beta_operator = zeros(Int8, length(gene_seq_beta))
     head_len = toolbox.head_len
@@ -556,15 +565,15 @@ end
         end_gene = start + gene_len - 1
 
 
-        point1 = rand(start:quarter)
-        point2 = rand(quarter+1:half)
-        point3 = rand(half+1:end_gene)
+        point1 = rand(rng,start:quarter)
+        point2 = rand(rng,quarter+1:half)
+        point3 = rand(rng,half+1:end_gene)
         alpha_operator[point1:point2] .= Int8(1)
         alpha_operator[point3:end_gene] .= Int8(1)
 
 
-        point1 = rand(start:end_gene)
-        point2 = rand(point1:end_gene)
+        point1 = rand(rng,start:end_gene)
+        point2 = rand(rng,point1:end_gene)
         beta_operator[point1:point2] .= Int8(1)
         beta_operator[point2+1:end_gene] .= Int8(1)
     end
@@ -577,10 +586,10 @@ end
 end
 
 
-@inline function gene_dominant_fusion!(chromosome1::Chromosome, chromosome2::Chromosome, pb::Real=0.2)
+@inline function gene_dominant_fusion!(chromosome1::Chromosome, chromosome2::Chromosome, pb::Real=0.2; rng::AbstractRNG=STD_RNG)
     gene_seq_alpha = chromosome1.genes
     gene_seq_beta = chromosome2.genes
-    alpha_operator, beta_operator = create_operator_masks(gene_seq_alpha, gene_seq_beta, pb)
+    alpha_operator, beta_operator = create_operator_masks(gene_seq_alpha, gene_seq_beta, pb; rng=rng)
 
     child_1_genes = similar(gene_seq_alpha)
     child_2_genes = similar(gene_seq_beta)
@@ -594,10 +603,10 @@ end
     chromosome2.genes = child_2_genes
 end
 
-@inline function gen_rezessiv!(chromosome1::Chromosome, chromosome2::Chromosome, pb::Real=0.2)
+@inline function gen_rezessiv!(chromosome1::Chromosome, chromosome2::Chromosome, pb::Real=0.2; rng::AbstractRNG=STD_RNG)
     gene_seq_alpha = chromosome1.genes
     gene_seq_beta = chromosome2.genes
-    alpha_operator, beta_operator = create_operator_masks(gene_seq_alpha, gene_seq_beta, pb)
+    alpha_operator, beta_operator = create_operator_masks(gene_seq_alpha, gene_seq_beta, pb; rng=rng)
 
     child_1_genes = similar(gene_seq_alpha)
     child_2_genes = similar(gene_seq_beta)
@@ -611,10 +620,10 @@ end
     chromosome2.genes = child_2_genes
 end
 
-@inline function gene_fussion!(chromosome1::Chromosome, chromosome2::Chromosome, pb::Real=0.2)
+@inline function gene_fussion!(chromosome1::Chromosome, chromosome2::Chromosome, pb::Real=0.2; rng::AbstractRNG=STD_RNG)
     gene_seq_alpha = chromosome1.genes
     gene_seq_beta = chromosome2.genes
-    alpha_operator, beta_operator = create_operator_masks(gene_seq_alpha, gene_seq_beta, pb)
+    alpha_operator, beta_operator = create_operator_masks(gene_seq_alpha, gene_seq_beta, pb; rng=rng)
 
     child_1_genes = similar(gene_seq_alpha)
     child_2_genes = similar(gene_seq_beta)
@@ -628,10 +637,10 @@ end
     chromosome2.genes = child_2_genes
 end
 
-@inline function gene_one_point_cross_over!(chromosome1::Chromosome, chromosome2::Chromosome)
+@inline function gene_one_point_cross_over!(chromosome1::Chromosome, chromosome2::Chromosome; rng::AbstractRNG=STD_RNG)
     gene_seq_alpha = chromosome1.genes
     gene_seq_beta = chromosome2.genes
-    alpha_operator, beta_operator = create_operator_point_one_masks(gene_seq_alpha, gene_seq_beta, chromosome1.toolbox)
+    alpha_operator, beta_operator = create_operator_point_one_masks(gene_seq_alpha, gene_seq_beta, chromosome1.toolbox; rng=rng)
 
     child_1_genes = similar(gene_seq_alpha)
     child_2_genes = similar(gene_seq_beta)
@@ -645,10 +654,10 @@ end
     chromosome2.genes = child_2_genes
 end
 
-@inline function gene_two_point_cross_over!(chromosome1::Chromosome, chromosome2::Chromosome)
+@inline function gene_two_point_cross_over!(chromosome1::Chromosome, chromosome2::Chromosome; rng::AbstractRNG=STD_RNG)
     gene_seq_alpha = chromosome1.genes
     gene_seq_beta = chromosome2.genes
-    alpha_operator, beta_operator = create_operator_point_two_masks(gene_seq_alpha, gene_seq_beta, chromosome1.toolbox)
+    alpha_operator, beta_operator = create_operator_point_two_masks(gene_seq_alpha, gene_seq_beta, chromosome1.toolbox; rng=rng)
 
     child_1_genes = similar(gene_seq_alpha)
     child_2_genes = similar(gene_seq_beta)
@@ -662,37 +671,37 @@ end
     chromosome2.genes = child_2_genes
 end
 
-@inline function gene_mutation!(chromosome1::Chromosome, pb::Real=0.25)
+@inline function gene_mutation!(chromosome1::Chromosome, pb::Real=0.25; rng::AbstractRNG=STD_RNG)
     gene_seq_alpha = chromosome1.genes
-    alpha_operator, _ = create_operator_masks(gene_seq_alpha, gene_seq_alpha, pb)
-    mutation_seq_1 = generate_chromosome(chromosome1.toolbox)
+    alpha_operator, _ = create_operator_masks(gene_seq_alpha, gene_seq_alpha, pb; rng=rng)
+    mutation_seq_1 = generate_chromosome(chromosome1.toolbox; rng=rng)
 
     @inbounds @simd for i in eachindex(gene_seq_alpha)
         gene_seq_alpha[i] = alpha_operator[i] == 1 ? mutation_seq_1.genes[i] : gene_seq_alpha[i]
     end
 end
 
-@inline function gene_inversion!(chromosome1::Chromosome)
-    start_1 = rand(chromosome1.toolbox.gen_start_indices)
+@inline function gene_inversion!(chromosome1::Chromosome; rng::AbstractRNG=STD_RNG)
+    start_1 = rand(rng,chromosome1.toolbox.gen_start_indices)
     reverse!(@view chromosome1.genes[start_1:chromosome1.toolbox.head_len])
 end
 
-@inline function gene_insertion!(chromosome::Chromosome)
-    start_1 = rand(chromosome.toolbox.gen_start_indices)
-    insert_pos = rand(start_1:(start_1+chromosome.toolbox.head_len-1))
-    insert_sym = rand(chromosome.toolbox.tailsyms)
+@inline function gene_insertion!(chromosome::Chromosome; rng::AbstractRNG=STD_RNG)
+    start_1 = rand(rng,chromosome.toolbox.gen_start_indices)
+    insert_pos = rand(rng,start_1:(start_1+chromosome.toolbox.head_len-1))
+    insert_sym = rand(rng,chromosome.toolbox.tailsyms)
     chromosome.genes[insert_pos] = insert_sym
 end
 
-@inline function root_insertion!(chromosome::Chromosome)
-    start_1 = rand(chromosome.toolbox.gen_start_indices)
-    rolled_array = circshift(chromosome.genes[start_1:start_1+chromosome.toolbox.head_len-1], rand(1:chromosome.toolbox.head_len-1))
+@inline function root_insertion!(chromosome::Chromosome; rng::AbstractRNG=STD_RNG)
+    start_1 = rand(rng,chromosome.toolbox.gen_start_indices)
+    rolled_array = circshift(chromosome.genes[start_1:start_1+chromosome.toolbox.head_len-1], rand(rng,1:chromosome.toolbox.head_len-1))
     chromosome.genes[start_1:start_1+chromosome.toolbox.head_len-1] = rolled_array
 end
 
-@inline function reverse_insertion_tail!(chromosome::Chromosome)
-    start_1 = rand(chromosome.toolbox.gen_start_indices) + chromosome.toolbox.head_len + 1
-    rolled_array = circshift(chromosome.genes[start_1:start_1+chromosome.toolbox.head_len-1], rand(1:chromosome.toolbox.head_len-1))
+@inline function reverse_insertion_tail!(chromosome::Chromosome; rng::AbstractRNG=STD_RNG)
+    start_1 = rand(rng,chromosome.toolbox.gen_start_indices) + chromosome.toolbox.head_len + 1
+    rolled_array = circshift(chromosome.genes[start_1:start_1+chromosome.toolbox.head_len-1], rand(rng,1:chromosome.toolbox.head_len-1))
     chromosome.genes[start_1:start_1+chromosome.toolbox.head_len-1] = rolled_array
 end
 
@@ -707,22 +716,22 @@ Swaps two small segments of genes between two positions within the same chromoso
 - `len::Int=3`: Length of segment to transpose (default: 5)
 
 """
-@inline function gene_transposition!(chromosome::Chromosome, len::Int=5)
+@inline function gene_transposition!(chromosome::Chromosome, len::Int=5; rng::AbstractRNG=STD_RNG)
     toolbox = chromosome.toolbox
     head_len = toolbox.head_len
     gene_len = head_len * 2 + 1
     gen_start_indices = toolbox.gen_start_indices
 
     # Get start positions
-    source_start = rand(gen_start_indices)
-    target_start = rand(gen_start_indices)
+    source_start = rand(rng,gen_start_indices)
+    target_start = rand(rng,gen_start_indices)
 
     # Ensure segment length is valid
     segment_len = min(len, gene_len - 1)
 
     # Randomly select source and target positions within gene bounds
-    source_pos = rand(source_start+head_len:(source_start + gene_len-segment_len))
-    target_pos = rand(target_start+head_len:(target_start + gene_len-segment_len))
+    source_pos = rand(rng,source_start+head_len:(source_start + gene_len-segment_len))
+    target_pos = rand(rng,target_start+head_len:(target_start + gene_len-segment_len))
 
     # Perform in-place swap to avoid allocations
     for i in 0:(segment_len - 1)
@@ -767,78 +776,79 @@ Genetic operators for chromosome modification.
 # Effects
 Modify chromosome genes in place
 """
-@inline function genetic_operations!(space_next::Vector{Chromosome}, i::Int, toolbox::Toolbox; generation::Int64, max_generation::Int64, parents::Vector{Chromosome})
+@inline function genetic_operations!(space_next::Vector{Chromosome}, i::Int, toolbox::Toolbox; 
+    generation::Int64, max_generation::Int64, parents::Vector{Chromosome}, rng::AbstractRNG=STD_RNG)
     #allocate them within the space - create them once instead of n time 
     space_next[i:i+1] = replicate(space_next[i], space_next[i+1], toolbox)
-    rand_space = rand(20)
+    rand_space = rand(rng,20)
 
 
     if rand_space[1] < toolbox.gep_probs["one_point_cross_over_prob"]
-        gene_one_point_cross_over!(space_next[i], space_next[i+1])
+        gene_one_point_cross_over!(space_next[i], space_next[i+1], rng=rng)
     end
 
     if rand_space[2] < toolbox.gep_probs["two_point_cross_over_prob"]
-        gene_two_point_cross_over!(space_next[i], space_next[i+1])
+        gene_two_point_cross_over!(space_next[i], space_next[i+1], rng=rng)
     end
 
     if rand_space[3] < toolbox.gep_probs["mutation_prob"]
-        gene_mutation!(space_next[i], toolbox.gep_probs["mutation_rate"])
+        gene_mutation!(space_next[i], toolbox.gep_probs["mutation_rate"];rng=rng)
     end
 
     if rand_space[4] < toolbox.gep_probs["mutation_prob"]
-        gene_mutation!(space_next[i+1], toolbox.gep_probs["mutation_rate"])
+        gene_mutation!(space_next[i+1], toolbox.gep_probs["mutation_rate"]; rng=rng)
     end
 
     if rand_space[5] < toolbox.gep_probs["dominant_fusion_prob"]
-        gene_dominant_fusion!(space_next[i], space_next[i+1], toolbox.gep_probs["fusion_rate"])
+        gene_dominant_fusion!(space_next[i], space_next[i+1], toolbox.gep_probs["fusion_rate"]; rng=rng)
     end
 
     if rand_space[6] < toolbox.gep_probs["rezessiv_fusion_prob"]
-        gen_rezessiv!(space_next[i], space_next[i+1], toolbox.gep_probs["rezessiv_fusion_rate"])
+        gen_rezessiv!(space_next[i], space_next[i+1], toolbox.gep_probs["rezessiv_fusion_rate"];rng=rng)
     end
 
     if rand_space[7] < toolbox.gep_probs["fusion_prob"]
-        gene_fussion!(space_next[i], space_next[i+1], toolbox.gep_probs["fusion_rate"])
+        gene_fussion!(space_next[i], space_next[i+1], toolbox.gep_probs["fusion_rate"];rng=rng)
     end
 
     if rand_space[8] < toolbox.gep_probs["inversion_prob"]
-        gene_inversion!(space_next[i])
+        gene_inversion!(space_next[i];rng=rng)
     end
 
     if rand_space[9] < toolbox.gep_probs["inversion_prob"]
-        gene_inversion!(space_next[i+1])
+        gene_inversion!(space_next[i+1];rng=rng)
     end
 
     if rand_space[10] < toolbox.gep_probs["insertion_prob"]
-        gene_insertion!(space_next[i])
+        gene_insertion!(space_next[i];rng=rng)
     end
 
     if rand_space[11] < toolbox.gep_probs["insertion_prob"]
-        gene_insertion!(space_next[i+1])
+        gene_insertion!(space_next[i+1];rng=rng)
     end
 
     if rand_space[12] < toolbox.gep_probs["root_insertion_prob"]
-        root_insertion!(space_next[i])
+        root_insertion!(space_next[i];rng=rng)
     end
 
     if rand_space[13] < toolbox.gep_probs["root_insertion_prob"]
-        root_insertion!(space_next[i+1])
+        root_insertion!(space_next[i+1];rng=rng)
     end
 
     if rand_space[14] < toolbox.gep_probs["reverse_insertion_tail"]
-        reverse_insertion_tail!(space_next[i])
+        reverse_insertion_tail!(space_next[i];rng=rng)
     end
 
     if rand_space[15] < toolbox.gep_probs["reverse_insertion_tail"]
-        reverse_insertion_tail!(space_next[i+1])
+        reverse_insertion_tail!(space_next[i+1];rng=rng)
     end
 
     if rand_space[16] < toolbox.gep_probs["gene_transposition_prob"]
-        reverse_insertion_tail!(space_next[i])
+        reverse_insertion_tail!(space_next[i];rng=rng)
     end
 
     if rand_space[18] < toolbox.gep_probs["gene_transposition_prob"]
-        reverse_insertion_tail!(space_next[i+1])
+        reverse_insertion_tail!(space_next[i+1];rng=rng)
     end
 
 end

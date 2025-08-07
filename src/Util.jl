@@ -113,7 +113,7 @@ export create_history_recorder, record_history!, record!, close_recorder!
 export HistoryRecorder, OptimizationHistory, get_history_arrays, one_hot_mean, FUNCTION_STRINGIFY
 export train_test_split, select_n_samples_lhs
 export FUNCTION_LIB_COMMON, ARITY_LIB_COMMON
-export TensorNode, compile_network
+export TensorNode, compile_network, split_rng
 
 using OrderedCollections
 using DynamicExpressions
@@ -128,6 +128,7 @@ using Tensors
 using Flux
 using StatsBase
 using NearestNeighbors
+using Random123
 using Base.Threads: @spawn
 
 
@@ -924,5 +925,30 @@ function normalize_features(features)
     
     return normalized
 end
+
+"""
+    split_rng(equastacked_features, n_samples; seed=nothing)
+
+Select splits the rng masterkey from the toolbox into subkeys -> depending on the task number
+
+Parameters:
+- `master_rng`: top_level rng key
+- `n::Int`: number of indepentend subtask
+
+Returns:
+- set of subkeys derived from a master key
+"""
+
+function split_rng(master_rng::Threefry4x, n::Int)
+    typeof(master_rng)
+    subkeys = Vector{Threefry4x}(undef, n)
+    for i in 1:n
+        new_seed = (UInt64(rand(master_rng, UInt32)), UInt64(rand(master_rng, UInt32)), UInt64(rand(master_rng, UInt32)), UInt64(rand(master_rng, UInt32)))
+        subkeys[i] = Threefry4x(UInt64, new_seed)
+    end
+    return subkeys
+end
+
+
 
 end
