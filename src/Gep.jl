@@ -303,7 +303,7 @@ The evolution process stops when either:
     initial_size = population_sampling_multiplier <= 1 ? population_size + mating_size : population_size * population_sampling_multiplier
     population, start_epoch = isnothing(load_state_callback) ? (generate_population(initial_size, toolbox), 1) : load_state_callback()
     if start_epoch <= 1 && population_sampling_multiplier > 1
-        prob_dataset = rand(1000, inputs_ == 0 ? 10 : inputs_)'
+        prob_dataset = rand(toolbox.master_rng,100, inputs_ == 0 ? 10 : inputs_)'
         population = population[equation_characterization_default(population, population_size + mating_size, prob_dataset')]
     end
 
