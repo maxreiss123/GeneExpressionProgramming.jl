@@ -8,7 +8,7 @@ using Statistics
 Random.seed!(1)
 
 #Define the iterations for the algorithm and the population size
-epochs = 2
+epochs = 99
 population_size = 100
 
 #Number of features which needs to be inserted

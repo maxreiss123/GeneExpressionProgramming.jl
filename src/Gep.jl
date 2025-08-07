@@ -326,7 +326,7 @@ The evolution process stops when either:
                     unlock(cache_lock)
                 else
                     atomic_add!(same, 1)
-                    population[i].fitness = fit_cache[key]#modify_fitness(population[i].fitness, penalty)
+                    population[i].fitness = modify_fitness(population[i].fitness, penalty)
                 end
             end
         end
