@@ -81,7 +81,6 @@ using Printf
 using LRUCache
 using Base.Threads: SpinLock
 using .Threads
-
 export runGep
 
 
@@ -163,12 +162,14 @@ Performs one evolutionary step in the GEP algorithm, creating and evaluating new
 """
 @inline function perform_step!(population::Vector{Chromosome}, parents::Vector{Chromosome}, next_gen::Vector{Chromosome},
     toolbox::Toolbox, mating_size::Int, generation::Int, max_generation::Int)
+    subkeys = split_rng(toolbox.master_rng,div(mating_size,2)+1)
+
     @inbounds Threads.@threads for i in 1:2:mating_size-1
         next_gen[i] = parents[i]
         next_gen[i+1] = parents[i+1]
 
         genetic_operations!(next_gen, i, toolbox;
-            generation=generation, max_generation=max_generation, parents=parents)
+            generation=generation, max_generation=max_generation, parents=parents, rng=subkeys[div(i,2)+1])
 
         compile_expression!(next_gen[i]; force_compile=true)
         compile_expression!(next_gen[i+1]; force_compile=true)
@@ -325,7 +326,7 @@ The evolution process stops when either:
                     unlock(cache_lock)
                 else
                     atomic_add!(same, 1)
-                    population[i].fitness = modify_fitness(population[i].fitness, penalty)
+                    population[i].fitness = fit_cache[key]#modify_fitness(population[i].fitness, penalty)
                 end
             end
         end
@@ -359,9 +360,9 @@ The evolution process stops when either:
 
 
         if length(fits_representation[1]) == 1
-            selectedMembers = tournament_selection(fits_representation, mating_size, tourni_size)
+            selectedMembers = tournament_selection(fits_representation, mating_size, tourni_size; rng=toolbox.master_rng)
         else
-            selectedMembers = nsga_selection(fits_representation)
+            selectedMembers = nsga_selection(fits_representation; rng=toolbox.master_rng)
         end
 
         !isnothing(file_logger_callback) && file_logger_callback(population[1:population_size], epoch, selectedMembers)
