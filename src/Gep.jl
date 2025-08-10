@@ -375,10 +375,6 @@ The evolution process stops when either:
 
     end
 
-    for i in eachindex(population[1:hof])
-        population[i].fitness = compute_fitness(population[i], evalStrategy, validate=true)
-    end
-
     sort!(population, by=x -> mean(x.fitness))
 
     best = population[1:hof]
