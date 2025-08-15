@@ -59,7 +59,16 @@ Performing this over many iterations by changing the string (using genetic opera
   ```
 
 # How to consider the physical dimensions mentioned within [2]? 
-- Imagine you want to find $J$ explaining superconductivity as $J=-\rho \frac{q}{m} A$ (Fyneman III 21.20)
+To account for the physical dimension of certain input values, we can correct subtrees according to the expected output using semantic backpropagation. In theory it works as follows:
+![Semantic](images/semantic_backprop.gif)
+
+
+
+
+
+
+
+- For a more concrete example, imagine you want to find $J$ explaining superconductivity as $J=-\rho \frac{q}{m} A$ (Fyneman III 21.20)
 - $J$ marking the electric current, $q$ the electric charge, $\rho$ the charge density, $m$ the mass and $A$ the magnetic vector potential
 
  ```julia
