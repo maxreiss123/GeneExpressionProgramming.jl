@@ -132,7 +132,8 @@ import .GepUtils:
     FUNCTION_LIB_COMMON,
     FUNCTION_STRINGIFY,
     one_hot_mean,
-    select_n_samples_lhs
+    select_n_samples_lhs,
+    split_rng
 
 # Import selection mechanisms
 import .EvoSelection:
@@ -277,7 +278,7 @@ export equal_unit_forward, mul_unit_forward, div_unit_forward,
 export find_indices_with_sum, compile_djl_datatype,
     optimize_constants!, minmax_scale, isclose,
     save_state, load_state,
-    train_test_split, one_hot_mean, select_n_samples_lhs
+    train_test_split, one_hot_mean, select_n_samples_lhs, split_rng
 
 # Export history recording functionality
 export HistoryRecorder, OptimizationHistory,

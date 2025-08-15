@@ -2,6 +2,7 @@ using DynamicExpressions
 using Test
 using OrderedCollections
 using Random
+using Random123
 operators =  OperatorEnum(; binary_operators=[+, -, *, /], unary_operators=[sqrt])
 
 # Helper function to create test toolbox
@@ -40,7 +41,7 @@ function create_test_toolbox()
         "rezessiv_fusion_rate" => 0.1
     )
     
-    return Toolbox(2, 3, symbols, Int8[1], callbacks, nodes, gep_probs)
+    return Toolbox(2, 3, symbols, Int8[1], callbacks, nodes, gep_probs; master_rng=Threefry4x(UInt64, (UInt64(0), UInt64(0), UInt64(0), UInt64(0))))
 end
 
 @testset "SymbolicEntities Tests" begin
