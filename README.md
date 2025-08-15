@@ -9,6 +9,14 @@ The repository contains an implementation of the Gene Expression Programming [1]
 - Matrix/ Tensor optimization
 - Phy. Dimensionality Consideration
 
+# How does it work?
+It pojects an encoded string of symbols into an expression tree: 
+![Decoding](images/gep_decoding.gif)
+
+Performing this over many iterations by changing the string (using genetic operators), leads to:
+![Solve](images/solve_gep.gif)
+
+
 # How to use it?
 - Install the package:
   ```julia
