@@ -88,7 +88,7 @@ function main()
             if case_name in keys(case_data)
                 @show ("Current case: ", case_name)
                 #gep_params
-                epochs = 500
+                epochs = 1000
                 population_size = 1000
 
                 results = DataFrame(Seed=[],
@@ -130,7 +130,7 @@ function main()
                         if isnan(mean(elem.fitness)) && elem.dimension_homogene || validate
                             y_pred = elem.compiled_function(x_train', regressor.operators_)
                             fit = sqrt(get_loss_function("rmse")(y_train, y_pred))
-                            elem.fitness =  (fit+length(elem.expression_raw)*0.1*fit,)
+                            elem.fitness =  (fit,)
                         end
                     catch e
                         elem.fitness = (typemax(Float64),)
@@ -140,7 +140,7 @@ function main()
 
                 #perform the regression by entering epochs, population_size, the feature cols, the target col and the loss function
 		fit!(regressor, epochs, population_size, loss_new_; target_dimension=target_dim,
-                break_condition=break_condition, correction_amount=0.7, cycles=30)
+                break_condition=break_condition, correction_amount=0.5, cycles=30)
 
                 end_time = (time_ns() - start_time) / 1e9
                 elem = regressor.best_models_[1]
