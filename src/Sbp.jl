@@ -553,16 +553,16 @@ function div_unit_backward(u1::Vector{Float16}, u2::Vector{Float16}, expected_di
         end
         return lr, rr
     elseif has_inf16(u2)
-        return u1, .-(expected_dim .+ u1)
+        return u1, .-expected_dim .+ u1
     elseif has_inf16(u1)
         return expected_dim .+ u2, u2
     else
         if isapprox(u1, u2, atol=F16_LOWER_BOUND)
             lr = expected_dim .- expected_dim .÷ 2
-            rl = .-(expected_dim .+ lr)
+            rl = .-expected_dim .+ lr
             return lr, rl
         elseif isapprox(u1, expected_dim, atol=F16_LOWER_BOUND)
-            return u1, .-(expected_dim .+ u1)
+            return u1, .- expected_dim .+ u1
         else
             return expected_dim .+ u2, u2
         end
@@ -1451,7 +1451,7 @@ function propagate_necessary_changes!(
         return true
     end
 
-    if check_crit_up!(tree.depend_on_total_number + 1, expected_dim, tree) && distance_to_change <= 0 && rand() > 0.05
+    if check_crit_up!(tree.depend_on_total_number + 1, expected_dim, tree) && distance_to_change <= 0
         return enforce_changes!(tree, expected_dim)
     end
 
