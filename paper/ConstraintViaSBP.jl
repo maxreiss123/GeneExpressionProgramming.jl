@@ -120,16 +120,16 @@ function main()
                 start_time = time_ns()
 
                 regressor = GepRegressor(num_cols - 1;
-                    considered_dimensions=phy_dims,
+                    considered_dimensions=phy_dims, gene_count=3, head_len=6,
                     entered_non_terminals=[:+, :-, :*, :/, :sqrt, :sin, :cos, :exp, :log],
-                    max_permutations_lib=5000, rounds=7, number_of_objectives=1)
+                    max_permutations_lib=10000, rounds=5, number_of_objectives=1)
 
 
                 @inline function loss_new_(elem, validate::Bool)
                     try
                         if isnan(mean(elem.fitness)) && elem.dimension_homogene || validate
                             y_pred = elem.compiled_function(x_train', regressor.operators_)
-                            fit = sqrt(get_loss_function("mse")(y_train, y_pred))
+                            fit = sqrt(get_loss_function("rmse")(y_train, y_pred))
                             elem.fitness =  (fit+length(elem.expression_raw)*0.1*fit,)
                         end
                     catch e
@@ -139,8 +139,8 @@ function main()
 
 
                 #perform the regression by entering epochs, population_size, the feature cols, the target col and the loss function
-                fit!(regressor, epochs, population_size, loss_new_; target_dimension=target_dim,
-                break_condition=break_condition, correction_amount=0.5)
+		fit!(regressor, epochs, population_size, loss_new_; target_dimension=target_dim,
+                break_condition=break_condition, correction_amount=0.5, cycles=30)
 
                 end_time = (time_ns() - start_time) / 1e9
                 elem = regressor.best_models_[1]

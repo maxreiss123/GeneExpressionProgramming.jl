@@ -216,7 +216,7 @@ Applies correction operations to ensure dimensional homogeneity in chromosomes.
         Threads.@threads for i in 1:pop_amount
             if !(population[i].dimension_homogene) && population[i].compiled && isnan(mean(population[i].fitness))
                 distance, correction = correction_callback(population[i].genes, population[i].toolbox.gen_start_indices,
-                    population[i].expression_raw)
+                    population[i].expression_raw, epoch)
                 if correction
                     compile_expression!(population[i]; force_compile=true)
                     population[i].dimension_homogene = true

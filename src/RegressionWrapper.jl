@@ -713,13 +713,13 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, x_trai
 )
 
     correction_callback = if !isnothing(target_dimension)
-        (genes, start_indices, expression) -> correct_genes!(
+        (genes, start_indices, expression, generation) -> correct_genes!(
             genes,
             start_indices,
             expression,
             target_dimension,
             regressor.token_dto_;
-            cycles=cycles
+            cycles=generation>1 ? 10 : cycles
         )
     else
         nothing
@@ -792,13 +792,13 @@ function fit!(regressor::GepRegressor, epochs::Int, population_size::Int, loss_f
 )
 
     correction_callback = if !isnothing(target_dimension)
-        (genes, start_indices, expression) -> correct_genes!(
+        (genes, start_indices, expression, generation) -> correct_genes!(
             genes,
             start_indices,
             expression,
             target_dimension,
             regressor.token_dto_;
-            cycles=cycles
+            cycles=generation>1 ? 10 : cycles
         )
     else
         nothing

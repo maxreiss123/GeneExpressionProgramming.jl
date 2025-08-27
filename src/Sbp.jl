@@ -1164,11 +1164,11 @@ function calculate_vector_dimension!(tree::TempComputeTree)
     tree.vector_dimension = function_op(dims...)
 
     #needs to be revised
-    #if length(dims) == 2 && has_inf16(tree.vector_dimension)
-    #    tree.symbol = rand(point_operations)
-    #    function_op = tokenLib.physical_operation_dict[][tree.symbol]
-    #    tree.vector_dimension = function_op(dims...)
-    #end
+    if length(dims) == 2 && has_inf16(tree.vector_dimension)
+        tree.symbol = rand(point_operations)
+        function_op = tokenLib.physical_operation_dict[][tree.symbol]
+        tree.vector_dimension = function_op(dims...)
+    end
     tree.modified = false
     return tree.vector_dimension
 end
@@ -1197,6 +1197,10 @@ function enforce_changes!(tree::TempComputeTree, expected_dim::Vector{Float16}, 
     if isnothing(exchange_symbol) || isempty(exchange_symbol)
         return false
     end
+    
+    
+    
+    
     tree.depend_on[index] = rand(exchange_symbol)
     tree.modified = true
     calculate_vector_dimension!(tree)
@@ -1451,7 +1455,7 @@ function propagate_necessary_changes!(
         return true
     end
 
-    if check_crit_up!(tree.depend_on_total_number + 1, expected_dim, tree) && distance_to_change <= 0
+    if check_crit_up!(tree.depend_on_total_number + 1, expected_dim, tree) && distance_to_change <= 0 && rand() > 0.01
         return enforce_changes!(tree, expected_dim)
     end
 
