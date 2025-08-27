@@ -88,8 +88,8 @@ function main()
             if case_name in keys(case_data)
                 @show ("Current case: ", case_name)
                 #gep_params
-                epochs = 1000
-                population_size = 1500
+                epochs = 500
+                population_size = 1000
 
                 results = DataFrame(Seed=[],
                     Name=String[], NoiseLeve=String[], Fitness=Float64[], Equation=String[], R2_test=Float64[],
@@ -122,7 +122,7 @@ function main()
                 regressor = GepRegressor(num_cols - 1;
                     considered_dimensions=phy_dims, gene_count=3, head_len=6,
                     entered_non_terminals=[:+, :-, :*, :/, :sqrt, :sin, :cos, :exp, :log],
-                    max_permutations_lib=10000, rounds=5, number_of_objectives=1)
+                    max_permutations_lib=20000, rounds=5, number_of_objectives=1)
 
 
                 @inline function loss_new_(elem, validate::Bool)
@@ -140,7 +140,7 @@ function main()
 
                 #perform the regression by entering epochs, population_size, the feature cols, the target col and the loss function
 		fit!(regressor, epochs, population_size, loss_new_; target_dimension=target_dim,
-                break_condition=break_condition, correction_amount=0.5, cycles=30)
+                break_condition=break_condition, correction_amount=0.7, cycles=30)
 
                 end_time = (time_ns() - start_time) / 1e9
                 elem = regressor.best_models_[1]
