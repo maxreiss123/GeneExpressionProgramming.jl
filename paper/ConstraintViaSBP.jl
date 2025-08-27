@@ -74,10 +74,10 @@ function main()
     log_path = "error.log"
     setup_logger(log_path)
 
-    file_name_save = "test_gep_on_srsd_p.csv"
+    file_name_save = "test_gep_on_srsd_p_full_scale.csv"
 
 
-    for seed in 1:10
+    for seed in 1:100
         test_data_dict = Dict{String,Tuple{Matrix{Float64},Vector{Float64}}}()
         for (name, data) in framesDict_
             case_identifier_name = uppercase(split(name, "-")[2])

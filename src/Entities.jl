@@ -867,7 +867,6 @@ end
                 ret_val[coeff_count, 1] = mean(eval_tree_array(chromosome.compiled_function, prob_data_set, chromosome.toolbox.operators_)[1])
             end
         catch e
-            @error "Something went wrong $e"
             ret_val[:, 1] .= Inf
         end
     end
