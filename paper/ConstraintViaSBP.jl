@@ -127,7 +127,7 @@ function main()
 
                 @inline function loss_new_(elem, validate::Bool)
                     try
-                        if isnan(mean(elem.fitness)) || validate
+                        if isnan(mean(elem.fitness)) && elem.dimension_homogene || validate
                             y_pred = elem.compiled_function(x_train', regressor.operators_)
                             fit = sqrt(get_loss_function("mse")(y_train, y_pred))
                             elem.fitness =  (fit+length(elem.expression_raw)*0.1*fit,)
@@ -140,7 +140,7 @@ function main()
 
                 #perform the regression by entering epochs, population_size, the feature cols, the target col and the loss function
                 fit!(regressor, epochs, population_size, loss_new_; target_dimension=target_dim,
-                break_condition=break_condition)
+                break_condition=break_condition, correction_amount=0.5)
 
                 end_time = (time_ns() - start_time) / 1e9
                 elem = regressor.best_models_[1]
