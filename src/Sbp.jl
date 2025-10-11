@@ -1162,13 +1162,6 @@ function calculate_vector_dimension!(tree::TempComputeTree)
     function_op = tokenLib.physical_operation_dict[][tree.symbol]
     dims = map(elem -> elem isa TempComputeTree ? calculate_vector_dimension!(elem) : get_physical_dimension(tokenLib, elem), tree.depend_on)
     tree.vector_dimension = function_op(dims...)
-
-    #needs to be revised
-    if length(dims) == 2 && has_inf16(tree.vector_dimension)
-        tree.symbol = rand(point_operations)
-        function_op = tokenLib.physical_operation_dict[][tree.symbol]
-        tree.vector_dimension = function_op(dims...)
-    end
     tree.modified = false
     return tree.vector_dimension
 end
