@@ -1,6 +1,6 @@
 name = "GeneExpressionProgramming"
 uuid = "2f0a5bb0-5f4f-4f7f-b515-93a1e67611af"
-version = "0.5.1"
+version = "0.5.2"
 authors = ["Max Reissmann <reissmannm@student.unimelb.edu.au>"]
 
 [deps]
