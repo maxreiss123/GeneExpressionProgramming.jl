@@ -1,7 +1,7 @@
 name = "GeneExpressionProgramming"
 uuid = "2f0a5bb0-5f4f-4f7f-b515-93a1e67611af"
-authors = ["Max Reissmann <reissmannm@student.unimelb.edu.au>"]
 version = "0.5.1"
+authors = ["Max Reissmann <reissmannm@student.unimelb.edu.au>"]
 
 [deps]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
@@ -37,6 +37,7 @@ Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 Tensors = "48a634ad-e948-5137-8d70-aa71f2a747f4"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+ThreadsX = "ac1d9e8a-700a-412c-b207-f0111f4b6c0d"
 Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [compat]
@@ -72,5 +73,6 @@ Statistics = "1"
 StatsBase = "0.34 - 0.37"
 Tensors = "1"
 Test = "1"
+ThreadsX = "0.1"
 Zygote = "0.6"
 julia = "1"

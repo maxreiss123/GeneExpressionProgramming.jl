@@ -881,9 +881,9 @@ function create_lib(tokenLib::TokenLib, features::Vector{Int8},
         end
 
         lib_array = collect(lib)
-        Threads.@threads for i in eachindex(lib_array)
+        Threads.@threads :static for i in eachindex(lib_array)
             entry = lib_array[i]
-            local_entries = new_entries_local[Threads.threadid()]
+            local_entries = new_entries_local[mod1(Threads.threadid(), Threads.nthreads())]
             for item in search_space
                 new_entry = copy(entry)
                 append!(new_entry, item)
@@ -917,11 +917,11 @@ function reorganize_lib(old_lib::Set{LibEntry})
     local_libs = [OrderedDict{Tuple{Vector{Float16},Int},Vector{Vector{Int8}}}() for _ in 1:Threads.nthreads()]
 
     old_lib_array = collect(old_lib)  # Convert Set to Array
-    Threads.@threads for i in eachindex(old_lib_array)
+    Threads.@threads :static for i in eachindex(old_lib_array)
         entry = old_lib_array[i]
         clean!(entry)
         key = (entry.physical_dimension, length(entry.elements))
-        local_lib = local_libs[Threads.threadid()]
+        local_lib = local_libs[mod1(Threads.threadid(), Threads.nthreads())]
 
         if haskey(local_lib, key)
             push!(local_lib[key], entry.elements)
@@ -1174,7 +1174,7 @@ function calculate_contribution(tree::TempComputeTree, expected_dim::Vector{Floa
 end
 
 function check_crit_up!(len_rest::Int, expected_dim::Vector{Float16}, tree::TempComputeTree)
-    @inbounds for elem in len_rest:-1:SMALLEST_TREE_SEGMENT
+    @inbounds for elem in len_rest:-1:max(SMALLEST_TREE_SEGMENT,len_rest-SMALLEST_TREE_SEGMENT*2)
         if haskey(tree.tokenDto.lib[], (expected_dim, elem))
             tree.exchange_len = elem
             return true
@@ -1448,7 +1448,7 @@ function propagate_necessary_changes!(
         return true
     end
 
-    if check_crit_up!(tree.depend_on_total_number + 1, expected_dim, tree) && distance_to_change <= 0 && rand() > 0.01
+    if check_crit_up!(tree.depend_on_total_number + 1, expected_dim, tree) && distance_to_change <= 0 && rand() > 0.05
         return enforce_changes!(tree, expected_dim)
     end
 

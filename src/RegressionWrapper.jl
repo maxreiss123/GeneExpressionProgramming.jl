@@ -473,7 +473,7 @@ mutable struct GepRegressor
     function GepRegressor(feature_amount::Int;
         entered_features::Vector{Symbol}=Vector{Symbol}(),
         entered_non_terminals::Vector{Symbol}=[:+, :-, :*, :/],
-        entered_terminal_nums::Vector{Symbol}=[Symbol(0.0), Symbol(0.5)],
+        entered_terminal_nums::Vector{Symbol}=[Symbol(0.5),Symbol(0.0)],
         gene_connections::Vector{Symbol}=[:+, :-, :*, :/],
         considered_dimensions::Dict{Symbol,Vector{Float16}}=Dict{Symbol,Vector{Float16}}(),
         rnd_count::Int=1,

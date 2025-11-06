@@ -81,6 +81,7 @@ using Printf
 using LRUCache
 using Base.Threads: SpinLock
 using .Threads
+using ThreadsX
 export runGep
 
 
@@ -213,7 +214,7 @@ Applies correction operations to ensure dimensional homogeneity in chromosomes.
 
     if !isnothing(correction_callback) && epoch % correction_epochs == 0
         pop_amount = Int(ceil(length(population) * correction_amount))
-        Threads.@threads for i in 1:pop_amount
+	ThreadsX.foreach(1:pop_amount) do i
             if !(population[i].dimension_homogene) && population[i].compiled && isnan(mean(population[i].fitness))
                 distance, correction = correction_callback(population[i].genes, population[i].toolbox.gen_start_indices,
                     population[i].expression_raw, epoch)
@@ -315,7 +316,7 @@ The evolution process stops when either:
         same = Atomic{Int}(0)
         perform_correction_callback!(population[1:population_size], epoch, correction_epochs, correction_amount, correction_callback)
 
-        Threads.@threads for i in eachindex(population[1:population_size])
+        ThreadsX.foreach(eachindex(population[1:population_size])) do i
             if isnan(mean(population[i].fitness))
                 key = join(population[i].expression_raw, ",")
                 cache_value = key in keys(fit_cache)
