@@ -112,7 +112,7 @@ To account for the physical dimension of certain input values, we can correct su
    #perform the regression by entering epochs, population_size, the feature cols, the target col and the loss function
   fit!(regressor, epochs, population_size, x_train', y_train; x_test=x_test', y_test=y_test, loss_fun="mse", target_dimension=target_dim)
 
-  pred = regressor(x_data')
+  pred = regressor(x_test')
 
   @show regressor.best_models_[1].compiled_function
   @show regressor.best_models_[1].fitness
