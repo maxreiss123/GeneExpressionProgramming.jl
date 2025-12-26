@@ -215,8 +215,8 @@ Feel free to utilize it for your research, it would be nice __citing us__! Our [
 - [x] Improve usability for user interaction
 - [ ] staggered exploration
 - [x] nice print flux
-- [ ] constant node needs to be fixed
-- [ ] Clean Package Structure
+- [x] constant node needs to be fixed
+- [x] Clean Package Structure
 - [ ] considering Tullio.jl for faster tensor ops
 - [ ] LLM-interface
 - [ ] Python-interface
