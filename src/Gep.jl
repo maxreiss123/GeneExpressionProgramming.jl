@@ -363,7 +363,8 @@ The evolution process stops when either:
         if length(fits_representation[1]) == 1
             selectedMembers = tournament_selection(fits_representation, mating_size, tourni_size; rng=toolbox.master_rng)
         else
-            selectedMembers = nsga_selection(fits_representation; rng=toolbox.master_rng)
+            selectedMembers = EvoSelection.moga_selection(fits_representation; rng=toolbox.master_rng)
+            #selectedMembers = nsga_selection(fits_representation; rng=toolbox.master_rng)
         end
 
         !isnothing(file_logger_callback) && file_logger_callback(population[1:population_size], epoch, selectedMembers)
@@ -376,7 +377,8 @@ The evolution process stops when either:
 
     end
 
-    sort!(population, by=x -> mean(x.fitness))
+
+    sort!(population, by=x -> norm(x.fitness))
 
     best = population[1:hof]
     close_recorder!(recorder)

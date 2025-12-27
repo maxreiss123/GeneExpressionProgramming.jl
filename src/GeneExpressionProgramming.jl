@@ -143,7 +143,8 @@ import .EvoSelection:
     fast_non_dominated_sort,
     calculate_fronts,
     determine_ranks,
-    assign_crowding_distance
+    assign_crowding_distance,
+    moga_selection, determine_moga_ranks
 
 # Import physical constants functionality
 import .PhysicalConstants:
@@ -252,7 +253,8 @@ export get_loss_function
 # Export selection mechanisms
 export tournament_selection, nsga_selection, dominates_,
     fast_non_dominated_sort, calculate_fronts,
-    determine_ranks, assign_crowding_distance
+    determine_ranks, assign_crowding_distance,
+    moga_selection, determine_moga_ranks
 
 # Export physical constants functionality
 export physical_constants, physical_constants_all,

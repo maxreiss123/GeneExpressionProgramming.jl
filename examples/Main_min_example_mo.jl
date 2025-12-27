@@ -2,7 +2,6 @@ include("../src/GeneExpressionProgramming.jl")
 
 using .GeneExpressionProgramming
 using Random
-using Plots
 using DynamicExpressions
 using Statistics
 
@@ -10,8 +9,8 @@ using Statistics
 Random.seed!(1)
 
 #Define the iterations for the algorithm and the population size
-epochs = 1000
-population_size = 1000
+epochs = 100
+population_size = 100
 
 #Number of features which needs to be inserted
 number_features = 2

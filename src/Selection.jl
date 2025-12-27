@@ -3,6 +3,7 @@ using LinearAlgebra
 using Random
 
 export tournament_selection, nsga_selection, dominates_, fast_non_dominated_sort, calculate_fronts, determine_ranks, assign_crowding_distance
+export moga_selection, determine_moga_ranks
 
 struct SelectedMembers
     indices::Vector{Int}
@@ -221,6 +222,124 @@ function nsga_selection(population::Vector{T}; tournament_size::Int=3, rng::Abst
     selected_indices = tournament_selection_nsga(all_indices, ranks, crowding_distances, pop_size, tournament_size; rng=rng)
 
     return SelectedMembers(selected_indices, Dict(enumerate(fronts)))
+end
+
+"""
+    determine_moga_ranks(pop)
+
+Calculates the Pareto Rank for MOGA.
+Rank = 1 + (number of individuals that dominate the current individual).
+"""
+@inline function determine_moga_ranks(pop::Vector{T}) where {T<:Tuple}
+    n = length(pop)
+    ranks = ones(Int, n)
+    
+    # Compare every individual with every other individual
+    for i in 1:n
+        for j in 1:n
+            if i != j && dominates_(pop[j], pop[i]) # If j dominates i
+                ranks[i] += 1
+            end
+        end
+    end
+    return ranks
+end
+
+function calculate_shared_fitness(population::Vector{T}, ranks::Vector{Int}, sigma_share::Float64) where {T<:Tuple}
+    n = length(population)
+    
+    # --- 1. Assign Raw Fitness (Interpolated) ---
+    # We assign higher fitness to lower ranks (better individuals).
+    # Logic: Sort by rank, assign linear values N down to 1, then average for ties.
+    
+    indices = sortperm(ranks)
+    sorted_ranks = ranks[indices]
+    raw_fitness = zeros(Float64, n)
+    
+    # Linear values to distribute
+    linear_values = Float64.(n:-1:1)
+    
+    i = 1
+    while i <= n
+        j = i
+        # Find the end of the current rank block
+        while j < n && sorted_ranks[j+1] == sorted_ranks[i]
+            j += 1
+        end
+        
+        block_sum = sum(linear_values[k] for k in i:j)
+        avg_fit = block_sum / (j - i + 1)
+        
+        for k in i:j
+            raw_fitness[indices[k]] = avg_fit
+        end
+        i = j + 1
+    end
+
+    num_obj = length(first(population))
+    
+    objs = [[p[m] for p in population] for m in 1:num_obj]
+    mins = [minimum(col) for col in objs]
+    maxs = [maximum(col) for col in objs]
+    ranges = [maxs[m] - mins[m] for m in 1:num_obj]
+    
+    ranges = [r == 0 ? 1.0 : r for r in ranges]
+
+    norm_pop = Matrix{Float64}(undef, n, num_obj)
+    for i in 1:n
+        for m in 1:num_obj
+            norm_pop[i, m] = (population[i][m] - mins[m]) / ranges[m]
+        end
+    end
+
+    shared_fitness = zeros(Float64, n)
+    
+    for i in 1:n
+        niche_count = 0.0
+        for j in 1:n
+            dist_sq = 0.0
+            for m in 1:num_obj
+                dist_sq += (norm_pop[i, m] - norm_pop[j, m])^2
+            end
+            d = sqrt(dist_sq)
+
+            if d < sigma_share
+                niche_count += 1.0 - (d / sigma_share)
+            end
+        end
+        
+        shared_fitness[i] = raw_fitness[i] / niche_count
+    end
+
+    return shared_fitness
+end
+
+function moga_selection(population::Vector{T}; tournament_size::Int=3, sigma_share::Float64=0.1, rng::AbstractRNG=STD_RNG) where {T<:Tuple}
+    pop_size = length(population)
+    
+    ranks = determine_moga_ranks(population)
+    
+    fitness = calculate_shared_fitness(population, ranks, sigma_share)
+    
+    selected_indices = Vector{Int}(undef, pop_size)
+    pop_indices = collect(1:pop_size)
+    
+    for i in 1:pop_size
+        contenders = rand(rng, pop_indices, tournament_size)
+        
+        winner = reduce(contenders) do best, contender
+            fitness[contender] > fitness[best] ? contender : best
+        end
+        selected_indices[i] = winner
+    end
+
+    unique_ranks = sort(unique(ranks))
+    fronts = Dict{Int, Vector{Int}}()
+    for r in unique_ranks
+        fronts[r] = findall(x -> x == r, ranks)
+    end
+
+    return SelectedMembers(selected_indices, fronts)
 end
 
 end
