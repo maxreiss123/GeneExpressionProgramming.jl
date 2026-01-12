@@ -1174,7 +1174,7 @@ function calculate_contribution(tree::TempComputeTree, expected_dim::Vector{Floa
 end
 
 function check_crit_up!(len_rest::Int, expected_dim::Vector{Float16}, tree::TempComputeTree)
-    @inbounds for elem in len_rest:-1:max(SMALLEST_TREE_SEGMENT,len_rest-SMALLEST_TREE_SEGMENT*2)
+    @inbounds for elem in len_rest:-1:SMALLEST_TREE_SEGMENT
         if haskey(tree.tokenDto.lib[], (expected_dim, elem))
             tree.exchange_len = elem
             return true
