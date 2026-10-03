@@ -348,10 +348,3 @@ Feel free to utilize it for your research, it would be nice __citing us__! Our [
 }
 
 ```
-
-# Todo 
-- [ ] staggered exploration
-- [ ] considering Tullio.jl for faster tensor ops
-- [ ] LLM-interface
-- [ ] Python-interface
-- [ ] MOGA-2 implementation - alternative to NSGA-2
