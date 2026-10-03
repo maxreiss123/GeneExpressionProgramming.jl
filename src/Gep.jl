@@ -628,6 +628,7 @@ The population holds `population_size + m` chromosomes, with the mating size `m`
     penalty::AbstractFloat=2.0,
     surrogate::Union{SurrogateScreening,Nothing}=nothing)
 
+    isnothing(surrogate) || check_acquisition(surrogate.screen, length(toolbox.fitness_reset[1]))
     recorder = HistoryRecorder(epochs, Tuple)
     mating_ = toolbox.gep_probs["mating_size"]
     mating_size = Int(ceil(population_size * mating_))

@@ -5,8 +5,8 @@ smooth, since a run that diverges returns a large error.
 
     julia --project=. --threads=4 examples/Main_fictive_cfd_in_the_loop.jl
 
-The fictive CFD solver is not an actual CFD run but a stand-in for one that takes
-milliseconds: the 1D momentum balance of fully developed turbulent flow between two walls,
+The fictive CFD solver is not an actual CFD run but a stand-in for one that takes under a
+millisecond: the 1D momentum balance of fully developed turbulent flow between two walls,
 (nu + nu_t(y, S)) S = tau(y) with S = dU/dy, for a channel flow (tau = u_tau^2 (1 - y / h))
 and a Couette flow (tau = u_tau^2) at Re_tau = 550, solved for S by a damped fixed-point
 iteration that evaluates the closure nu_t at every iteration. A closure that makes
@@ -17,20 +17,26 @@ that flow gets the error 1e3. The reference profiles come from van Driest's mixi
 1. The search for nu_t(y, S, u_tau, nu): the features carry their SI units and every
    scored model is held to m^2/s; one objective per flow, the relative error of its
    velocity profile; a `SurrogateScreening` scores 15 % of the new individuals of an
-   epoch, and the constants of the best model are tuned against the fictive CFD solver
-   every 10 epochs (`constant_optimizer`).
+   epoch, with the settings for a loss that diverges (`failure_above` at the error of a
+   diverged run, the batch acquisition `:qehvi`), and the constants of the best model are
+   tuned against the fictive CFD solver every 10 epochs (`constant_optimizer`).
 2. The calibration of van Driest's mixing length with a viscosity correction,
    nu_t = (k y D)^2 S + c nu, in bounds of which the part c < -1 diverges, by Nelder-Mead,
    the screened Nelder-Mead and the screened swarm (`swarm_box`), from the same starts.
 
-With the script's seed, the same at any thread count, the search makes 4,234 fictive CFD
-runs in 80 to 100 s on 4 threads, 1,132 of which diverge, and returns
-nu_t = 0.00675 y^2 u_tau^2 / nu (nu_t+ = 0.00675 y+^2), homogeneous in m^2/s, with relative
-errors of 2.7e-3 (channel) and 3.7e-3 (Couette); it prints with the four constants it
-carries, and with S / S. Every calibration finds k = 0.41, A = 26, c = 0: plain
-Nelder-Mead reaches the smallest median error (1.3e-7), and the swarm, which scores points
-across the bounds, solves into the diverging part 13 times without harm. This loss is one
-valley, where the swarm brings nothing; it is meant for a loss with several minima.
+With the script's seed, the same at any thread count, the search makes 4,078 fictive CFD
+runs in about two minutes on 4 threads, 1,922 of which diverge and 120 of which tune
+constants, and returns nu_t = 0.0874 y^2 S - 0.600 nu, Prandtl's mixing length
+(kappa y)^2 S with kappa = 0.296 less a viscosity correction, homogeneous in m^2/s, with
+relative errors of 2.9e-3 (channel) and 3.1e-3 (Couette); it prints with the four
+constants it carries, and with u_tau / u_tau. Over seeds 1 to 6 the best mean error of the
+two flows was 3.0e-3 to 3.8e-3 (benchmark/acquisitions.jl tuned); with the default
+screening (no `failure_above`, `:lcb`) the search got below 4e-3 on 2 of the seeds and
+ended at 1.5e-2 to 3.5e-2 on the others, with half the diverged runs. Every calibration
+finds k = 0.41, A = 26, c = 0: plain Nelder-Mead reaches the smallest median error
+(1.3e-7), and the swarm, which scores points across the bounds, solves into the diverging
+part 13 times without harm. This loss is one valley, where the swarm brings nothing; it is
+meant for a loss with several minima.
 =#
 include(joinpath(@__DIR__, "..", "src", "GeneExpressionProgramming.jl"))
 
@@ -154,7 +160,11 @@ end
 # the probes of the screening: 36 states (y, S, u_tau, nu) the reference flows pass through
 states = vcat(Y2', S_REF', UT2', fill(NU, 1, 2N))
 probes = states[:, randperm(2N)[1:36]]
-surrogate = SurrogateScreening(regressor, probes; individuals_per_epoch=0.15, seed=1)
+# a run that diverged gets the error 1e3: for the screening a failure, which teaches it
+# where the solver diverges, not a value its processes fit; the batch acquisition weighs
+# every candidate by its chance to converge
+surrogate = SurrogateScreening(regressor, probes; individuals_per_epoch=0.15, seed=1,
+    failure_above=DIVERGED, screen=GpScreen(acquisition=:qehvi))
 
 function report(population, epoch, _)
     epoch % 20 == 0 || return
@@ -176,7 +186,9 @@ for m in sort(front; by=m -> m.fitness[1])
     @printf("    %.2e  %.2e   nu_t = %s   (homogeneous: %s)\n", m.fitness..., m,
         is_dimensionally_homogeneous(m.expression_raw, nut_unit, regressor.token_dto_))
 end
-println("  fictive CFD runs  ", calls[], ", ", diverged_calls[], " of them diverged")
+# the screening counts the runs it made; the others tuned constants
+println("  fictive CFD runs  ", calls[], ", ", diverged_calls[], " of them diverged, ",
+    calls[] - surrogate.evaluated_count, " of them on the constants")
 println("  time              ", round(seconds; digits=1), " s")
 
 # ---------------------------------------------------------------------------------------

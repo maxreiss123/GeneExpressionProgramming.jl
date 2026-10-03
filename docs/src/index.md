@@ -9,7 +9,7 @@ GeneExpressionProgramming.jl is a Julia package for symbolic regression by Gene 
 - **Physical dimensions**: given the SI dimensions of the features and of the target, semantic backpropagation (SBP) repairs candidates towards the target dimension, and only homogeneous candidates are scored.
 - **Tensor regression**: scalar, vector and tensor features (Tensors.jl) side by side, through the same batched evaluator.
 - **Constant optimisation and linear scaling** (`fit!` on data): Nelder-Mead tuning of the constants of the best model, or one least-squares coefficient per gene.
-- **Surrogate screening of expensive losses**: Gaussian processes over the behaviour of the candidates decide which few individuals per epoch the loss scores, and predict the loss of the others (`SurrogateScreening`), for one or several objectives and for chromosomes that carry several expressions.
+- **Surrogate screening of expensive losses**: Gaussian processes over the behaviour of the candidates decide which few individuals per epoch the loss scores, and predict the loss of the others (`SurrogateScreening`), for one or several objectives, for chromosomes that carry several expressions, and for solvers whose runs can diverge (`failure_above`, the batch acquisition `:qehvi`).
 - **Constants against an expensive loss**: Nelder-Mead whose loss calls a Gaussian process over the constants places where it expects the minimum (`ScreenedNelderMead`), after a screened particle swarm in a box for a loss with several minima (`swarm_box`), for the constants of the best model inside a search (`constant_optimizer` of `fit!`) or on their own (`optimize_constants!`, `simplex_search`), e.g. with a CFD simulation as the cost function.
 - **Threads**: fitness evaluation, genetic operators and repair run on the threads Julia is started with (`julia --threads=auto`).
 
@@ -65,6 +65,8 @@ It builds on concepts explored and developed in:
 > Weatheritt, J., Sandberg, R. D. (2016)  A novel evolutionary algorithm applied to algebraic modifications of the RANS stress–strain relationship. Journal of Computational Physics, vol. 325, pp. 22-37
 
 > Waschkowski, F., Zhao, Y., Sandberg R. D., Klewicki J., (2022), Multi-objective CFD-driven development of coupled turbulence closure models. Journal of Computational Physics, vol. 452, 
+
+> Fang, Y., Waschkowski, F., Reissmann, M., Sandberg, R. D., Oda, T., & Tanimoto, K. (2025). A surrogate-augmented symbolic CFD-driven training framework for accelerating multi-objective physical model development. arXiv. https://arxiv.org/abs/2512.19031
 
 ## Community and Support
 

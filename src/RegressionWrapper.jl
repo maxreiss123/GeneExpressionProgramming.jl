@@ -1288,6 +1288,7 @@ function GepSurrogate.SurrogateScreening(regressor::GepRegressor, probes::Abstra
     embedding::Symbol=:expression, expressions::Integer=1,
     transform::Union{Symbol,AbstractString}=:asinh, kwargs...)
     check_objective_expressions(regressor.toolbox_, kwargs)
+    check_acquisition(get(kwargs, :screen, nothing), length(regressor.toolbox_.fitness_reset[1]))
     embedder = if embedding === :expression
         SemanticEmbedder(regressor.toolbox_, probes; transform=transform,
             expressions=expressions)
@@ -1318,6 +1319,7 @@ function GepSurrogate.SurrogateScreening(regressor::GepTensorRegressor, probes::
     embedding in (:expression, :genes) || throw(ArgumentError(
         "the embedding $embedding is unknown, use :expression or :genes"))
     check_objective_expressions(regressor.toolbox_, kwargs)
+    check_acquisition(get(kwargs, :screen, nothing), length(regressor.toolbox_.fitness_reset[1]))
     embedder = TensorEmbedder(regressor.toolbox_, probes; components=components,
         transform=transform, per_gene=embedding === :genes, expressions=expressions)
     return SurrogateScreening(embedder; kwargs...)

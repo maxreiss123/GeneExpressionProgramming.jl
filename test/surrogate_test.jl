@@ -140,6 +140,36 @@ end
         @test GaussianProcess(reshape([1.0, 2.0], :, 1), [3.0]).best == 0.0
         dup = GaussianProcess(hcat(X, X), vcat(y, y))
         @test all(isfinite, SG.posterior(dup, Xq)[1])
+
+        # the joint posterior: the marginal one on its diagonal, and two candidates at the
+        # same place perfectly correlated
+        mu, C = SG.posterior_covariance(gp, Xq)
+        mu0, sd0 = SG.posterior(gp, Xq)
+        @test mu ≈ mu0
+        @test sqrt.(max.(diag(C), 0.0)) ≈ sd0 atol = 1e-8
+        _, Ctwin = SG.posterior_covariance(gp, hcat(Xq[:, 1], Xq[:, 1]))
+        @test Ctwin[1, 2] ≈ Ctwin[1, 1] atol = 1e-12
+
+        # an archive of near duplicates, copies that differ in the last bits as equivalent
+        # expressions evaluated along different paths do: the length scale is not set by
+        # the rounding of the distances, and the process factorizes (the median of every
+        # positive distance put the length scale at 7e-9 here, and the factorization failed)
+        rng = MersenneTwister(12)
+        base = randn(rng, 6, 20)
+        near = reduce(hcat, [i <= 280 ? base[:, 1] .* (1 .+ 1e-15 .* randn(rng, 6)) :
+                             base[:, 1+i%19+1] for i in 1:300])
+        Xs = (near .- mean(near; dims=2)) ./ (std(near; dims=2, corrected=false) .+ 1e-12)
+        @test SG.median_distance(Xs) == 1.0           # the first 256 are all one point
+        @test SG.median_distance(hcat(Xs[:, 281:end], Xs[:, 1:5])) > 0.1
+        # a copy is a distance within the rounding of the expansion, not a small one: three
+        # points a millionth apart keep their distances; and where copies are a minority, the
+        # median of every positive distance stands, as it always did
+        @test SG.median_distance([0.0 1e-6 3e-6]) ≈ 2e-6
+        few = hcat(base[:, 1:12], base[:, 1] .* (1 .+ 1e-15 .* randn(rng, 6)))
+        S = SG.square_distances(few, few)
+        @test SG.median_distance(few) == median(sqrt.(S[S.>0.0]))
+        noisy = GaussianProcess(near, randn(rng, 300))
+        @test all(isfinite, SG.posterior(noisy, near[:, 1:5])[2])
     end
 
     @testset "feasibility model" begin
@@ -175,6 +205,20 @@ end
         F = SG.pareto_points(rand(rng, 2, 12))
         Q = rand(rng, 2, 25)
         @test SG.hypervolume_improvement(F, Q, [1.2, 1.2]) ≈ SG.hv_improvement_slow(F, Q, [1.2, 1.2])
+        # the staircase is the front in the order of the first objective, and the volume a
+        # single point adds to it agrees with the difference of hypervolumes, in two and
+        # three objectives, fronts empty or not, points inside the box or not
+        stairs = SG.staircase(P)
+        @test stairs == [1.0 2.0 3.0; 3.0 2.0 1.0]
+        for k in (2, 3), _ in 1:100
+            Fk = SG.staircase(rand(rng, k, rand(rng, 0:9)))
+            q = 1.1 .* rand(rng, k)
+            r = fill(1.05, k)
+            @test SG.point_improvement(Fk, q, r) ≈ SG.hv_improvement_slow(Fk, reshape(q, :, 1), r)[1] atol = 1e-12
+        end
+        @test SG.point_improvement(stairs, [1.5, 1.5], ref) ≈ gain[1]
+        @test SG.point_improvement(stairs, [3.5, 3.5], ref) == 0.0
+        @test SG.point_improvement(stairs, [5.0, 0.0], ref) == 0.0
     end
 
     @testset "embedders" begin
@@ -332,7 +376,7 @@ end
         X2 = reshape([0.0, 0.1, 0.2, 0.35, 0.5, 0.65, 0.8, 0.9, 1.0], 1, :)
         T2 = vcat((X2 .- 0.3) .^ 2, (X2 .- 0.7) .^ 2)
         @test size(SG.pareto_points(T2), 2) == 3
-        for (acq, per_pick) in ((:lcb, false), (:lcb, true), (:ehvi, false))
+        for (acq, per_pick) in ((:lcb, false), (:lcb, true), (:ehvi, false), (:qehvi, false))
             sc = GpScreen(acquisition=acq, scalarize_per_pick=per_pick)
             SG.fit_screen!(sc, X2, T2; rng=MersenneTwister(7))
             means, devs = SG.predict_screen(sc, cands)
@@ -342,6 +386,128 @@ end
             # the front lies between the two optima
             @test all(0.2 .<= cands[1, p] .<= 0.8)
         end
+    end
+
+    @testset "the batch hypervolume acquisition" begin
+        # two objectives, optimal at 0.3 and 0.7, as in the selection test
+        X2 = reshape([0.0, 0.1, 0.2, 0.35, 0.5, 0.65, 0.8, 0.9, 1.0], 1, :)
+        T2 = vcat((X2 .- 0.3) .^ 2, (X2 .- 0.7) .^ 2)
+        cands = reshape(collect(range(0, 1; length=21)), 1, :)
+        fitted(acq) = SG.fit_screen!(GpScreen(acquisition=acq), X2, T2; rng=MersenneTwister(7))
+        sc = fitted(:qehvi)
+        first_pick = SG.select_screen(sc, cands, 1)[1]
+        # a copy of a candidate is the candidate in every joint sample: once it is in the
+        # batch, the copy adds nothing, and the next pick goes elsewhere
+        twins = hcat(cands[:, first_pick], cands)
+        picks = SG.select_screen(fitted(:qehvi), twins, 3)
+        @test length(unique(twins[1, picks])) == 3
+        # a candidate the feasibility model rules out is worth nothing, and one it trusts
+        # is worth its improvement
+        sure = fill(1.0, 21)
+        @test SG.select_screen(fitted(:qehvi), cands, 1; feasible=sure)[1] == first_pick
+        doubtful = copy(sure)
+        doubtful[first_pick] = 0.0
+        gated = SG.select_screen(fitted(:qehvi), cands, 5; feasible=doubtful)
+        @test !(first_pick in gated)
+        # more picks than candidates that can add volume: the rest by the optimistic bounds,
+        # every candidate once, the doubtful one last
+        all_picks = SG.select_screen(fitted(:qehvi), cands, 21; feasible=doubtful)
+        @test sort(all_picks) == 1:21
+        @test all_picks[end] == first_pick
+        # the reference sits a tenth of the front's spread beyond its worst values
+        front = SG.staircase(T2)
+        @test SG.front_reference(front, T2) ≈ vec(maximum(front; dims=2)) .+
+                                               0.1 .* vec(maximum(front; dims=2) .- minimum(front; dims=2))
+        # called directly with one objective, it ranks by the improvement of the batch
+        # (fit! rejects the hypervolume acquisitions for one objective, see below)
+        rng = MersenneTwister(6)
+        X = rand(rng, 1, 60)
+        T = reshape((X[1, :] .- 0.3) .^ 2, 1, :)
+        one = SG.fit_screen!(GpScreen(acquisition=:qehvi), X, T; rng=rng)
+        p1 = SG.select_screen(one, cands, 3)
+        @test length(unique(p1)) == 3
+        @test abs(cands[1, p1[1]] - 0.3) <= 0.1
+    end
+
+    @testset "a hypervolume acquisition needs several objectives" begin
+        prob = surrogate_problem(; seed=3)
+        probes = prob.x[:, 1:20]
+        for acquisition in (:ehvi, :qehvi)
+            screen = GpScreen(acquisition=acquisition)
+            @test_throws ArgumentError SurrogateScreening(prob.reg, probes; screen=screen)
+            # a screening built on an embedder alone: the search refuses it before a loss call
+            s = SurrogateScreening(SemanticEmbedder(prob.reg.toolbox_, probes); screen=screen)
+            @test_throws ArgumentError fit!(prob.reg, 2, 20, prob.loss; surrogate=s)
+            @test prob.calls[] == 0
+        end
+        two = surrogate_problem(; seed=3, objectives=2)
+        @test SurrogateScreening(two.reg, two.x[:, 1:20];
+            screen=GpScreen(acquisition=:qehvi)) isa SurrogateScreening
+        @test isnothing(SG.check_acquisition(GpScreen(acquisition=:logei_believer), 1))
+    end
+
+    @testset "a loss that diverges" begin
+        prob = surrogate_problem(; seed=3)
+        tb = prob.reg.toolbox_
+        s = SurrogateScreening(identity; failure_above=100.0)
+        pop = generate_population(6, tb)
+        v = [0.25]
+        # at or above the threshold a finite loss is a failure: the feasibility model learns
+        # it, the processes do not, and the floor of the predictions still moves
+        pop[1].fitness = (100.0,)
+        @test !SG.record_evaluation!(s, pop[1], v, :acquisition)
+        @test s.risk_labels == [0.0] && s.failed_count == 1 && archive_size(s) == 0
+        @test s.incumbent == [100.0]
+        pop[2].fitness = (2.0,)
+        @test SG.record_evaluation!(s, pop[2], v, :acquisition)
+        @test s.risk_labels == [0.0, 1.0] && archive_size(s) == 1 && s.incumbent == [2.0]
+        pop[3].fitness = (Inf,)
+        @test !SG.record_evaluation!(s, pop[3], v, :acquisition)
+        @test s.failed_count == 2 && s.incumbent == [2.0]
+        @test SurrogateScreening(identity).failure_above == Inf
+        # an individual the feasibility model doubts is predicted toward the failure value,
+        # by its probability of failing, in the transformed units
+        s.feasibility = FeasibilityModel([0.0 0.0 0.0 0.0 0.0 1.0 1.0 1.0 1.0 1.0],
+            [1, 1, 1, 1, 1, 0, 0, 0, 0, 0])
+        where = [0.0 0.5 1.0]
+        usable = s.feasibility(where)
+        @test usable[1] > 0.5 > usable[3]
+        plan = SG.ScreenPlan(collect(4:6), collect(4:6), Int[], where, Int[], Symbol[], :screened,
+            fill(log10(5.0), 1, 3), zeros(1, 3), zeros(0, 0))
+        @test SG.commit_epoch!(s, pop, plan) == 3
+        for (j, i) in enumerate(4:6)
+            @test pop[i].fitness[1] ≈ 10^(usable[j] * log10(5.0) + (1 - usable[j]) * 2.0)
+        end
+        @test pop[4].fitness[1] < pop[5].fitness[1] < pop[6].fitness[1] < 100.0
+        # a scored individual carries no prediction, even where the loss returns the very
+        # value it was predicted (a sure failure is predicted at the failure value)
+        @test SG.carries_prediction(s, pop[6])
+        SG.record_evaluation!(s, pop[6], v, :validation)
+        @test !SG.carries_prediction(s, pop[6])
+        # without a threshold a finite prediction is not touched by the feasibility model
+        plain = SurrogateScreening(identity)
+        plain.feasibility = s.feasibility
+        plain.incumbent = [2.0]
+        SG.commit_epoch!(plain, pop, plan)
+        @test all(i -> pop[i].fitness[1] ≈ 5.0, 4:6)
+    end
+
+    @testset "a screened search whose loss diverges" begin
+        prob = surrogate_problem(; seed=8, objectives=2)
+        # a model far off "diverges": the loss gives it a large error on both objectives
+        function diverging(elem, validate::Bool)
+            prob.loss(elem, validate)
+            f = elem.fitness
+            isfinite(f[1]) && f[1] > 3.0 && (elem.fitness = (1e3, 1e3))
+        end
+        s = SurrogateScreening(prob.reg, prob.x[:, 1:20]; individuals_per_epoch=8,
+            warmup_runs=30, failure_above=1e3, screen=GpScreen(acquisition=:qehvi), seed=5)
+        fit!(prob.reg, 8, 100, diverging; surrogate=s)
+        @test s.failed_count > 0
+        @test s.imputed_count > 0
+        # the processes never saw a diverged run
+        @test all(t -> all(t .< log10(1e3)), s.archive_targets)
+        @test all(m -> is_validated(s, m), prob.reg.best_models_)
     end
 
     @testset "fit! with a surrogate" begin
@@ -383,17 +549,19 @@ end
     end
 
     @testset "two objectives" begin
-        prob = surrogate_problem(; seed=31, objectives=2)
-        s = SurrogateScreening(prob.reg, prob.x[:, 1:20]; individuals_per_epoch=8,
-            warmup_runs=30, screen=GpScreen(acquisition=:ehvi), seed=5)
-        fit!(prob.reg, 8, 100, prob.loss; surrogate=s)
-        @test s.imputed_count > 0
-        for m in prob.reg.best_models_
-            @test length(m.fitness) == 2
-            @test is_validated(s, m)
+        for acquisition in (:ehvi, :qehvi)
+            prob = surrogate_problem(; seed=31, objectives=2)
+            s = SurrogateScreening(prob.reg, prob.x[:, 1:20]; individuals_per_epoch=8,
+                warmup_runs=30, screen=GpScreen(acquisition=acquisition), seed=5)
+            fit!(prob.reg, 8, 100, prob.loss; surrogate=s)
+            @test s.imputed_count > 0
+            for m in prob.reg.best_models_
+                @test length(m.fitness) == 2
+                @test is_validated(s, m)
+            end
+            # the incumbent is the best loss per objective, and no prediction beat it
+            @test length(s.incumbent) == 2
         end
-        # the incumbent is the best loss per objective, and no prediction beat it
-        @test length(s.incumbent) == 2
     end
 
     @testset "several expressions per chromosome" begin
@@ -616,7 +784,7 @@ end
         known = fill(NaN, 2, 11)
         known[2, :] .= 10.0
         known[2, 6] = -10.0
-        for acquisition in (:lcb, :ehvi)
+        for acquisition in (:lcb, :ehvi, :qehvi)
             sc = GpScreen(acquisition=acquisition)
             SG.fit_screen!(sc, X, T; rng=MersenneTwister(1))
             means, devs = SG.predict_screen(sc, cands; known=known)

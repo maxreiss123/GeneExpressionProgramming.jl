@@ -18,9 +18,9 @@ reports the solver calls: both find f exactly, the screened search after 776 sol
 calls, the other after 5,423.
 
 The screening costs time of its own (fitting the process, predicting and ranking): here,
-on one thread, 0.11 s per epoch against 0.01 s for the loop without it, so it saves time
+on one thread, 0.05 s per epoch against 0.01 s for the loop without it, so it saves time
 where a loss call costs more than that over the individuals it spares, i.e. for a real
-solver. The simulation here takes 4 ms; the first search of a session includes the
+solver. The simulation here takes about 6 ms; the first search of a session includes the
 compilation of either path.
 =#
 include(joinpath(@__DIR__, "..", "src", "GeneExpressionProgramming.jl"))

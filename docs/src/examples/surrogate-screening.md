@@ -91,6 +91,8 @@ The loss is the one a search without screening would use; the screening only dec
 - **The batch**: `individuals_per_epoch` is a count (10 by default), which pins the loss calls per epoch, or a share in `(0, 1)`, which adapts them to the new individuals of an epoch.
 - **The seed**: `seed` fixes the random choices of the screening, so that a seeded search reproduces.
 
+The acquisition, which picks the individuals the loss scores, is best left at its default for this search. [Choosing the Acquisition](#Choosing-the-Acquisition) tells when to change it, and [A Loss That Diverges](#A-Loss-That-Diverges) what to set for a solver that diverges.
+
 `examples/Main_surrogate_screening.jl` runs this search with and without the screening, from the same seed. Both find `x - 0.5 x^2` exactly; the screened search after 776 solver calls, the other after 5,423.
 
 ## Several Expressions and Objectives: a System of ODEs
@@ -202,7 +204,7 @@ What changes against a single objective:
 
 - **`expressions = 2`** embeds a chromosome with one latent block per expression: each part `split_karva` makes, evaluated on the probes. The whole karva string joins the parts with connectors the loss never uses, so its behaviour is not what the loss sees. The gene count has to be divisible by the number of expressions.
 - **`objective_expressions = [1, 2]`** lets the process of each objective see the block of the expression it judges alone; the other block would only blur its distances. On this system, the rank correlation of predictions and held-out losses went from -0.21, 0.35, 0.18 and 0.29 to 0.19, 0.35, 0.54 and 0.56 in two runs, and the screened search solved both equations on 5 of 6 seeds instead of 2. An objective that depends on all expressions takes `0` or `:all`.
-- **The pick** scalarizes the objectives by a random augmented Chebyshev weighting per epoch (ParEGO); `screen = GpScreen(acquisition = :ehvi)` ranks by the expected hypervolume improvement instead.
+- **The pick** scalarizes the objectives by a random augmented Chebyshev weighting per epoch (ParEGO); `screen = GpScreen(acquisition = :ehvi)` ranks by the expected hypervolume improvement instead, and `:qehvi` by the joint expected hypervolume improvement of the batch (see [Choosing the Acquisition](#Choosing-the-Acquisition)).
 - **The break condition** asks `is_validated(surrogate, c)`, so that only a loss value, never a prediction, can stop the search.
 - **The result is a front**, not one model: `best_models_` holds the `hof` best models by the mean of their objectives, all of them scored by the loss (`validate_hof`), and `calculate_fronts` picks the non-dominated ones. A large `hof` costs a loss call per predicted member at the end.
 
@@ -225,6 +227,52 @@ surrogate = SurrogateScreening(regressor, probes;
     exact_objectives=Dict(3 => size_of))  # computed, not predicted
 ```
 
+## A Loss That Diverges
+
+A solver in the loop often gives a run that diverged a large error. The loss is then smooth where the solver converges and jumps where it does not, and a Gaussian process fitted across the jump bends around it: it smears the jump into the converged region nearby and spends its uncertainty there. `failure_above` keeps the two apart:
+
+```julia
+# the loss gives a flow whose solve diverged the error 1e3
+surrogate = SurrogateScreening(regressor, probes; individuals_per_epoch=0.15,
+    failure_above=1e3,                     # a diverged run is a failure, not a value
+    screen=GpScreen(acquisition=:qehvi))   # weighs each candidate by its chance to converge
+```
+
+- A diverged run teaches the `FeasibilityModel` where the solver fails, as a run that returns `Inf` does; the processes learn from the converged runs alone.
+- An individual the loss has not scored is predicted between its process's prediction and `failure_above`, by its probability of diverging (in the transformed units), so a model that likely diverges does not survive on an optimistic guess.
+- `:qehvi` weighs each candidate's improvement by that probability inside its samples; the other acquisitions fill the batch from the candidates the model considers runnable first.
+- The individuals keep the fitness the loss gave them: the threshold only decides what the screening learns from it.
+
+Set `failure_above` at or below the error your loss gives a diverged run, and above every error a converged run can reach. With several objectives, a call fails once any of them reaches the threshold, and then teaches the processes of none. A loss that returns `Inf` for a failed run needs no threshold, as a value that is not finite always counts as failed. Nor does the constant tuning of a search, which calls the loss outside the screening ([Coefficient Tuning](coefficient-tuning.md#When-the-Solver-Diverges)).
+
+`examples/Main_fictive_cfd_in_the_loop.jl` searches a turbulence closure with these settings: a diverged run gets the error 1e3 per flow, and the constants of the best model are tuned every 10 epochs. Over seeds 1 to 6 (`benchmark/acquisitions.jl tuned`), the best mean relative error of the two flows was 3.0e-3 to 3.8e-3. The default screening got below 4e-3 on 2 of the seeds and ended at 1.5e-2 to 3.5e-2 on the others; `failure_above` with the default acquisition got there on 3, ending at about 1e-2 to 3.5e-2 on the others. Without the constant tuning (100 epochs, 4 seeds; `benchmark/acquisitions.jl`), `failure_above = 1e3` raised the median hypervolume of everything the solver scored, in log10 of the errors below a relative error of 1 in both flows, from 2.66 to 5.71 with the default acquisition and to 5.90 with `:qehvi`. The median best errors went from 2.7e-2 (channel) and 2.6e-2 (Couette) to 2.5e-3 and 5.1e-3.
+
+The price is more diverged runs: in the example, a median of 1,726 of about 4,100 runs over the six seeds, against 821 of about 4,200 with the default screening. A loss that stops a run as soon as it diverges keeps these runs cheap.
+
+## Choosing the Acquisition
+
+The acquisition is the `screen` of the screening, `GpScreen(acquisition = ...)`. What to take, as measured on the searches of this page and on the closure of `examples/Main_fictive_cfd_in_the_loop.jl`:
+
+| the search | `screen` | measured |
+| --- | --- | --- |
+| one objective | `GpScreen()`, the default `:lcb`; `:logei` and `:logei_believer` otherwise | the fewest loss calls: the ODE above found `f` after 776 solver calls, after 885 with `:logei_believer` and 939 with `:logei` |
+| several objectives | `GpScreen()`, or `GpScreen(acquisition = :qehvi)` | a tie: the system of two ODEs solved on 4 of 6 seeds with either; with the seed of its example after 1,196 and 1,538 solver calls (`:ehvi`: 1,241) |
+| several objectives, and a solver that gives a diverged run a large error | `GpScreen(acquisition = :qehvi)` with `failure_above` at that error, never without it | the best and steadiest on the closure, with its constant tuning and without (see [A Loss That Diverges](#A-Loss-That-Diverges)); without the threshold, erratic (hypervolumes of 2.06 to 6.20 over four seeds) |
+
+`:ehvi` and `:qehvi` rank by the hypervolume of several objectives, which one objective does not have: a search whose loss sets one refuses them. With one objective and a solver that diverges, set `failure_above` the same way; which acquisition suits that case best was not measured. The acquisition does not reach the constant tuning of a search, which places its loss calls by a process of its own ([Coefficient Tuning](coefficient-tuning.md#Inside-a-Search)), and `:qehvi` costs about as much time per epoch as `:lcb` ([When the Screening Pays Off](#When-the-Screening-Pays-Off)).
+
+`GpScreen(acquisition = :qehvi)` is the q-expected hypervolume improvement of Daulton, Balandat and Bakshy (2020), the batch form of `:ehvi`. The candidates are sampled jointly from their processes, and the batch is filled greedily: every pick is valued by the volume it adds to the front as the earlier picks of the same sample left it, averaged over the samples. Two candidates that behave alike are correlated in every sample, so the second adds nothing once the first is in, and a candidate that will likely fail is worth its improvement times its chance to succeed. `:ehvi` imputes the posterior mean of the earlier picks instead and samples each candidate alone; `:lcb`, the default, ranks by one random Chebyshev scalarization of the optimistic bounds per epoch. The paper's differentiable form serves acquisitions optimized by gradient over a continuous space; the screening ranks a finite set of bred individuals, so every candidate is valued directly.
+
+On the two searches of `benchmark/acquisitions.jl` (output in `benchmark/acquisitions_results.txt`):
+
+| acquisition | two ODEs: solved of 6, median solver calls | closure: median hypervolume, best errors | closure with `failure_above = 1e3` |
+| --- | --- | --- | --- |
+| `:lcb` (default) | 4, 1,551 | 2.66; 2.7e-2, 2.6e-2 | 5.71; 3.4e-3, 5.4e-3 |
+| `:ehvi` | 3, 1,375 | 5.01; 5.6e-3, 6.1e-3 | 4.39; 7.2e-3, 6.9e-3 |
+| `:qehvi` | 4, 1,503 | 3.51; 2.1e-2, 1.7e-2 | 5.90; 2.5e-3, 5.1e-3 |
+
+With the threshold, `:qehvi` was the best and the steadiest on the closure (5.65 to 6.44 over the seeds, the default 5.00 to 6.21), with the fewest solver calls; on the two ODEs, whose failures are non-finite and need no threshold, it tied the default. Without the threshold the jump of the loss misleads the processes: `:ehvi` held up best, and `:qehvi` swung from 6.20 on one seed to 2.06 on another. Four and six seeds show which way the acquisitions lean, no more.
+
 ## What the Screening Guarantees
 
 - **A prediction is never cached.** A copy of a predicted individual is screened again, while a copy of a scored one takes its loss times `penalty`, even once the fitness cache has dropped it.
@@ -245,7 +293,8 @@ In your own callbacks (a `break_condition`, a `file_logger_callback`), `is_valid
 | `expressions` | `1` | latent blocks per chromosome, one per expression of a multi-expression loss |
 | `objective_expressions` | `nothing` | the expression each objective judges, one entry per objective (`0` or `:all` for all of them) |
 | `exact_objectives` | `nothing` | objectives computed from the chromosome instead of predicted, as `objective => function` |
-| `screen` | `GpScreen()` | the ranking: `acquisition = :lcb` (default), `:logei`, `:logei_believer`, `:ehvi`; `kappa`, `fit` |
+| `screen` | `GpScreen()` | the ranking: `acquisition = :lcb` (default), `:logei`, `:logei_believer`, and for several objectives `:ehvi` and `:qehvi` (see [Choosing the Acquisition](#Choosing-the-Acquisition)); `kappa`, `fit` |
+| `failure_above` | `nothing` | a loss value at or above which a loss call counts as failed, e.g. the error a diverged run gets (see [A Loss That Diverges](#A-Loss-That-Diverges)) |
 | `budget_rule` | `:fixed` | `:uncertainty` scores only the individuals whose optimistic bound still beats the incumbent: a gain with several objectives, a collapse with one, as the Python package measured |
 | `target_transform` | `:log10` | `:asinh` or `:none` for objectives that can be negative |
 | `warmup_runs`, `warmup_batch` | six times the batch (at least 60), twice the batch (at least 20) | the warmup before the processes take over |
@@ -258,7 +307,7 @@ For a `GepTensorRegressor`, `SurrogateScreening(regressor, probes; components=3)
 ## Diagnostics
 
 - `surrogate.evaluated_count`: loss calls made through the screening; `surrogate.imputed_count`: predictions handed out instead
-- `surrogate.broken_count`: individuals scored as a crash because they could not be embedded; `surrogate.failed_count`: loss calls that returned a non-finite value (from 5 on, a model of which individuals the loss can score gates the batch)
+- `surrogate.broken_count`: individuals scored as a crash because they could not be embedded; `surrogate.failed_count`: loss calls that returned a non-finite value, or one at or above `failure_above` (from 5 on, a model of which individuals the loss can score gates the batch, or weighs it with `:qehvi`)
 - `surrogate.spearman_log`: the rank correlation of prediction and loss within each screened batch, of the first predicted objective; `surrogate.spearman_objectives` holds one such log per objective. A batch holds the individuals the processes rated most promising, which are hard to tell apart, so the values are low even where the screening works; follow them over the run rather than reading single ones
 - `surrogate.last_batch`: the individuals the loss scored in the last epoch, as `(chromosome, fitness, reason)`, the reason being `:warmup`, `:acquisition`, `:explore` or `:validation`
 - `archive_size(surrogate)`: individuals scored with a finite loss
@@ -290,15 +339,16 @@ surrogate = deserialize("screening.jls")
 
 ## When the Screening Pays Off
 
-Fitting the processes and ranking the new individuals costs time of its own, which grows with the archive of scored individuals (at most 1000) and with the objectives. Measured on one thread, outside the loss:
+Fitting the processes and ranking the new individuals costs time of its own, which grows with the archive of scored individuals (at most 1000), with the population and with the objectives. Measured on one thread, outside the loss and after the compilation, in seconds per epoch:
 
-| search | without screening | screened |
-| --- | --- | --- |
-| the ODE above, a batch of 10 | 0.009 s per epoch | 0.035 s per epoch |
-| the ODE above, 15 % of the new individuals | 0.009 s per epoch | 0.11 s per epoch |
-| the system of two ODEs, 15 % | 0.011 s per epoch | 0.19 s per epoch |
+| search | without screening | screened, `:lcb` | screened, `:qehvi` |
+| --- | --- | --- | --- |
+| the ODE above, a batch of 10 | 0.010 | 0.032 | – |
+| the ODE above, 15 % of the new individuals | 0.010 | 0.051 | – |
+| the system of two ODEs, 15 % | 0.012 | 0.20 | 0.17 |
+| the closure of `examples/Main_fictive_cfd_in_the_loop.jl`, 15 % of 400 individuals, with its constant tuning | 0.20 | 0.67 | 0.69, with `failure_above` |
 
-The screening saves time where a loss call costs more than that over the individuals it spares: a solver, a simulation, an external program. With a cheap loss it works too, but the time goes into the processes instead.
+The screening saves time where a loss call costs more than that over the individuals it spares: a solver, a simulation, an external program. With a cheap loss it works too, but the time goes into the processes instead. With several objectives, `:qehvi` costs about as much as the default.
 
 On three benchmark functions (10 seeds each, 200 individuals, 40 epochs, a custom MSE loss; `benchmark/surrogate_screening.jl`), screening 15 % of the new individuals beat scoring every individual at about 6.5 times fewer loss calls, and a batch of 10 per epoch beat a search without screening at the same number of loss calls on every function. Median MSE of the returned model:
 
@@ -315,7 +365,7 @@ A screened search is still an evolutionary search: it can settle in a local opti
 
 ## The Constants of a Model
 
-A Gaussian process screens the constants of a model just as well: `fit!(...; constant_optimizer=ScreenedNelderMead())` tunes the constants of the best model against the loss, with the loss calls placed by a process over the constants, and `optimize_constants!` and `simplex_search` do so on their own. [Coefficient Tuning](coefficient-tuning.md) shows when to use which variant, what to do about runs that diverge, and a closure model searched with a fictive CFD solver in the loop.
+A Gaussian process screens the constants of a model just as well: `fit!(...; constant_optimizer=ScreenedNelderMead())` tunes the constants of the best model against the loss, with the loss calls placed by a process over the constants, and `optimize_constants!` and `simplex_search` do so on their own. In a screened search, the tuning calls the loss next to the screening, with a process and an acquisition of its own: `screen` and `failure_above` do not reach it, and `surrogate.evaluated_count` does not count its calls. [Coefficient Tuning](coefficient-tuning.md) shows when to use which variant, what to do about runs that diverge, and a closure model searched with a fictive CFD solver in the loop.
 
 ## Running the Examples
 

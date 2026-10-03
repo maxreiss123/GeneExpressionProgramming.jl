@@ -42,8 +42,9 @@ using Distributions: Normal, cdf, pdf, logcdf
 
 export SurrogateScreening, GpScreen, GaussianProcess, FeasibilityModel
 export SemanticEmbedder, GeneEmbedder, TensorEmbedder
-export posterior, unstandardize, expected_improvement, log_expected_improvement, believe
-export fit_screen!, predict_screen, select_screen, plausible_screen
+export posterior, posterior_covariance, unstandardize, expected_improvement,
+    log_expected_improvement, believe
+export fit_screen!, predict_screen, select_screen, plausible_screen, check_acquisition
 export pareto_points, hypervolume, hypervolume_improvement
 export resolve_count, get_transform
 export archive_size, is_validated, brood_multiplier, brood_size
@@ -135,13 +136,23 @@ end
     median_distance(X)
 
 Median of the positive pairwise distances between the first 256 columns of `X`, or 1 when
-there are none: the length scale of the median heuristic.
+there are none: the length scale of the median heuristic. Copies, as equivalent
+expressions evaluated along different paths leave them, are apart by the rounding of the
+expansion `|a|² + |b|² - 2 a·b` (below `64 eps (|a|² + |b|²)`), and they are the smallest
+of the positive distances. Where they make up half of them or more, the median would be
+that rounding, under which a point's kernel with itself is no longer one and the process
+cannot be factorized; the median of the distances between distinct columns is taken
+instead.
 """
 function median_distance(X::AbstractMatrix)
     sub = X[:, 1:min(size(X, 2), 256)]
-    D = sqrt.(square_distances(sub, sub))
-    positive = D[D.>0.0]
-    return isempty(positive) ? 1.0 : median(positive)
+    S = square_distances(sub, sub)
+    positive = sqrt.(S[S.>0.0])
+    isempty(positive) && return 1.0
+    norms = vec(sum(abs2, sub; dims=1))
+    distinct = sqrt.(S[S.>64 * eps() .* (norms .+ norms')])
+    2 * length(distinct) > length(positive) && return median(positive)
+    return isempty(distinct) ? 1.0 : median(distinct)
 end
 
 rbf_kernel(A::AbstractMatrix, B::AbstractMatrix, lengthscale::Real) =
@@ -184,8 +195,9 @@ const FIT_NOISES = (1e-6, 1e-4, 1e-3, 1e-2, 1e-1)
 Exact Gaussian process regression of `y` on the columns of `X` (`d × n`, one latent vector
 per column). The process is kept small: the inputs standardized per dimension, the targets
 to zero mean and unit variance, a radial basis kernel whose length scale is the median
-pairwise distance of the data, and a fixed nugget. There is nothing to fit iteratively, so
-the process is cheap enough to be rebuilt every epoch.
+distance between the distinct points of the data ([`median_distance`](@ref)), and a fixed
+nugget. There is nothing to fit iteratively, so the process is cheap enough to be rebuilt
+every epoch.
 
 With `fit = true` the length scale (a multiple of the median heuristic from
 `length_factors`) and the noise (from `noises`) are chosen by the marginal likelihood over
@@ -312,6 +324,22 @@ A standardized prediction of [`posterior`](@ref) in the units of the data.
 """
 unstandardize(gp::GaussianProcess, mu, sd) = (mu .* gp.y_scale .+ gp.y_mean, sd .* gp.y_scale)
 
+"""
+    posterior_covariance(gp::GaussianProcess, Xq) -> (mean, covariance)
+
+Posterior mean and covariance at the columns of `Xq` (`d × m`), in the standardized units
+of the targets: what a joint sample of the candidates needs, where [`posterior`](@ref)
+gives each one's deviation alone. Two candidates that behave alike are correlated, and a
+batch that samples them jointly learns that scoring both tells little more than one.
+"""
+function posterior_covariance(gp::GaussianProcess, Xq::AbstractMatrix)
+    Q = standardize_inputs(gp, Xq)
+    cross = rbf_kernel(Q, gp.X, gp.lengthscale)
+    V = gp.L \ Matrix(cross')
+    C = gp.amplitude .* (rbf_kernel(Q, Q, gp.lengthscale) .- V' * V)
+    return cross * gp.alpha, Symmetric((C .+ C') ./ 2)
+end
+
 const STD_NORMAL = Normal()
 
 """
@@ -402,7 +430,7 @@ Probability that the loss returns a finite value for an individual. An expensive
 not only cost, it also fails (a case diverges, a run hits its timeout), and such a call
 costs as much as a useful one while carrying no value the regression could learn from.
 The model is the classification counterpart of the process, kept as small: a kernel
-weighted average of the outcomes `labels` (1 for a finite value, 0 for a failure) at the
+weighted average of the outcomes `labels` (1 for a usable value, 0 for a failure) at the
 columns of `X` (a Nadaraya-Watson estimator), pulled toward the overall success rate by
 `prior` pseudo observations, so a region nobody has probed is neither condemned nor
 trusted. The kernel is `bandwidth` times the median pairwise distance wide: the failures
@@ -558,6 +586,61 @@ function hv_improvement_slow(front::AbstractMatrix, points::AbstractMatrix,
     return [all(points[:, j] .< reference) ?
             max(hypervolume(hcat(front, points[:, j]), reference) - base, 0.0) : 0.0
             for j in axes(points, 2)]
+end
+
+"""
+    staircase(P)
+
+The non-dominated columns of `P` (`k × n`, minimized), ordered by the first objective: for
+two objectives the staircase [`point_improvement`](@ref) sweeps.
+"""
+function staircase(P::AbstractMatrix)
+    F = pareto_points(P)
+    return F[:, sortperm(collect(eachcol(F)); by=c -> (c[1], c[2:end]...))]
+end
+
+"""
+    point_improvement(front, y, reference)
+
+The volume the point `y` adds to the hypervolume of `front` (a [`staircase`](@ref)) with
+respect to `reference`: zero where the front dominates it or it lies outside the
+reference box. Two objectives are swept along the staircase, from the step left of the
+point until a step reaches below it; more take the box between the point and the
+reference minus what the front already covers of it.
+"""
+function point_improvement(front::AbstractMatrix, y::AbstractVector, reference::AbstractVector)
+    for r in eachindex(y)
+        y[r] < reference[r] || return 0.0
+    end
+    length(y) == 2 || return box_improvement(front, y, reference)
+    px, py, rx, ry = y[1], y[2], reference[1], reference[2]
+    s = searchsortedlast(view(front, 1, :), px)
+    # the staircase falls with the first objective: the step left of the point is the lowest
+    # the front reaches there
+    s > 0 && front[2, s] <= py && return 0.0
+    ceiling = s > 0 ? min(front[2, s], ry) : ry
+    start = px
+    volume = 0.0
+    for t in s+1:size(front, 2)
+        x = front[1, t]
+        x >= rx && break
+        volume += (x - start) * (ceiling - py)
+        start = x
+        ceiling = min(front[2, t], ry)
+        ceiling <= py && return volume
+    end
+    return volume + (rx - start) * (ceiling - py)
+end
+
+function box_improvement(front::AbstractMatrix, y::AbstractVector, reference::AbstractVector)
+    # the part of the box [y, reference] a front point covers is the box from the point,
+    # lifted to y, to the reference
+    covered = Vector{Float64}[]
+    for j in axes(front, 2)
+        p = max.(view(front, :, j), y)
+        all(p .< reference) && push!(covered, p)
+    end
+    return max(prod(reference .- y) - hv_recursive(covered, Vector{Float64}(reference)), 0.0)
 end
 
 # ----------------------------------------------------------------------------------------
@@ -859,15 +942,22 @@ expression_blocks(e) = throw(ArgumentError(
 
 The acquisitions [`GpScreen`](@ref) selects with: `:lcb` (the optimistic confidence bound
 `mean - kappa * deviation`, the default), `:logei` (the top of the LogEI ranking),
-`:logei_believer` (greedy batch LogEI with the kriging believer between the picks) and
-`:ehvi` (the expected hypervolume improvement, for several objectives).
+`:logei_believer` (greedy batch LogEI with the kriging believer between the picks),
+`:ehvi` (the expected hypervolume improvement, every pick joining the front at its
+predicted mean) and `:qehvi` (the joint expected hypervolume improvement of the batch, see
+[`select_qehvi`](@ref)). The hypervolume acquisitions need several objectives
+([`check_acquisition`](@ref)).
 """
-const ACQUISITIONS = (:lcb, :logei, :logei_believer, :ehvi)
+const ACQUISITIONS = (:lcb, :logei, :logei_believer, :ehvi, :qehvi)
 
 # samples of the Monte Carlo estimate of the expected hypervolume improvement, and the
 # margin of its reference point as a share of the spread of the observed front
 const EHVI_SAMPLES = 96
 const EHVI_MARGIN = 0.1
+# joint samples of the batch acquisition, as in Daulton et al. (2020), and the deviations a
+# candidate's optimistic bound may lie behind the front before it is left out of them
+const QEHVI_SAMPLES = 128
+const QEHVI_REACH = 3.0
 
 """
     GpScreen(; nugget=1e-6, rho=0.05, acquisition=:lcb, kappa=1.0,
@@ -888,6 +978,15 @@ its improvement underflows to a tie for most members of an evolved population, t
 form because it resolves that tail toward large deviations, i.e. toward behavioural
 outliers, which in a symbolic search are mostly broken models. See [`ACQUISITIONS`](@ref)
 for the others.
+
+With several objectives, `:qehvi` ([`select_qehvi`](@ref)) values the batch jointly, as
+Daulton, Balandat and Bakshy (2020) do. On the fictive CFD closure of the examples, whose
+diverged runs get a large error, it was the best and steadiest acquisition with
+`failure_above` set on the [`SurrogateScreening`](@ref) (a median hypervolume of 5.90
+against 5.71 for `:lcb` over 4 seeds), and it tied `:lcb` on a system of two ODEs; without
+the threshold the jump of the loss misled it (`benchmark/acquisitions.jl`). Like `:ehvi`,
+it needs several objectives: a search whose loss sets one refuses both
+([`check_acquisition`](@ref)).
 
 - `scalarize_per_pick`: several objectives and `:lcb` only; draw a fresh scalarization
   for every pick of a batch rather than one per epoch (measured as a tie)
@@ -939,6 +1038,22 @@ mutable struct GpScreen
             GaussianProcess[], nothing, zeros(0, 0), Float64[], Float64[], Float64[],
             isnothing(inputs) ? nothing : Vector{Any}(inputs), MersenneTwister(0))
     end
+end
+
+"""
+    check_acquisition(screen, objectives)
+
+Throws an `ArgumentError` for a hypervolume acquisition (`:ehvi`, `:qehvi`) of a loss that
+sets one objective: a hypervolume needs several, and with one the choice is `:lcb`,
+`:logei` or `:logei_believer`. `runGep` asks before the loss is ever called, and so does
+`SurrogateScreening(regressor, probes; screen)` before the search.
+"""
+function check_acquisition(screen, objectives::Integer)
+    screen isa GpScreen && objectives == 1 && screen.acquisition in (:ehvi, :qehvi) &&
+        throw(ArgumentError("GpScreen(acquisition=:$(screen.acquisition)) ranks by the " *
+            "hypervolume of several objectives, and the loss sets one: take :lcb (the " *
+            "default), :logei or :logei_believer"))
+    return nothing
 end
 
 # the rows of `X` the process of objective `j` sees
@@ -1045,6 +1160,9 @@ function select_screen(screen::GpScreen, X::AbstractMatrix, n::Integer; feasible
     m = size(X, 2)
     n = min(Int(n), m)
     n <= 0 && return Int[]
+    # the batch acquisition weighs the feasibility inside its samples instead of gating
+    screen.acquisition === :qehvi &&
+        return select_qehvi(screen, X, n; feasible=feasible, known=known)
     isnothing(feasible) || return select_feasible(screen, X, n, feasible; known=known)
     multi = length(screen.models) > 1
     multi && screen.acquisition === :ehvi && return select_ehvi(screen, X, n; known=known)
@@ -1182,6 +1300,145 @@ function select_ehvi(screen::GpScreen, X::AbstractMatrix, n::Int; samples::Int=E
     return chosen
 end
 
+"""
+    front_reference(front, targets)
+
+The corner the batch acquisition measures against: the worst value of the front per
+objective plus a tenth of the front's spread (of the archive's, where the front is one
+point or flat). Close to the front, the volume a candidate adds is volume the front lacks;
+the worst value of the archive ([`reference_point`](@ref)) would weigh the extremes, and a
+loss that gives a diverged run a large error would put the corner out there.
+"""
+function front_reference(front::AbstractMatrix, targets::AbstractMatrix)
+    worst = vec(maximum(front; dims=2))
+    spread = worst .- vec(minimum(front; dims=2))
+    wide = vec(maximum(targets; dims=2)) .- vec(minimum(targets; dims=2))
+    margin = ifelse.(spread .> 0, spread, ifelse.(wide .> 0, wide, 1.0))
+    return worst .+ EHVI_MARGIN .* margin
+end
+
+"""
+    joint_samples(screen, X, samples, rng; known=nothing) -> Array (k × m × samples)
+
+Samples of the objectives of the candidates `X` (`d × m`), drawn jointly over the
+candidates from the posterior of each objective's process (the objectives independent of
+each other, as their processes are); a known objective is its value in every sample.
+"""
+function joint_samples(screen::GpScreen, X::AbstractMatrix, samples::Int, rng::AbstractRNG;
+    known=nothing)
+    k, m = length(screen.models), size(X, 2)
+    Y = Array{Float64}(undef, k, m, samples)
+    for (j, model) in enumerate(screen.models)
+        mu, C = posterior_covariance(model, objective_input(screen, j, X))
+        L, _ = robust_cholesky(C, 1e-8)
+        Y[j, :, :] .= (mu .+ L * randn(rng, m, samples)) .* model.y_scale .+ model.y_mean
+    end
+    if has_known(known)
+        for i in 1:m, j in 1:k
+            isnan(known[j, i]) || (Y[j, i, :] .= known[j, i])
+        end
+    end
+    return Y
+end
+
+"""
+    select_qehvi(screen, X, n; samples=QEHVI_SAMPLES, feasible=nothing, known=nothing)
+
+A batch by the q-expected hypervolume improvement (qEHVI) of Daulton, Balandat and Bakshy
+(2020): the expected volume the whole batch adds to the front of the archive, estimated on
+`samples` joint posterior samples of the candidates (a known objective is not sampled),
+measured against [`front_reference`](@ref).
+
+The batch is filled greedily, and the value of a pick is the volume it adds in every
+sample to the front as that sample's earlier picks left it, averaged over the samples: the
+proper integration over the pending points of the paper, not the posterior mean the
+`:ehvi` acquisition imputes. A pick that a sample places behind an earlier one adds
+nothing there, so a batch spreads where the process is unsure, and two candidates that
+behave alike, correlated in every sample, do not both look new. The improvement only
+shrinks as the fronts grow (it is submodular), so a candidate is valued again only when
+its last value could still top the batch, which picks the greedy batch exactly.
+
+`feasible`, one probability per candidate that the loss returns a usable value (a
+[`FeasibilityModel`](@ref)), weighs the improvement inside the samples, as the paper's
+constrained qEHVI weighs it by its constraints: a candidate fails in the samples a uniform
+draw puts above its probability, adds nothing there and leaves those fronts as they were.
+A candidate that will likely fail is thus worth little, but a sure improvement elsewhere
+is not risked on it, which the gate of the other acquisitions decides before the
+acquisition looks. Candidates whose optimistic bound (`QEHVI_REACH` deviations) cannot
+reach the front are not sampled, and once no candidate adds any volume, the rest of the
+batch is ranked by the epoch's Chebyshev scalarization of the optimistic bounds, the
+feasible first.
+
+The paper's differentiable form serves acquisitions optimized by gradient over a
+continuous space; the screen ranks a finite set of individuals, so the samples are drawn
+once per batch and every candidate is valued directly.
+"""
+function select_qehvi(screen::GpScreen, X::AbstractMatrix, n::Int; samples::Int=QEHVI_SAMPLES,
+    feasible=nothing, known=nothing)
+    m = size(X, 2)
+    rng = screen.rng
+    front = staircase(screen.targets)
+    reference = front_reference(front, screen.targets)
+    # only a candidate whose optimistic bound beats the front somewhere can add volume
+    means, deviations = predict_screen(screen, X; known=known)
+    optimistic = means .- QEHVI_REACH .* deviations
+    contenders = [i for i in 1:m if point_improvement(front, optimistic[:, i], reference) > 0]
+    chosen = Int[]
+    if !isempty(contenders)
+        sub = has_known(known) ? known[:, contenders] : nothing
+        Y = joint_samples(screen, X[:, contenders], samples, rng; known=sub)
+        alive = isnothing(feasible) ? trues(length(contenders), samples) :
+                rand(rng, length(contenders), samples) .< Vector{Float64}(feasible)[contenders]
+        fronts = fill(front, samples)
+        value(c) = sum(alive[c, t] ? point_improvement(fronts[t], view(Y, :, c, t), reference) :
+                       0.0 for t in 1:samples) / samples
+        bounds = [value(c) for c in eachindex(contenders)]
+        fresh = trues(length(contenders))
+        open = trues(length(contenders))
+        while length(chosen) < n
+            best = 0
+            for c in eachindex(contenders)
+                open[c] && (best == 0 || bounds[c] > bounds[best]) && (best = c)
+            end
+            (best == 0 || bounds[best] <= 0) && break
+            if !fresh[best]
+                # a stale value only bounds the current one from above
+                bounds[best] = value(best)
+                fresh[best] = true
+                continue
+            end
+            push!(chosen, contenders[best])
+            open[best] = false
+            for t in 1:samples
+                alive[best, t] || continue
+                y = view(Y, :, best, t)
+                point_improvement(fronts[t], y, reference) > 0 &&
+                    (fronts[t] = staircase(hcat(fronts[t], y)))
+            end
+            fresh .= false
+        end
+    end
+    length(chosen) < n || return chosen
+    rest = setdiff(1:m, chosen)
+    return vcat(chosen, rank_by_bounds(screen, X, rest, n - length(chosen), feasible, known))
+end
+
+# the `count` best of the columns `rest` of `X` by the epoch's Chebyshev scalarization of
+# their optimistic bounds, those the feasibility model considers runnable first
+function rank_by_bounds(screen::GpScreen, X::AbstractMatrix, rest::AbstractVector{Int},
+    count::Int, feasible, known)
+    (count <= 0 || isempty(rest)) && return Int[]
+    sub = has_known(known) ? known[:, rest] : nothing
+    scalar = chebyshev(scaled_bounds(screen, X[:, rest]; known=sub) .* screen.weights, screen.rho)
+    order = sortperm(scalar)
+    if !isnothing(feasible)
+        p = Vector{Float64}(feasible)[rest]
+        order = vcat(filter(i -> p[i] >= 0.5, order),
+            sort(filter(i -> p[i] < 0.5, order); by=i -> -p[i]))
+    end
+    return rest[order[1:min(count, length(order))]]
+end
+
 # ----------------------------------------------------------------------------------------
 #  The screening policy
 # ----------------------------------------------------------------------------------------
@@ -1228,9 +1485,10 @@ in a search for an ODE system 197 of 200 survivors carried a prediction after 50
 61 of them in that corner, while the best scored losses had not moved since epoch 10.
 With one objective, where the incumbent leads the population and is scored every epoch,
 screening the predictions again was a wash on the benchmark of the package (better on
-three of its six screened arms, worse on two, even on one). Once `min_failures` scored
-individuals had a non-finite loss, the batch is filled from the individuals a
-[`FeasibilityModel`](@ref) considers runnable first.
+three of its six screened arms, worse on two, even on one). Once `min_failures` loss
+calls failed (a non-finite value, or one at or above `failure_above`), the batch is filled
+from the individuals a [`FeasibilityModel`](@ref) considers runnable first, or, with
+`GpScreen(acquisition=:qehvi)`, weighed by it.
 
 The screening is the memory of a search: every individual the loss has scored, with its
 latent vector and loss. Use a fresh one for a new search (or another regressor); passing
@@ -1248,6 +1506,8 @@ and it can be saved alongside the population with `Serialization`.
   objectives) and as a collapse with a single objective
 - `min_individuals=1`: floor of the batch under the uncertainty rule, a count or a share
 - `min_failures=5`: failed loss calls before the feasibility gate starts
+- `failure_above=nothing`: a loss value at or above which a loss call counts as failed,
+  e.g. the large error a loss gives a simulation that diverged (see below)
 - `explore_fraction=0.1`: share of the batch picked as in the warmup, to explore
 - `warmup_runs`: scored individuals before the screening starts, by default six times
   the batch, at least 60
@@ -1304,10 +1564,27 @@ lets its process see that block alone: in two searches for a system of two ODEs,
 objective per equation, the rank correlations of the predictions with held-out losses
 went from -0.21, 0.35, 0.18 and 0.29 to 0.19, 0.35, 0.54 and 0.56.
 
+# A loss that diverges
+A solver in the loop often gives a run that diverged a large error, so the loss is smooth
+where the solver converges and jumps where it does not. A process fitted across the jump
+bends around it: it smears the jump into the converged region nearby and spends its
+deviation there. With `failure_above` set at or below the error of a diverged run (e.g.
+1e3 for a loss that gives such a run 1e3), the screening keeps the two apart: a diverged
+run teaches the [`FeasibilityModel`](@ref) where the solver fails, the processes learn
+from the converged runs alone, an individual the loss has not scored is predicted between
+its process's prediction and `failure_above` by its probability of diverging, and `:qehvi`
+weighs each candidate's improvement by that probability inside its samples. The
+individuals keep the fitness the loss gave them; the threshold only decides what the
+screening learns from it. Set it above every error a converged run reaches: with several
+objectives, a call fails once any of them reaches the threshold. A loss that returns `Inf`
+for a failed run needs none, and the constant tuning of a search (`constant_optimizer`)
+calls the loss outside the screening, unaffected by it.
+
 # Diagnostics
 - `evaluated_count`: loss calls made through the screening; `imputed_count`: predictions
   handed out instead; `broken_count`: individuals scored as a crash for their embedding;
-  `failed_count`: loss calls that returned a non-finite value
+  `failed_count`: loss calls that returned a non-finite value, or one at or above
+  `failure_above`
 - `spearman_log`: rank correlation of the prediction and the realized loss, per screened
   batch -- the running diagnostic of the surrogate; with several objectives, of the first
   one the processes predict
@@ -1325,6 +1602,7 @@ mutable struct SurrogateScreening
     budget_rule::Symbol
     min_individuals::Union{Int,Float64}
     min_failures::Int
+    failure_above::Float64
     explore_fraction::Float64
     warmup_runs::Int
     warmup_batch::Union{Int,Float64,Nothing}
@@ -1375,6 +1653,7 @@ function SurrogateScreening(embedder;
     budget_rule::Symbol=:fixed,
     min_individuals::Real=1,
     min_failures::Integer=5,
+    failure_above::Union{Real,Nothing}=nothing,
     explore_fraction::Real=0.1,
     warmup_runs::Union{Integer,Nothing}=nothing,
     warmup_batch::Union{Real,Nothing,Symbol}=:auto,
@@ -1412,7 +1691,8 @@ function SurrogateScreening(embedder;
             isnothing(warmup_batch) ? nothing : count_or_share(warmup_batch)
 
     return SurrogateScreening(embedder, screen, budget, budget_rule,
-        count_or_share(min_individuals), Int(min_failures), Float64(explore_fraction), runs,
+        count_or_share(min_individuals), Int(min_failures),
+        isnothing(failure_above) ? Inf : Float64(failure_above), Float64(explore_fraction), runs,
         batch, warmup_lhs, isnothing(budget_decay) ? nothing : Float64(budget_decay),
         Float64(impute_beta), Int(archive_cap),
         isnothing(offspring_multiplier) ? nothing : Float64(offspring_multiplier),
@@ -1861,15 +2141,20 @@ end
 """
     record_evaluation!(s, chromosome, vector, reason)
 
-Archive one loss call: the outcome for the feasibility model, a finite result for the
-processes and the incumbent (the best loss per objective), and the fitness as the known
-value of the karva string.
+Archive one loss call: the outcome for the feasibility model, a usable result (finite and
+below `failure_above`) for the processes, a finite one for the incumbent (the best loss per
+objective), and the fitness as the known value of the karva string.
 """
 function record_evaluation!(s::SurrogateScreening, chromosome::Chromosome,
     vector::AbstractVector, reason::Symbol)
     fitness = chromosome.fitness
     values = Float64[v for v in fitness]
-    usable = all(isfinite, values)
+    finite = all(isfinite, values)
+    # a diverged run teaches the feasibility model where the loss jumps, and keeps the jump
+    # out of the regression
+    usable = finite && all(<(s.failure_above), values)
+    # the loss has scored it: whatever it returned, even the value it was predicted
+    delete!(s.predictions, chromosome)
     push!(s.risk_vectors, Vector{Float64}(vector))
     push!(s.risk_labels, usable ? 1.0 : 0.0)
     usable || (s.failed_count += 1)
@@ -1880,9 +2165,9 @@ function record_evaluation!(s::SurrogateScreening, chromosome::Chromosome,
     if usable
         push!(s.archive_vectors, Vector{Float64}(vector))
         push!(s.archive_targets, s.forward.(values))
-        # the best scored value per objective is the floor of every prediction
-        s.incumbent = isnothing(s.incumbent) ? values : min.(s.incumbent, values)
     end
+    # the best scored value per objective is the floor of every prediction
+    finite && (s.incumbent = isnothing(s.incumbent) ? values : min.(s.incumbent, values))
     # a loss that left the individual unscored (NaN) has not scored it
     any(isnan, values) || (s.known[copy(chromosome.expression_raw)] = fitness)
     push!(s.last_batch, (chromosome=chromosome, fitness=fitness, reason=reason))
@@ -1895,7 +2180,9 @@ end
 
 After the loss has scored `evaluated_indices(plan)`: archive the results and give every
 other embedded individual of the plan its prediction. A screened epoch predicts
-`mean + impute_beta * deviation`, a capped warmup epoch the median of the batch per
+`mean + impute_beta * deviation` (with `failure_above` and a feasibility model, weighed
+with the failure value by the probability of failing, in transformed units: the expected
+transformed loss over both outcomes), a capped warmup epoch the median of the batch per
 objective (and leaves the others unscored, to be screened again, if nothing in the batch
 was finite); either is made one float step worse than the incumbent where it is not
 already worse. Returns the number of predictions.
@@ -1909,9 +2196,16 @@ function commit_epoch!(s::SurrogateScreening, population::AbstractVector, plan::
     imputed = 0
     if plan.mode === :screened
         k = size(plan.means, 1)
+        # the processes learned the loss where it is usable; an individual that may fail is
+        # worth as much less as it is likely to
+        usable = (isfinite(s.failure_above) && !isnothing(s.feasibility)) ?
+                 s.feasibility(plan.vectors) : nothing
+        failure = s.forward(s.failure_above)
         for pos in eachindex(plan.entries)
             pos in chosen && continue
-            prediction = s.inverse.(plan.means[:, pos] .+ s.impute_beta .* plan.deviations[:, pos])
+            center = plan.means[:, pos] .+ s.impute_beta .* plan.deviations[:, pos]
+            isnothing(usable) || (center = usable[pos] .* center .+ (1 - usable[pos]) .* failure)
+            prediction = s.inverse.(center)
             exact = isempty(plan.exact) ? nothing : plan.exact[:, pos]
             c = population[plan.entries[pos]]
             c.fitness = impute(s, prediction, exact)
@@ -2004,6 +2298,7 @@ function record_validation!(s::SurrogateScreening, chromosome::Chromosome)
     is_validated(s, chromosome) && return false
     v = embed(s, chromosome)
     if isnothing(v)
+        delete!(s.predictions, chromosome)
         values = Float64[f for f in chromosome.fitness]
         any(isnan, values) || (s.known[copy(chromosome.expression_raw)] = chromosome.fitness)
         s.evaluated_count += 1
