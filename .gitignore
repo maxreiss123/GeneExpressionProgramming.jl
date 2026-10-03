@@ -7,9 +7,7 @@
 # Ignore all .dat files in subfolders
 **/*.dat
 
-# Ignore all json files in subfolders
-**/*.json
-
+paper/**/*.json
 
 # Ignore all hidden dotfiles in subfolders (e.g., .env, .config)
 **/.*

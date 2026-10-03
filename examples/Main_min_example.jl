@@ -14,7 +14,7 @@ using Random
 Random.seed!(1)
 
 # generations and population size
-epochs = 100
+epochs = 1000
 population_size = 100
 
 number_features = 2
