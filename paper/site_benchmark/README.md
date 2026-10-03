@@ -12,35 +12,11 @@ run on the same machine.
 
 SITE is related to this repository: its dimensional homogeneity check cites Reissmann et
 al. (2025), the semantic-backpropagation constraint implemented here; its evolutionary
-encoding follows M-GEP (a host chromosome for tensors, plasmid chromosomes for the
-embedded scalars), and its coefficients come from a tensor linear regression (TLR).
+encoding is inspired by the M-GEP, and its coefficients come from a tensor linear regression (TLR).
 
 All numbers below were measured on the same 4-core container (Julia 1.12.7 with 4
 threads; Python 3.11 for SITE). The paper's own timings were taken on a 13th Gen Intel
 Core i9-13900K and are quoted where useful.
-
-> **Which code these numbers describe.** `results/` was rerun after three changes to the
-> previous set. The dimensional check binds: every unscored individual is checked, the
-> ones that fail are repaired (up to `correction_amount` of the population per
-> generation, 0.3 in every harness here), and with a target dimension only homogeneous
-> ones are scored; before, it acted almost only on the initial population. The constant
-> optimiser runs (only the DSMC case asks for it); before, a bug kept it idle. And the
-> genetic operators include gene averaging and the repaired transposition. The previous
-> `results/` are in the git history and are quoted where the changes alter a conclusion.
-> `results_pre_refactor/` holds the same matrix from the earlier, nondeterministic code
-> (single draws). `results/tensor_gep_s1.json`, the tensor evaluator as released before
-> the refactor, has no harness any more and was not rerun.
->
-> Two later commits on main bear on these files. 1f7f583 scored a duplicate whose cached
-> fitness was evicted in a parallel pass, and the tasks that pass spawned moved the seeds
-> of every task spawned after them, the repair's among them: a seeded run with the check
-> took another path. That pass runs on the calling thread again (466d6bf), and seed 1 of
-> every configuration then reproduces these files exactly. 2ee8b7d holds every gene to the
-> target under linear scaling and repairs the genes one by one, so the scaled scalar runs
-> (`gep_ls_*`) were rerun with it, after a container restart, on a host of the same speed
-> (seed 1 of the check-only run took 19.6 s there against the 19.9 s recorded here). Only
-> those files record `winner_homogeneous`, the check applied to the winning model as it is
-> scored (gene by gene under scaling); it holds for every winner.
 
 ## What is being compared
 
@@ -48,7 +24,7 @@ Core i9-13900K and are quoted where useful.
 |---|---|---|
 | encoding | host (tensor) + plasmid (scalar) chromosomes | (a) scalar chromosome, the tensor problem component-stacked, one row per `(sample, i, j)`; (b) tensor-native `GepTensorRegressor` |
 | physical constraint | dimensional homogeneity check, invalid individuals get a large loss (soft rejection) | semantic backpropagation: individuals off the target dimension are *repaired* (`correct_genes!`), and only homogeneous ones are scored |
-| coefficients | tensor linear regression (least squares per gene) and/or random numerical constants | gene-wise linear scaling (`linear_scaling=true`, the TLR analogue), symbolic constant terminals, random constants; `Optim`-based constant tuning (the DSMC case) |
+| coefficients | tensor linear regression (least squares per gene) and/or random numerical constants | gene-wise linear scaling (`linear_scaling=true`, the TLR analog), symbolic constant terminals, random constants; `Optim`-based constant tuning (the DSMC case) |
 | loss | mean relative `L2` error over the tensor components | the same (`make_site_loss`, a port of `loss_func` in `SITE.py`) |
 | implementation | Python (geppy + DEAP) | Julia, multi-threaded |
 
