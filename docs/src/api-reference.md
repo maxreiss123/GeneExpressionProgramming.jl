@@ -1,36 +1,44 @@
 # API Reference
 
-This comprehensive API reference provides detailed documentation for all public functions, types, and modules in GeneExpressionProgramming.jl. The API is organized by functionality to help you quickly find the components you need.
+The public functions, types and modules of GeneExpressionProgramming.jl, by functionality. Everything listed is exported by `GeneExpressionProgramming` unless it is written with its module prefix.
 
-## Core Types
+## Regressors
 
 ### GepRegressor
 
-The main regressor for scalar symbolic regression tasks.
+The regressor for scalar symbolic regression.
 
 ```julia
-GepRegressor(number_features::Int; kwargs...)
+GepRegressor(feature_amount::Int; kwargs...)
 ```
 
 **Parameters:**
-- `number_features::Int`: Number of input features
-- `gene_count::Int = 2`: Number of genes per chromosome
-- `head_len::Int = 7`: Head length of each gene
-- `rnd_count::Int = 5`: Amount of random numbers being considered  
-- `entered_non_terminals::Vector{Symbol} = [:+, :-, :*, :/]`: Available functions
-- `gene_connections::Vector{Symbol} = [:+, :-, :*, :/]`: Functions for connecting the genes
-- `number_of_objectives::Int = 1`: Number of objectives (1 for single-objective)
-- `considered_dimensions::Dict{Symbol,Vector{Float16}} = Dict()`: Physical dimensions
-- `max_permutations_lib::Int = 1000`: Maximum permutations for dimensional analysis
-- `rounds::Int = 5`: Tree depth for dimensional checking
+- `feature_amount::Int`: Number of input features
+- `entered_features::Vector{Symbol} = Symbol[]`: Feature names; `x1, x2, ...` when empty
+- `entered_non_terminals::Vector{Symbol} = [:+, :-, :*, :/]`: Functions (see [Function Sets](#Function-Sets))
+- `gene_connections::Vector{Symbol} = [:+, :-, :*, :/]`: Connectors, the functions that join the genes; only those also in `entered_non_terminals` are used
+- `entered_terminal_nums::Vector{Symbol} = [Symbol(0.5), Symbol(0.0)]`: Constant terminals
+- `rnd_count::Int = 1`: Number of further constant terminals, drawn uniformly from [0, 1)
+- `node_type::Type = Float64`: Numeric type of the constant terminals
+- `gene_count::Int = 3`: Number of genes per chromosome
+- `head_len::Int = 6`: Head length of each gene (the tail is `head_len + 1` long)
+- `tail_weigths = [0.6, 0.2, 0.2]`: Sampling weight of each feature, each fixed constant and each random constant when terminals are drawn
+- `head_weigths = nothing`: Accepted; not used
+- `number_of_objectives::Int = 1`: Number of objectives; more than one needs the `fit!` method with a custom loss, and selects with NSGA-II
+- `considered_dimensions::Dict{Symbol,Vector{Float16}} = Dict()`: Physical dimensions of the features and constants, keyed by their symbols (`:x1`, `:x2`, ... or the `entered_features`; `Symbol(0.5)`, ... for the `entered_terminal_nums`); unlisted ones are dimensionless. When given, the regressor builds the library that the unit repair draws on, which `fit!` needs for a `target_dimension`
+- `max_permutations_lib::Int = 10000`: New library expressions kept per build round
+- `rounds::Int = 4`: Library build rounds; library expressions have up to `rounds + 1` symbols
+- `preamble_syms::Vector{Symbol} = Symbol[]`: Terminals appended to every chromosome, one per gene, outside its expression
 
 **Fields:**
-- `best_models_::Vector`: Best evolved models
-- `fitness_history_`: Training history (if available)
+- `best_models_::Vector{Chromosome}`: The best models of the last `fit!`, best first
+- `fitness_history_`: Training history: `train_loss` and `val_loss`, one fitness tuple per epoch
+- `toolbox_::Toolbox`: The GEP configuration (alphabet, operators, probabilities)
+- `token_dto_`: The library and unit rules used by the repair (`nothing` without `considered_dimensions`)
 
 **Example:**
 ```julia
-regressor = GepRegressor(3; 
+regressor = GepRegressor(3;
                         gene_count=3,
                         head_len=5,
                         entered_non_terminals=[:+, :-, :*, :/, :sin, :cos])
@@ -38,769 +46,635 @@ regressor = GepRegressor(3;
 
 ### GepTensorRegressor
 
-Specialized regressor for tensor (vector/matrix) symbolic regression.
+Regressor for models over scalars, vectors and higher-order tensors ([Tensors.jl](https://github.com/Ferrite-FEM/Tensors.jl) types).
 
 ```julia
-GepTensorRegressor(number_features::Int, gene_count::Int, head_len::Int; kwargs...)
+GepTensorRegressor(feature_amount::Int; kwargs...)
 ```
 
 **Parameters:**
-- `number_features::Int`: Number of input features
-- `gene_count::Int`: Number of genes per chromosome
-- `head_len::Int`: Head length of each gene
-- `feature_names::Vector{String} = []`: Names for features (for interpretability)
+- `feature_amount::Int`: Number of input features (scalar and tensor-valued alike)
+- `problem_dimension::Int = 2`: Spatial dimension of the tensors
+- `feature_names::Vector{String} = String[]`: Names of the features, used when printing; `x1, x2, ...` when empty
+- `entered_non_terminals::Vector{Symbol} = [:+, :-, :*, :/]`: Functions, including the tensor operations (see [Tensor Operations](#Tensor-Operations))
+- `gene_connections::Vector{Symbol} = [:+, :*]`: Connectors; only those also in `entered_non_terminals` are used
+- `entered_terminal_nums::Vector{<:AbstractFloat} = Float64[]`: Constant terminals
+- `rnd_count::Int = 0`: Number of further constant terminals, drawn uniformly from `rnd_limits = (-0.1, 0.1)`
+- `gene_count::Int = 2`: Number of genes per chromosome
+- `head_len::Int = 3`: Head length of each gene
+- `number_of_objectives::Int = 1`: Number of objectives
+- `head_tail_balance::Real = 0.6`: Weight of the binary functions when head symbols are drawn; `tail_weigths = [0.7, 0.2, 0.1]`: as for `GepRegressor`
+- `considered_dimensions`, `max_permutations_lib = 10000`, `rounds = 5`: As for `GepRegressor`, with two differences: the dimensions are keyed `:x1`, `:x2`, ... in feature order whatever `feature_names` says, and each carries the tensor order in front of the SI exponents; constants are dimensionless. Only the functions with tensor unit rules can be used with dimensions (see [Tensor Operations](#Tensor-Operations))
+- `higher_dim_feature_amount::Int = 0`: Accepted; not used
+
+**Fields:**
+- `best_models_`, `fitness_history_`, `toolbox_`, `token_dto_`: As for `GepRegressor`
+- `input_values`: The input columns, set by `allocate_buffers!`
+- `buffers`: The per-thread evaluation buffers, set by `allocate_buffers!`
 
 **Example:**
 ```julia
-regressor = GepTensorRegressor(5, 2, 3; 
+regressor = GepTensorRegressor(5;
+                              problem_dimension=3,
+                              gene_count=3,
+                              head_len=4,
+                              entered_non_terminals=[:+, :-, :*],
                               feature_names=["x1", "x2", "U1", "U2", "U3"])
+# x1, x2: scalar columns; u1, u2, u3: columns of Tensor{1,3} (see Tensor Regression)
+allocate_buffers!(regressor, (x1, x2, u1, u2, u3))    # one column per feature
 ```
 
-### StandardRegressionStrategy
-
-A strategy for evaluating standard regression tasks with typed floating-point data.
-
-```julia
-struct StandardRegressionStrategy{T<:AbstractFloat} <: EvaluationStrategy
-```
-
-**Fields:**
-- `operators::OperatorEnum`: Available operators for the strategy
-- `number_of_objectives::Int`: Number of optimization objectives
-- `x_data::AbstractArray{T}`: Training input data
-- `y_data::AbstractArray{T}`: Training target data
-- `x_data_test::AbstractArray{T}`: Test input data
-- `y_data_test::AbstractArray{T}`: Test target data
-- `loss_function::Function`: Primary loss function
-- `validation_loss_function::Function`: Validation loss function
-- `secOptimizer::Union{Function,Nothing}`: Secondary optimizer (if any)
-- `break_condition::Union{Function,Nothing}`: Condition to stop evolution
-- `penalty::T`: Penalty value for regularization
-- `crash_value::T`: Value assigned on evaluation failure
-
-**Constructor:**
-```julia
-StandardRegressionStrategy{T}(operators::OperatorEnum,
-    x_data::AbstractArray,
-    y_data::AbstractArray,
-    x_data_test::AbstractArray,
-    y_data_test::AbstractArray,
-    loss_function::Function;
-    validation_loss_function::Union{Nothing,Function}=nothing,
-    secOptimizer::Union{Function,Nothing}=nothing,
-    break_condition::Union{Function,Nothing}=nothing,
-    penalty::T=zero(T),
-    crash_value::T=typemax(T)) where {T<:AbstractFloat}
-```
-
-**Example:**
-```julia
-strategy = StandardRegressionStrategy{Float64}(
-    OperatorEnum([:+, :-, :*, :/]),
-    x_train, y_train, x_test, y_test,
-    mse;
-    penalty=0.1,
-    crash_value=Inf
-)
-```
-
-### GenericRegressionStrategy
-
-A flexible strategy for generic regression tasks, supporting multi-objective optimization.
-
-```julia
-struct GenericRegressionStrategy <: EvaluationStrategy
-```
-
-**Fields:**
-- `operators::Union{OperatorEnum,Nothing}`: Available operators (optional)
-- `number_of_objectives::Int`: Number of optimization objectives
-- `loss_function::Function`: Primary loss function
-- `validation_loss_function::Union{Function,Nothing}`: Validation loss function
-- `secOptimizer::Union{Function,Nothing}`: Secondary optimizer (if any)
-- `break_condition::Union{Function,Nothing}`: Condition to stop evolution
-
-**Constructor:**
-```julia
-GenericRegressionStrategy(operators::Union{OperatorEnum,Nothing}, number_of_objectives::Int, loss_function::Function;
-    validation_loss_function::Union{Function,Nothing}=nothing,
-    secOptimizer::Union{Function,Nothing}=nothing,
-    break_condition::Union{Function,Nothing}=nothing)
-```
-
-**Example:**
-```julia
-strategy = GenericRegressionStrategy(
-    nothing,
-    2,
-    multi_objective_loss;
-    validation_loss_function=validate_loss
-)
-```
-
-### Toolbox
-
-Contains parameters and operations for GEP algorithm execution.
-
-```julia
-struct Toolbox
-```
-
-**Fields:**
-- `gene_count::Int`: Number of genes per chromosome
-- `head_len::Int`: Head length for each gene
-- `symbols::OrderedDict{Int8,Int8}`: Available symbols and their arities
-- `gene_connections::Vector{Int8}`: How genes connect
-- `headsyms::Vector{Int8}`: Symbols allowed in head
-- `tailsyms::Vector{Int8}`: Symbols allowed in tail
-- `arrity_by_id::OrderedDict{Int8,Int8}`: Symbol arities
-- `callbacks::Dict`: Operation callbacks
-- `nodes::OrderedDict`: Node definitions
-- `gen_start_indices::Vector{Int}`: Gene start positions
-- `gep_probs::Dict{String,AbstractFloat}`: Operation probabilities
-- `fitness_reset::Tuple`: Default fitness values
-- `preamble_syms::Vector{Int8}`: Preamble symbols
-- `len_preamble::Int8`: Preamble length
-- `operators_::Union{OperatorEnum,Nothing}`: Operator definitions
-- `compile_function_::Union{Function,Nothing}`: Compilation function
-- `tail_weights::Union{Weights,Nothing}`: Probability for tail symbols
-- `head_weights::Union{Weights,Nothing}`: Probability for head symbols
-
-**Constructor:**
-```julia
-Toolbox(gene_count::Int, head_len::Int, symbols::OrderedDict{Int8,Int8}, 
-       gene_connections::Vector{Int8}, callbacks::Dict, nodes::OrderedDict, 
-       gep_probs::Dict{String,AbstractFloat};
-       unary_prob::Real=0.1, preamble_syms=Int8[],
-       number_of_objectives::Int=1, operators_::Union{OperatorEnum,Nothing}=nothing,
-       function_complile::Union{Function,Nothing}=compile_djl_datatype,
-       tail_weights_::Union{Weights,Nothing}=nothing,
-       head_tail_balance::Real=0.5)
-```
-
-**Example:**
-```julia
-toolbox = Toolbox(
-    3, 5, OrderedDict{Int8,Int8}(1 => 2, 2 => 0), 
-    Int8[1], Dict(), OrderedDict(), Dict("mutation_prob" => 0.1);
-    unary_prob=0.2
-)
-```
-
-### Chromosome
-
-Represents an individual solution in GEP.
-
-```julia
-mutable struct Chromosome
-```
-
-**Fields:**
-- `genes::Vector{Int8}`: Genetic material
-- `fitness::Tuple`: Fitness score
-- `toolbox::Toolbox`: Reference to toolbox
-- `compiled_function::Any`: Compiled expression
-- `compiled::Bool`: Compilation status
-- `expression_raw::Vector{Int8}`: Raw expression
-- `dimension_homogene::Bool`: Dimensional homogeneity
-- `chromo_id::Int`: Chromosome identifier
-
-**Constructor:**
-```julia
-Chromosome(genes::Vector{Int8}, toolbox::Toolbox, compile::Bool=false)
-```
-
-**Example:**
-```julia
-chromosome = Chromosome(Int8[1,2,3,4,5], toolbox, true)
-```
-
-
-### SelectedMembers
-
-Represents the selected individuals obtained from NSGA-II .
-
-```julia
-struct SelectedMembers
-```
-
-**Fields:**
-- `indices::Vector{Int}`: Sorted indices according to the current population
-- `fronts::Dict{Int,Vector{Int}}`: Listing of the pareto front
-
-
-## Core Functions
+## Training
 
 ### fit!
 
-Train the GEP regressor model.
+Train a regressor. There are three methods:
 
-There are multiple overloads for different use cases:
-
-1. Standard scalar regression with training data:
+1. Scalar regression on data arrays:
 
 ```julia
-fit!(regressor::GepRegressor, epochs::Int, population_size::Int, x_train::AbstractArray, 
+fit!(regressor::GepRegressor, epochs::Int, population_size::Int, x_train::AbstractArray,
      y_train::AbstractArray; kwargs...)
 ```
 
-Trains using provided data arrays, with optional validation data and dimensional constraints.
-
-**Arguments:**
-- `regressor::GepRegressor`: The regressor instance
-- `epochs::Int`: Number of evolutionary generations
-- `population_size::Int`: Size of the population
-- `x_train::AbstractArray`: Training features
-- `y_train::AbstractArray`: Training targets
+`x_train` holds one row per feature and one column per sample (hence the transposes in the examples). Throws an `ArgumentError` when a function or terminal has no batched counterpart.
 
 **Keyword Arguments:**
-- `x_test::Union{AbstractArray,Nothing}=nothing`: Test features for validation
-- `y_test::Union{AbstractArray,Nothing}=nothing`: Test targets for validation
-- `optimization_epochs::Int=100`: Number of epochs for constant optimization
-- `hof::Int=3`: Number of best models to keep in hall of fame
-- `loss_fun::Union{String,Function}="mse"`: Loss function ("mse", "mae", "rmse" or custom)
-- `loss_fun_validation::Union{String,Function}="mse"`: Validation loss function
-- `correction_epochs::Int=1`: Interval for dimensional corrections
-- `correction_amount::Real=0.05`: Fraction of population to correct for homogeneity
-- `opt_method_const::Symbol=:cg`: Method for constant optimization (:cg, :nd, etc.)
-- `target_dimension::Union{Vector{Float16},Nothing}=nothing`: Target physical dimension for homogeneity
-- `cycles::Int=10`: Cycles for dimension correction
-- `max_iterations::Int=1000`: Max iterations for optimizer
-- `n_starts::Int=3`: Number of optimizer restarts
-- `break_condition::Union{Function,Nothing}=nothing`: Function to check for early stopping
-- `file_logger_callback::Union{Function,Nothing}=nothing`: Callback for logging to file
-- `save_state_callback::Union{Function,Nothing}=nothing`: Callback to save evolution state
-- `load_state_callback::Union{Function,Nothing}=nothing`: Callback to load evolution state
-- `population_sampling_multiplier::Int=1`: Multiplier for initial population sampling
-- `penalty::AbstractFloat=2.0`: Penalty factor for duplicate functions
+- `x_test = nothing`, `y_test = nothing`: Held-out data for the validation loss (the training data when not given)
+- `loss_fun::Union{String,Function} = "mse"`: Loss to minimise: a name (see [Loss Functions](#Loss-Functions)) or a function `(y_true, y_pred) -> Real`
+- `loss_fun_validation::Union{String,Function} = "mse"`: Loss reported on the held-out data
+- `hof::Int = 3`: Number of best models returned in `best_models_`
+- `optimization_epochs::Int = 100`: Every this many epochs, if the best model has improved since the last time, Nelder-Mead tunes each occurrence of a constant in it on the training loss; values that lower the loss are kept in its `optimised_constants`. Not with `linear_scaling`
+- `max_iterations::Int = 1000`: Iterations of that constant optimisation
+- `linear_scaling::Bool = false`: Score each chromosome as the least-squares combination of its genes, one coefficient per gene (stored in `scaling_weights`), so that evolution searches for the structure only; the model is then the weighted sum of its genes. Needs `:+` and `:*` among the functions. With a `target_dimension`, every gene is held to it, not only the connected expression, since the coefficients are dimensionless only then
+- `target_dimension::Union{Vector{Float16},Nothing} = nothing`: Target physical dimension; only homogeneous individuals are scored, the others are repaired (needs `considered_dimensions`)
+- `correction_epochs::Int = 1`: Run the repair every this many epochs
+- `correction_amount::Real = 1.0`: The most individuals repaired per correction epoch, as a fraction of the population
+- `cycles::Int = 10`: Repair attempts per individual
+- `lib_seed_amount::Real = 0.5`: Fraction of the initial population seeded with library expressions of the target dimension
+- `penalty::AbstractFloat = 2.0`: Factor on the cached fitness of a new individual whose karva string has been scored before
+- `population_sampling_multiplier::Int = 1`: Above 1, the initial population is picked from this many times more random chromosomes, by the mean of their predictions on random probe data (`select_n_samples_lhs`). The selection is meant as Latin hypercube sampling, but its target points are not stratified
+- `break_condition = nothing`: `(population, epoch) -> Bool`, stops the run when `true`
+- `file_logger_callback = nothing`: `(population, epoch, selected_members)`, called every epoch
+- `save_state_callback = nothing`: `(population, strategy)`, called every epoch
+- `load_state_callback = nothing`: `() -> (population, start_epoch)`, resumes a run
+- `surrogate = nothing`: A [`SurrogateScreening`](#Surrogate-Screening) for an expensive loss: the loss scores only the individuals it picks each epoch, and the others get the prediction of a Gaussian process
+- `opt_method_const`, `n_starts`, `buffered`: Accepted; not used
 
-2. Custom loss for scalar or multi-objective regression:
+2. Custom loss over chromosomes, for several objectives or any evaluation of your own:
 
 ```julia
 fit!(regressor::GepRegressor, epochs::Int, population_size::Int, loss_function::Function; kwargs...)
 ```
 
-Allows custom loss for guiding evolution, useful for multi-objective or non-standard fitness.
-
-**Arguments:**
-- `regressor::GepRegressor`: The regressor instance
-- `epochs::Int`: Number of generations
-- `population_size::Int`: Population size
-- `loss_function::Function`: Custom loss function that sets fitness
+`loss_function(elem::Chromosome, validate::Bool)` sets `elem.fitness` to a tuple with one entry per objective (as many as `number_of_objectives`); its return value is ignored. It is called inside the threaded fitness loop for the unscored chromosomes (fitness `NaN`), once per distinct karva string, and each epoch with `validate = true` for the best one. The loop hands the chromosomes out one at a time to whichever thread is free, so a loss whose cost varies from one chromosome to the next keeps every thread busy; a call stays on one thread and no other call shares its `Threads.threadid()` meanwhile, even if the loss waits (on an external solver, say). Evaluate the chromosome in a per-thread context (see [thread_contexts](#thread_contexts)), and catch errors -- an exception thrown by the loss stops `fit!`.
 
 **Keyword Arguments:**
-- `optimizer_function_::Union{Function,Nothing}=nothing`: Function for secondary optimization
-- `loss_function_validation::Union{Function,Nothing}=nothing`: Validation loss
-- `optimization_epochs::Int=100`: Constant optimization epochs
-- `hof::Int=3`: Hall of fame size
-- `correction_epochs::Int=1`: Dimension correction interval
-- `correction_amount::Real=0.3`: Correction fraction
-- `opt_method_const::Symbol=:nd`: Constant optimization method
-- `target_dimension::Union{Vector{Float16},Nothing}=nothing`: Target dimension
-- `cycles::Int=10`: Correction cycles
-- `max_iterations::Int=150`: Optimizer iterations
-- `n_starts::Int=5`: Optimizer restarts
-- `break_condition::Union{Function,Nothing}=nothing`: Early stop condition
-- `file_logger_callback::Union{Function,Nothing}=nothing`: Logging callback
-- `save_state_callback::Union{Function,Nothing}=nothing`: Save state callback
-- `load_state_callback::Union{Function,Nothing}=nothing`: Load state callback
-- `penalty::AbstractFloat=2.0`: Duplicate penalty
+- `loss_function_validation = nothing`: `(elem, validate) -> Tuple`, called for the best chromosome each epoch; its return value is recorded as the validation loss (without it, the training fitness is recorded)
+- `hof`, `target_dimension`, `correction_epochs`, `correction_amount`, `cycles`, `lib_seed_amount`, `penalty`, `break_condition`, `file_logger_callback`, `save_state_callback`, `load_state_callback`: As above
+- `gene_wise_dimension::Bool = false`: Hold every gene to `target_dimension` rather than the connected expression, for a loss that scores the least-squares combination of the genes
+- `surrogate = nothing`: A [`SurrogateScreening`](#Surrogate-Screening): the loss is called only for the individuals it picks each epoch (and for a best or returned model that carries a prediction); the others get the prediction of a Gaussian process
+- `constant_optimizer = nothing`: A [`ScreenedNelderMead`](#Constants-Against-an-Expensive-Loss): every `optimization_epochs::Int = 100` epochs, if the best model has improved since the last time, its constants are tuned against `loss_function` by Nelder-Mead, screened by a Gaussian process or not (`optimize_constants!`), within `max_evaluations` loss calls. The loss must evaluate the chromosome by a path that applies tuned constants: `elem(ctx)` or `split_predict(elem, ctx, k)`. With a `surrogate`, the model tuned is the best one the loss has scored, never one that carries a prediction
+- `optimizer_function_`, `opt_method_const`, `max_iterations`, `n_starts`: Accepted; not used
 
-3. For tensor regression:
+This method has no `population_sampling_multiplier` keyword; `runGep`'s default of 100 applies, so the initial population is picked from 100 × `population_size` random chromosomes as described above.
+
+3. Tensor regression:
 
 ```julia
 fit!(regressor::GepTensorRegressor, epochs::Int, population_size::Int, loss_function::Function; kwargs...)
 ```
 
-Trains tensor regressor with custom tensor-specific loss.
-
-**Arguments:**
-- `regressor::GepTensorRegressor`: The tensor regressor
-- `epochs::Int`: Generations
-- `population_size::Int`: Population size
-- `loss_function::Function`: Custom tensor loss
+The loss has the same form as in 2.; it typically evaluates with `predictT`. Call `allocate_buffers!` first. Tournaments are of 0.3 % of the population (at least 3), and duplicates take the cached fitness times 2.0 (`runGep`'s default `penalty`).
 
 **Keyword Arguments:**
-- `hof::Int=3`: Hall of fame
-- `break_condition::Union{Function,Nothing}=nothing`: Stop condition
-- `file_logger_callback::Union{Function,Nothing}=nothing`: Logger
-- `save_state_callback::Union{Function,Nothing}=nothing`: Save state
-- `load_state_callback::Union{Function,Nothing}=nothing`: Load state
+- `hof`, `target_dimension`, `correction_epochs`, `correction_amount`, `cycles`, `lib_seed_amount`, `break_condition`, `file_logger_callback`, `save_state_callback`, `load_state_callback`: As above
+- `gene_wise_dimension::Bool = false`: Hold every gene to `target_dimension` rather than the connected expression; a loss that scores with `predictT_scaled` needs it unless the gene connectors are only `:+` and `:-`
+- `population_sampling_multiplier = 1`: Keep it at 1: the sampling probes candidates with the scalar evaluator, which does not accept a tensor toolbox (with a `surrogate`, the sampling uses its `TensorEmbedder` instead and works)
+- `surrogate = nothing`: A [`SurrogateScreening`](#Surrogate-Screening) built with `SurrogateScreening(regressor, probes)`, as for method 2.
+- `constant_optimizer = nothing`, `optimization_epochs::Int = 100`: As for method 2, for a loss that evaluates the chromosome with `predictT(regressor, elem)`, which applies tuned constants
 
-**Examples:**
+**Examples** (`x_train`, `y_train`, `x_test`, `y_test`, `target_dim` and the losses as defined on this page and in the examples):
 ```julia
 # Basic regression
 fit!(regressor, 1000, 1000, x_train', y_train; loss_fun="mse")
 
 # With validation data
-fit!(regressor, 1000, 1000, x_train', y_train; 
+fit!(regressor, 1000, 1000, x_train', y_train;
      x_test=x_test', y_test=y_test, loss_fun="rmse")
 
-# With physical dimensions
-fit!(regressor, 1000, 1000, x_train', y_train; 
+# With physical dimensions (a regressor built with considered_dimensions)
+fit!(regressor, 1000, 1000, x_train', y_train;
      target_dimension=target_dim)
 
-# Tensor regression with custom loss
-fit!(regressor, 100, 500, custom_loss_function)
+# Custom (e.g. multi-objective or tensor) loss
+fit!(regressor, 100, 500, multi_objective_loss)
 ```
 
-### Prediction
+## Prediction and Evaluation
 
-Make predictions using trained regressor.
+### Calling a regressor or a chromosome
 
 ```julia
-(regressor::GepRegressor)(x_data)
-(regressor::GepTensorRegressor)(input_data)
+(regressor::GepRegressor)(x_data)     # the best model's predictions
+(chromosome::Chromosome)(x_data)      # any chromosome's predictions
+(chromosome::Chromosome)(ctx)         # predictions in a prebuilt evaluation context
 ```
 
-**Parameters:**
-- `x_data`: Input features (features as rows, samples as columns)
-- `input_data`: Input data tuple for tensor regression
+`x_data` holds one row per feature and one column per sample. The predictions include the fitted constants (`optimised_constants`) or gene coefficients (`scaling_weights`) when the model has them.
 
-**Returns:**
-- Predictions as vector (scalar regression) or vector of tensors (tensor regression)
-
-**Examples:**
+**Example:**
 ```julia
-# Scalar predictions
 predictions = regressor(x_test')
-
-# Tensor predictions
-tensor_predictions = tensor_regressor(input_tuple)
+second_best = regressor.best_models_[2](x_test')
 ```
 
-### compile_expression!
-
-Compiles chromosome's genes into executable function using DynamicExpressions.
+### thread_contexts
 
 ```julia
-compile_expression!(chromosome::Chromosome; force_compile::Bool=false)
+thread_contexts(toolbox, x_data; std_return_type=Float64)
+buffer_context(toolbox, x_data; std_return_type=Float64)
 ```
 
-**Parameters:**
-- `chromosome::Chromosome`: Chromosome to compile
-- `force_compile::Bool=false`: Force recompilation
-
-**Effects:**
-Updates chromosome's `compiled_function` and related fields.
-
-**Example:**
-```julia
-compile_expression!(chromosome, force_compile=true)
-```
-
-### fitness
-
-Get chromosome's fitness value.
+`buffer_context` builds an evaluation context for `x_data` (one row per feature): the input columns, the operators, and the buffers the evaluator writes into. `thread_contexts` builds one per thread id, for losses that run inside the threaded fitness loop. Both work for `GepRegressor` toolboxes only; for a tensor toolbox, whose callbacks are operator objects, `buffer_context` returns `nothing`, and a tensor loss evaluates with `predictT` instead.
 
 ```julia
-fitness(chromosome::Chromosome)
+using Statistics
+
+ctxs = thread_contexts(regressor.toolbox_, x_train')
+
+function loss(elem, validate::Bool)
+    if isnan(mean(elem.fitness)) || validate
+        y_pred = elem(ctxs[Threads.threadid()])
+        # ... set elem.fitness from y_pred
+    end
+end
 ```
 
-**Returns:**
-Fitness value or tuple
+The result of `elem(ctx)` lives in the context's buffers; use it (or copy it) before the next evaluation in the same context.
 
-**Example:**
-```julia
-fit_value = fitness(chromosome)
-```
-
-### set_fitness!
-
-Set chromosome's fitness value.
-
-```julia
-set_fitness!(chromosome::Chromosome, value::Tuple)
-```
-
-**Parameters:**
-- `chromosome::Chromosome`: Target chromosome
-- `value::Tuple`: New fitness value
-
-**Example:**
-```julia
-set_fitness!(chromosome, (0.5, 0.3))
-```
-
-### _karva_raw
-
-Convert a chromosome's genes into Karva notation (K-expression).
+### Tensor prediction
 
 ```julia
-_karva_raw(chromosome::Chromosome; split::Bool=false)
+allocate_buffers!(regressor::GepTensorRegressor, data_x; std_return_type=Float64)
+predictT(regressor::GepTensorRegressor, rek_string::Vector)
+predictT(regressor::GepTensorRegressor, chromosome::Chromosome)
+predictT(regressor::GepTensorRegressor, rek_string::Vector, x_data::Vector)
+predictT(regressor::GepTensorRegressor, rek_string::Vector, new_input_values::Dict)
+predictT_scaled(regressor::GepTensorRegressor, chromosome::Chromosome, target)
+predictT_scaled!(out, regressor::GepTensorRegressor, chromosome::Chromosome, target)
+gene_bases(regressor::GepTensorRegressor, chromosome::Chromosome)
 ```
 
-**Parameters:**
-- `chromosome::Chromosome`: The chromosome to convert
-- `split::Bool=false`: Whether to split the expression by genes
+- `allocate_buffers!` stores the input columns (`data_x`: one column per feature, as a tuple or `Vector{Any}`) and allocates the per-thread buffers for them (`std_return_type` is not used). Required before `fit!`.
+- `predictT(regressor, rek_string)` evaluates a karva string (`chromosome.expression_raw`) on those columns, in the calling thread's buffers; use or copy the result before the next evaluation on the same thread.
+- `predictT(regressor, chromosome)` does the same for a chromosome, with its tuned constants (`optimised_constants`) if it has them, which a loss needs for `optimize_constants!` and the `constant_optimizer` of `fit!` to reach it; with tuned constants, the expression runs on the allocating path of the evaluator, into fresh arrays.
+- `predictT(regressor, rek_string, x_data)` evaluates it on new data (one column per feature, in the same order), into fresh arrays; constants are broadcast to the new sample count.
+- `predictT(regressor, rek_string, new_input_values)` evaluates it on the stored columns, with the column of each terminal `index => value` in the `Dict` set to `value` in every sample.
+- `predictT_scaled` fits one least-squares coefficient per gene against `target` -- the tensor counterpart of `linear_scaling` -- and returns the scaled prediction; the coefficients are stored in `scaling_weights`. Genes whose output does not match `target` in length and element type are left out; it returns `nothing` when no gene matches or the fit is not finite. The coefficients are dimensionless only if every gene has the target dimension (`gene_wise_dimension=true` in `fit!`). When every column and `target` are `Vector{Float64}`, the genes are evaluated by the compiled evaluator into preallocated buffers, with the same result.
+- `predictT_scaled!` writes that prediction into `out` (a vector like `target`) and returns it; with one `out` per thread slot, a loss allocates no prediction per candidate (second example).
+- `gene_bases` evaluates every gene on its own, into fresh arrays.
 
-**Returns:**
-Vector{Int8} representing the K-expression, or list of vectors if split=true
-
-**Example:**
+**Example** (the columns as in [Tensor Regression](examples/tensor-regression.md)):
 ```julia
-k_expression = _karva_raw(chromosome)
+best = regressor.best_models_[1]
+pred_train = predictT(regressor, best.expression_raw)
+# x1_new, x2_new, u1_new, u2_new, u3_new: new columns, one per feature, in the same order
+pred_new = predictT(regressor, best.expression_raw, Any[x1_new, x2_new, u1_new, u2_new, u3_new])
 ```
 
-### split_karva
-
-Split a chromosome's Karva expression into parts.
-
+**Example** (a scaled loss on `Vector{Float64}` columns and target `y`, one prediction buffer per thread slot):
 ```julia
-split_karva(chromosome::Chromosome, coeffs::Int=2)
+preds = [similar(y) for _ in 1:thread_slots()]
+function loss(elem, validate::Bool)
+    if isnan(mean(elem.fitness)) || validate
+        pred = predictT_scaled!(preds[Threads.threadid()], regressor, elem, y)
+        if pred isa AbstractVector && allfinite(pred)
+            pred .-= y                                  # the residual, in place
+            elem.fitness = (sum(abs2, pred) / length(y),)
+        else
+            elem.fitness = (1e6,)
+        end
+    end
+end
 ```
 
-**Parameters:**
-- `chromosome::Chromosome`: The chromosome to process
-- `coeffs::Int=2`: Number of parts to split into
+## Inspecting Models
 
-**Returns:**
-List of vectors representing split K-expressions
-
-**Example:**
-```julia
-split_expressions = split_karva(chromosome, coeffs=3)
-```
-
-### generate_gene
-
-Generate a single gene for GEP.
-
-```julia
-generate_gene(headsyms::Vector{Int8}, tailsyms::Vector{Int8}, headlen::Int,
-    tail_weights::Weights, head_weights::Weights)
-```
-
-**Parameters:**
-- `headsyms::Vector{Int8}`: Symbols for head
-- `tailsyms::Vector{Int8}`: Symbols for tail
-- `headlen::Int`: Head length
-- `tail_weights::Weights`: Probability weights for tail symbols
-- `head_weights::Weights`: Probability weights for head symbols
-
-**Returns:**
-Vector{Int8} representing gene
-
-**Example:**
-```julia
-gene = generate_gene(headsyms, tailsyms, 5, tail_weights, head_weights)
-```
-
-### generate_chromosome
-
-Generate a new chromosome using toolbox configuration.
+A model is a `Chromosome`. Printing it (`println`, `string`) writes it as an equation, with every binary operation parenthesised and with fitted constants or gene coefficients in place.
 
 ```julia
-generate_chromosome(toolbox::Toolbox)
+best = regressor.best_models_[1]
+println(best)                    # e.g. ((x1 * x1) + (x2 * (x1 - (x2 + x2))))
+best.fitness                     # tuple, one entry per objective
+best.expression_raw              # the karva string (Vector{Int8}) the evaluator runs
+best.optimised_constants         # tuned constants, or nothing
+best.scaling_weights             # gene coefficients (linear scaling), or nothing
+best.dimension_homogene          # true once the model is known to meet the target dimension
 ```
 
-**Parameters:**
-- `toolbox::Toolbox`: Toolbox configuration
-
-**Returns:**
-New Chromosome instance
-
-**Example:**
-```julia
-chromosome = generate_chromosome(toolbox)
-```
-
-### perform_step!
-
-Performs one evolutionary step in the GEP algorithm, creating and evaluating new chromosomes.
+### equation_string
 
 ```julia
-perform_step!(population::Vector{Chromosome}, parents::Vector{Chromosome}, 
-    next_gen::Vector{Chromosome}, toolbox::Toolbox, mating_size::Int)
+equation_string(chromosome::Chromosome)
 ```
 
-**Arguments:**
-- `population::Vector{Chromosome}`: Current population of chromosomes
-- `parents::Vector{Chromosome}`: Selected parent chromosomes for breeding
-- `next_gen::Vector{Chromosome}`: Buffer for storing newly created chromosomes
-- `toolbox::Toolbox`: Contains genetic operators and algorithm parameters
-- `mating_size::Int`: Number of chromosomes to create in this step
+The string `show` prints: the model as an equation, with fitted constants in place, or as a weighted sum of genes when it carries gene coefficients; both rounded to 6 significant digits.
 
-**Details:**
-- Processes parents in pairs to create new chromosomes
-- Applies genetic operations to create offspring
-- Compiles expressions for new chromosomes
-- Updates population with new chromosomes
-- Operations are performed in parallel using multiple threads
-
-### perform_correction_callback!
-
-Applies correction operations to ensure dimensional homogeneity in chromosomes.
-
-```julia
-perform_correction_callback!(population::Vector{Chromosome}, epoch::Int, 
-    correction_epochs::Int, correction_amount::Real,
-    correction_callback::Union{Function,Nothing})
-```
-
-**Arguments:**
-- `population::Vector{Chromosome}`: Current population of chromosomes
-- `epoch::Int`: Current epoch number
-- `correction_epochs::Int`: Frequency of correction operations
-- `correction_amount::Real`: Proportion of population to apply corrections to
-- `correction_callback::Union{Function,Nothing}`: Function that performs the actual correction
-
-**Details:**
-- Executes corrections periodically (every correction_epochs)
-- Processes a subset of the population determined by correction_amount
-- Applies corrections to dimensionally heterogeneous chromosomes
-- Updates chromosome compilation and dimensional homogeneity flags
-
-### runGep
-
-Main function that executes the GEP algorithm using a specified evaluation strategy.
-
-```julia
-runGep(epochs::Int, population_size::Int, toolbox::Toolbox, evalStrategy::EvaluationStrategy;
-    hof::Int=3, correction_callback::Union{Function,Nothing}=nothing,
-    correction_epochs::Int=1, correction_amount::Real=0.6,
-    tourni_size::Int=3)
-```
-
-**Arguments:**
-- `epochs::Int`: Number of evolutionary epochs to run
-- `population_size::Int`: Size of the chromosome population
-- `toolbox::Toolbox`: Contains genetic operators and algorithm parameters
-- `evalStrategy::EvaluationStrategy`: Strategy for evaluating chromosomes, handling fitness computation, and optimization
-
-**Optional Arguments:**
-- `hof::Int=3`: Number of best solutions to return (Hall of Fame size)
-- `correction_callback::Union{Function,Nothing}=nothing`: Function for dimensional homogeneity correction
-- `correction_epochs::Int=1`: Frequency of correction operations
-- `correction_amount::Real=0.6`: Proportion of population for correction
-- `tourni_size::Int=3`: Tournament selection size
-- `file_logger_callback::Union{Function,Nothing}=nothing`: Callback for extra logging, expected inputs `file_logger_callback(population::Vector{Chromosome}, epoch::Int, selectedMembers::SelectedMembers)`
-- `save_state_callback::Union{Function,Nothing}=nothing`: Callback for save a population, expected inputs `save_state_callback(population::Vector{Chromosome},evalStrategy::EvaluationStrategy)`
-- `load_state_callback::Union{Function,Nothing}=nothing`: Callback for loading a population, expected return `tuple(population::Vector{Chromosome},startepoch::Int)`
-- ` population_sampling_multiplier::Int=100`: Expansionfactor on the population to employ Latin-Hypercupe
-- `cache_size::Int=10000`: Functions stored in cache, (Limit! To mitigate cache blow up)
-- `penalty::AbstractFloat=2.0`: Employs a fit penalty for functions that has been seen for the second time
-
-**Returns:**
-`Tuple{Vector{Chromosome}, Any}`: Returns best solutions and training history
-
-**Details:**
-1. Initializes population and evolution parameters
-2. For each epoch:
-   - Applies dimensional homogeneity corrections if provided
-   - Computes fitness for all chromosomes using evaluation strategy
-   - Sorts population based on fitness
-   - Applies secondary optimization if specified in strategy
-   - Records training progress
-   - Checks break condition from evaluation strategy
-   - Performs selection and creates new generation
-3. Returns final solutions and training history
-
-Progress is monitored through a progress bar showing:
-- Current epoch
-- Training loss
-- Validation loss
-
-The evolution process stops when either:
-- Maximum epochs is reached
-- Break condition specified in evaluation strategy is met => needs to be informed as break_condition(population, epoch)
-
-## Utility Functions
-
-### Data Utilities
-
-#### train_test_split
-
-```julia
-train_test_split(X, y; test_ratio=0.2, random_state=42)
-```
-
-Split data into training and testing sets.
-
-**Parameters:**
-- `X`: Feature matrix
-- `y`: Target vector
-- `test_ratio::Float64 = 0.2`: Proportion of data for testing
-- `random_state::Int = 42`: Random seed
-
-**Returns:**
-- `(X_train, X_test, y_train, y_test)`: Split data
-
-**Example:**
-```julia
-X_train, X_test, y_train, y_test = train_test_split(X, y; test_ratio=0.3)
-```
-
-### Expression Utilities
-
-#### print_karva_strings
+### print_karva_strings
 
 ```julia
 print_karva_strings(chromosome::Chromosome; split_len::Int=1)
 ```
 
-Print the Karva notation representation of a chromosome.
+The expression as a string, built from the karva string alone -- without fitted constants or gene coefficients. `split_len = k > 1` skips the first `k - 1` connectors and returns the partial results, last gene first, instead of one string; with `k` equal to the gene count that is one string per gene.
 
-**Parameters:**
-- `chromosome::Chromosome`: Chromosome to print
-- `split_len::Int=1`: Length for splitting output
+### fitness / set_fitness!
 
-**Example:**
 ```julia
-print_karva_strings(chromosome)
+fitness(chromosome::Chromosome)
+set_fitness!(chromosome::Chromosome, value::Tuple)
 ```
+
+Get or set the fitness tuple.
+
+### Training history
+
+```julia
+history = regressor.fitness_history_
+train = [history.train_loss[i][1] for i in eachindex(history.train_loss) if isassigned(history.train_loss, i)]
+val = [history.val_loss[i][1] for i in eachindex(history.val_loss) if isassigned(history.val_loss, i)]
+```
+
+One tuple per epoch, for the best model of that epoch; the epochs after a `break_condition` stopped the run are unassigned.
+
+## Surrogate Screening
+
+For an expensive loss (a solver in the loop, a simulation), a Gaussian process decides which individuals of an epoch the loss scores and predicts the loss of the others. It is the Julia counterpart of `gep.SurrogateBatchStrategy` of the Python package, with its defaults. The types below are exported; the functions they are built from live in the submodule `GepSurrogate`. The example [Surrogate Screening](examples/surrogate-screening.md) walks through a search with one objective and one with several expressions and objectives.
+
+### SurrogateScreening
+
+```julia
+SurrogateScreening(embedder; screen=GpScreen(), individuals_per_epoch=10, kwargs...)
+SurrogateScreening(regressor::GepRegressor, probes::AbstractMatrix; embedding=:expression,
+    expressions=1, objective_expressions=nothing, kwargs...)
+SurrogateScreening(regressor::GepTensorRegressor, probes::AbstractVector; embedding=:expression,
+    expressions=1, objective_expressions=nothing, components=1, kwargs...)
+```
+
+Pass it to `fit!` (or `runGep`) as `surrogate`. `embedder` maps a chromosome to its latent vector, or to `nothing` for an expression that cannot be evaluated. The regressor methods build it on `probes`: one row per feature and one column per probe sample for a `GepRegressor` (like `x_train`), one column per feature for a `GepTensorRegressor` (like the data of `allocate_buffers!`); `embedding = :genes` embeds one block per gene, and `expressions = k` one block per expression of a chromosome that carries `k` of them (below). A few dozen probe samples from the relevant range suffice.
+
+Each epoch, the new individuals (one per karva string) are embedded; one that cannot be embedded is scored as a crash without a loss call. Then:
+- **Warmup**, until `warmup_runs` individuals (six times the batch, at least 60) have a finite loss: at most `warmup_batch` of them (twice the batch, at least 20; `nothing` for all) are scored, picked uniformly (or by Latin hypercube sampling with `warmup_lhs=true`), and the others get the median loss of that batch.
+- **Screened epochs**: a `GpScreen` is fitted on the scored individuals (the last `archive_cap = 1000`); the loss scores `individuals_per_epoch` individuals (a count, or a share in `(0, 1)` of the new individuals), `explore_fraction = 0.1` of them picked as in the warmup, the rest by the acquisition; every other individual gets the prediction `mean + impute_beta * deviation` (`impute_beta = 0`).
+- A prediction is at least one float step worse than the best loss scored so far on every objective (the incumbent), and it is never cached: a copy of a predicted individual is screened again, while a copy of a scored one takes its loss times `penalty`, even once the fitness cache has dropped it.
+- A prediction is provisional: with `rescreen = true`, the default with several objectives (`rescreen = nothing`), the individuals that carry one are screened again at the start of every epoch, next to the new ones, so a later process can pick them for a loss call or give them a fresh prediction. The batch stays a count or a share of the new individuals. Without, a surviving prediction is never looked at again, and in a search with several objectives the population fills up with stale ones; with one objective, re-screening was a wash on the benchmark of the package.
+- The best individual of an epoch is scored if it carries a prediction, before its loss is recorded and selected with; the returned hall of fame is scored at the end (`validate_hof = true`).
+- From `min_failures = 5` failed loss calls (a non-finite value) on, a `FeasibilityModel` gates each batch towards the individuals the loss can score.
+- With `budget_rule = :uncertainty`, an epoch scores only the individuals whose optimistic bound still beats the incumbent, between `min_individuals` and `individuals_per_epoch` of them (measured by the Python package as a gain with several objectives and as a collapse with one). `budget_decay` schedules the batch from `warmup_batch` down to `individuals_per_epoch`.
+- An epoch breeds `offspring_multiplier` times the children the population takes (by default 3 from 10 individuals per epoch on, read on a hundred individual epoch, and 1 below), and the process picks which enter (`GepSurrogate.preselect`).
+- An oversampled initial population (`population_sampling_multiplier > 1`) is picked by Latin hypercube sampling over the latent vectors (`characterize_initial = true`).
+- `target_transform = :log10` brings the losses into the space the processes work in; use `:asinh` or `:none` for objectives that can be negative.
+
+**Several objectives and several expressions.** A loss that sets several objectives (`number_of_objectives = k`) is screened with one process per objective. The pick scalarizes them by a random augmented Chebyshev weighting per epoch (ParEGO), or ranks by the expected hypervolume improvement (`GpScreen(acquisition = :ehvi)`). A prediction is clamped behind the best scored value of every objective, so no prediction dominates the individual holding one; and since the population survives by its mean fitness, which a prediction can beat without dominating anyone, the scored individuals that hold the best value of an objective are kept right behind the leader, where the next generation does not replace them (`GepSurrogate.keep_best_scored!`). The best scored value of every objective among the survivors thus never gets worse. An objective the loss computes from the chromosome alone, e.g. a size, is better computed than predicted: `exact_objectives = Dict(2 => c -> 0.01 * length(c.expression_raw))` gives every predicted individual that value (without a clamp), and the acquisition sees it without uncertainty. The function has to return exactly the value the loss sets. A chromosome that carries several expressions, split by `split_karva` in the loss (`split_predict` evaluates them), is embedded with one block per expression: `SurrogateScreening(regressor, probes; expressions = 2)`, which needs a gene count divisible by the number of expressions. The whole karva string joins the parts with connectors the loss never uses, so its behaviour is not what the loss sees. Where each objective judges one expression, `objective_expressions = [1, 2]` (one entry per objective, `0` or `:all` for one that depends on all of them) lets the process of an objective see the latent block of its expression alone (it sets the `inputs` of the `GpScreen`, `GepSurrogate.expression_blocks`). The result of such a search is a front: take the non-dominated members of `best_models_` (`calculate_fronts`), which the loss has all scored (`validate_hof`); a large `hof` costs a loss call per predicted member at the end.
+
+**Diagnostics:** `evaluated_count` (loss calls made through the screening), `imputed_count` (predictions), `broken_count`, `failed_count`, `spearman_log` (rank correlation of prediction and loss per screened batch, of the first predicted objective with several), `spearman_objectives` (the same, one log per objective), `last_batch` (the individuals scored in the last epoch, as `(chromosome, fitness, reason)`, the reason being `:warmup`, `:acquisition`, `:explore` or `:validation`), `archive_size(s)`, `is_validated(s, chromosome)` (the individual carries a loss, not a prediction).
+
+```julia
+using Random
+
+regressor = GepRegressor(2; number_of_objectives=1)
+probes = x_train[:, randperm(size(x_train, 2))[1:36]]     # x_train: one row per feature
+surrogate = SurrogateScreening(regressor, probes; individuals_per_epoch=0.15, seed=1)
+fit!(regressor, 100, 500, expensive_loss; surrogate=surrogate)
+
+@show surrogate.evaluated_count surrogate.imputed_count
+@show all(is_validated(surrogate, m) for m in regressor.best_models_)   # true
+```
+
+### GpScreen
+
+```julia
+GpScreen(; acquisition=:lcb, kappa=1.0, rho=0.05, scalarize_per_pick=false, fit=false, nugget=1e-6,
+    inputs=nothing)
+```
+
+Ranks the pending individuals with a Gaussian process per objective. `acquisition` is `:lcb` (the optimistic bound `mean - kappa * deviation`, the default the Python study measured best), `:logei` (the top of the log expected improvement), `:logei_believer` (greedy LogEI with the kriging believer between the picks) or `:ehvi` (expected hypervolume improvement, several objectives). With several objectives the other acquisitions pick by a random augmented Chebyshev scalarization (weight `rho`), drawn per fit or, with `scalarize_per_pick`, per pick. `fit = true` chooses the length scale and noise of the processes by the marginal likelihood over a grid. `inputs` gives the latent coordinates the process of each objective sees (one range or index vector per objective, `nothing` for all); with it, `:lcb` scalarizes the bounds of the processes of the objectives by the weights of the epoch. A custom screen is any object with methods of `GepSurrogate.fit_screen!`, `predict_screen`, `select_screen` and `plausible_screen`.
+
+### GaussianProcess and FeasibilityModel
+
+```julia
+GaussianProcess(X, y; nugget=1e-6, fit=false)      # X: d × n, one latent vector per column
+FeasibilityModel(X, labels; prior=2.0, bandwidth=0.25)
+```
+
+Exact Gaussian process regression with a radial basis kernel whose length scale is the median pairwise distance (or fitted, with `fit = true`); `GepSurrogate.posterior(gp, Xq)` gives the standardized mean and deviation, `unstandardize`, `expected_improvement`, `log_expected_improvement` and `believe` build on it. `FeasibilityModel` is a kernel-weighted average of the outcomes (1 for a finite loss, 0 for a failure), pulled to the overall rate by `prior` pseudo observations; call it on a `d × m` matrix for `m` probabilities.
+
+### SemanticEmbedder, GeneEmbedder, TensorEmbedder
+
+```julia
+SemanticEmbedder(toolbox, probes::AbstractMatrix; transform=:asinh, expressions=1)
+GeneEmbedder(toolbox, probes::AbstractMatrix; transform=:asinh, count=nothing)
+TensorEmbedder(toolbox, probes::AbstractVector; components=1, transform=:asinh, per_gene=false,
+    expressions=1)
+```
+
+Map a chromosome to the transformed outputs of its expression on the probe set (`SemanticEmbedder`), of its genes one block each (`GeneEmbedder`), or of a tensor expression flattened to `components` numbers per sample (`TensorEmbedder`), or to `nothing` if an output is not finite. With `expressions = k`, the chromosome is split into its `k` expressions (`split_karva`) and embedded with one block per expression; for a `TensorEmbedder`, `components` is then one number for all of them or a vector with one per expression. Constants tuned by an optimiser and gene coefficients are not applied, as an individual is embedded before it is scored.
+
+## Constants Against an Expensive Loss
+
+The constants of a model, tuned against an expensive custom loss (a solver in the loop, a CFD simulation) by Nelder-Mead, plain or screened by a Gaussian process over the constants. The functions they are built from live in the submodule `GepSimplex`. [Coefficient Tuning](examples/coefficient-tuning.md) shows when to use which variant, with measurements, and walks through both uses, inside a search and on their own.
+
+### ScreenedNelderMead
+
+```julia
+ScreenedNelderMead(; max_evaluations=60, screen=true, kappa=1.0, target_transform=:log10,
+    fit=true, polish_radius=1/32, tolerance=1e-8, seed=0, swarm_box=nothing, particles=10)
+```
+
+How `optimize_constants!` and `simplex_search` minimize, within `max_evaluations` loss calls (the initial simplex included). Both modes start as `Optim.NelderMead()` does: the given constants and one vertex per constant, moved by half its value plus 0.025 (by 0.025 where that vanishes, at -0.05).
+- `screen = false`: Nelder-Mead on the loss, the steps of `Optim.NelderMead()` (the adaptive parameters of Gao and Han, its stopping rule).
+- `screen = true`: every further loss call goes where a Gaussian process over the constants (a `GaussianProcess` with `fit` choosing its length scale and noise by the marginal likelihood, on the `target_transform` of the loss) expects the minimum: the minimum of `mean - kappa * deviation` inside a trust region around the best constants scored, in units of the initial steps. The region doubles after two improvements in a row and halves after `max(2, ceil(n / 2))` failures in a row; the bound turns greedy as it shrinks below the initial steps. A failed call (not finite) counts as the worst value scored. Below `polish_radius` initial steps, Nelder-Mead finishes on the loss from scored constants near the best ones.
+- `tolerance`: Nelder-Mead stops when the deviation of the values at the vertices, times `sqrt(n / (n + 1))`, falls below it, as in Optim; `seed` seeds the random starts of the search on the process and the swarm.
+- `swarm_box`: a particle swarm screened by a process explores a box first, for a loss with several minima: `(lower, upper)`, which must contain the start, or a number `r` of initial steps around the start (the form for `fit!`, whose models differ in their constants). The start and a Latin hypercube of the box, `particles` points in all, are scored; then every iteration moves every particle (constriction coefficients, the best of the swarm) and the loss scores the new position the process ranks best, one call per iteration. After `2n + 4` calls without a gain of 0.1 %, or at half the budget, the trust region search continues from the best point on every point scored; it is not bound to the box. It needs `screen = true`.
+
+Which variant suits which loss, with measurements: [Coefficient Tuning](examples/coefficient-tuning.md#Which-One-to-Use).
 
 ### optimize_constants!
 
-Optimizes constant values in a symbolic expression tree to minimize a given loss function.
-
 ```julia
-optimize_constants!(
-    node::Node,
-    loss::Function;
-    opt_method::Symbol=:cg,
-    max_iterations::Int=250,
-    n_restarts::Int=3
-)
+optimize_constants!(chromosome::Chromosome, loss::Function; method=ScreenedNelderMead(),
+    objective=nothing) -> Union{SimplexSearch,Nothing}
 ```
 
-**Arguments:**
-- `node::Node`: Expression tree containing constants to optimize
-- `loss::Function`: Loss function to minimize
-- `opt_method::Symbol=:cg`: Optimization method (:newton, :cg, or other for NelderMead)
-- `max_iterations::Int=250`: Maximum iterations per optimization attempt
-- `n_restarts::Int=3`: Number of random restarts to avoid local minima
+Tunes the constants of `chromosome` against `loss(chromosome, validate)`, the custom loss of a search: one parameter per occurrence of a constant in `expression_raw` (`constant_positions(chromosome)`), starting from the values the chromosome holds. Every candidate is set as the chromosome's `optimised_constants` and scored by `loss(chromosome, true)`, so the loss must evaluate by a path that applies them: `chromosome(ctx)`, `split_predict`, `predictT(regressor, chromosome)`. `objective` turns the fitness tuple into the value minimized: `nothing` for the mean of its entries (the order of the population), an index, or a function of the tuple. If the best constants beat the ones held, they stay in `optimised_constants` and the chromosome takes the fitness the loss gave them; otherwise, and if the loss throws, the chromosome is left as it was. Returns `nothing` for a chromosome without constants.
 
-**Returns:**
-Tuple containing:
-- `best_node::Node`: Expression tree with optimized constants
-- `best_loss::Float64`: Final loss value achieved
+### simplex_search and SimplexSearch
 
-**Example:**
 ```julia
-# Create expression with constants
-expr = Node(*, [
-    Node(1.5),  # constant to optimize
-    Node(x, degree=1)  # variable
-])
-
-# Define loss function
-loss(node) = sum((node(x_data) .- y_data).^2)
-
-# Optimize constants
-optimized_expr, final_loss = optimize_constants!(
-    expr,
-    loss;
-    opt_method=:cg,
-    max_iterations=500,
-    n_restarts=5
-)
+simplex_search(f, x0::AbstractVector{<:Real}; method=ScreenedNelderMead()) -> SimplexSearch
 ```
+
+Minimizes `f(x)`, a number for a vector, e.g. the error of a simulation for the coefficients `x`, within `method.max_evaluations` calls; a value that is not finite counts as the worst. The `SimplexSearch` holds the best point `f` scored (`minimizer`, `minimum`), the calls (`evaluations`), how many of them the process placed (`proposals`), the best value after every call (`history`), and every point scored with its value (`points`, `values`).
+
+```julia
+calibrate(p) = simulation_error(p)                 # one simulation per call
+result = simplex_search(calibrate, [1.0, 0.5, 2.0]; method=ScreenedNelderMead(max_evaluations=50))
+result.minimizer, result.minimum, result.evaluations
+```
+
+## Evaluation Strategies
+
+`fit!` builds one of these and hands it to `runGep`; they are only needed to call `runGep` directly.
+
+### StandardRegressionStrategy
+
+Evaluates scalar models on data arrays.
+
+```julia
+StandardRegressionStrategy{T}(operators, x_data, y_data, x_data_test, y_data_test,
+    loss_function::Function;
+    validation_loss_function=nothing,
+    secOptimizer=nothing,
+    break_condition=nothing,
+    penalty::T=zero(T),
+    crash_value::T=typemax(T),
+    linear_scaling::Bool=false,
+    buffered=nothing) where {T<:AbstractFloat}
+```
+
+`buffered` is the evaluation context from `build_buffers(regressor, x_data)` (without it every candidate scores `crash_value`); `crash_value` is the fitness of a candidate that cannot be evaluated, `Inf` for floating-point `T`. `operators`, `x_data` and `penalty` are stored but not used.
+
+### GenericRegressionStrategy
+
+Hands the chromosomes to a user loss, supporting several objectives.
+
+```julia
+GenericRegressionStrategy(operators, number_of_objectives::Int, loss_function::Function;
+    validation_loss_function=nothing,
+    secOptimizer=nothing,
+    break_condition=nothing)
+```
+
+## Core GEP Functions
+
+### runGep
+
+The evolutionary loop.
+
+```julia
+runGep(epochs::Int, population_size::Int, toolbox::Toolbox, evalStrategy::EvaluationStrategy;
+    hof::Int=3,
+    correction_callback=nothing,
+    homogeneity_check=nothing,
+    population_seeder=nothing,
+    correction_epochs::Int=1,
+    correction_amount::Real=0.6,
+    tourni_size::Int=3,
+    optimization_epochs::Int=500,
+    file_logger_callback=nothing,
+    save_state_callback=nothing,
+    load_state_callback=nothing,
+    population_sampling_multiplier::Int=100,
+    inputs_::Int=0,
+    cache_size::Int=10000,
+    penalty::AbstractFloat=2.0,
+    surrogate=nothing)
+```
+
+Some defaults differ from `fit!`'s (`correction_amount`, `optimization_epochs`, `population_sampling_multiplier`); `cache_size` is the capacity of the fitness cache, keyed by karva string. `surrogate` is a [`SurrogateScreening`](#Surrogate-Screening); what it changes in the steps below is listed there.
+
+**Returns:** `(best, history)`: the `hof` best chromosomes and the training history.
+
+Each epoch:
+1. With a dimensional target, new individuals are checked and, if needed, repaired (`correction_callback`, `homogeneity_check`); the others get the worst fitness instead of being scored
+2. New individuals are scored in parallel, once per distinct karva string, each thread taking the next one as soon as it is free; duplicates of known karva strings take the cached fitness times `penalty`
+3. The population is ranked by mean fitness; every `optimization_epochs` epochs, if the best has improved since the last time, the strategy's `secOptimizer` tunes it
+4. The best is re-scored with `validate = true`, its training and validation loss are recorded, and `break_condition(population, epoch)` may stop the run
+5. Parents are selected (tournament of `tourni_size`, or NSGA-II with several objectives) and, unless this is the last epoch, their offspring take ranks `population_size - m` to `population_size - 1` (see [Population Dynamics](core-concepts.md#Population-Dynamics))
+
+### Toolbox
+
+The GEP configuration: alphabet, arities, operators, gene layout and operator probabilities.
+
+```julia
+Toolbox(gene_count::Int, head_len::Int, symbols::OrderedDict{Int8,Int8},
+       gene_connections::Vector{Int8}, callbacks::Dict, nodes::OrderedDict,
+       gep_probs::Dict{String,AbstractFloat};
+       unary_prob::Real=0.1, preamble_syms=Int8[],
+       number_of_objectives::Int=1, operators_=nothing,
+       function_complile=compile_djl_datatype,
+       tail_weights_=nothing, head_tail_balance::Real=0.5, ...)
+```
+
+**Fields (selection):**
+- `gene_count`, `head_len`: Gene layout
+- `symbols::OrderedDict{Int8,Int8}`: Every symbol and its arity
+- `gene_connections::Vector{Int8}`: The connector symbols
+- `headsyms`, `tailsyms`: Symbols allowed in heads and tails
+- `callbacks`: The operator of every function symbol
+- `nodes`: The terminal behind every terminal symbol (feature selector or constant)
+- `gen_start_indices::Vector{Int}`: Position of every gene in a chromosome
+- `gep_probs`: Operator probabilities; for the regressors, the dictionary `RegressionWrapper.GENE_COMMON_PROBS` itself (see [Genetic Operators](#Genetic-Operators))
+- `fitness_reset::Tuple`: The worst fitness (all `Inf`) and the unscored fitness (all `NaN`)
+
+### Chromosome
+
+An individual: a linear chromosome and the model it encodes.
+
+```julia
+Chromosome(genes::Vector{Int8}, toolbox::Toolbox, compile::Bool=false)
+```
+
+**Fields:**
+- `genes::Vector{Int8}`: The connectors, then the genes (head and tail each), then the preamble symbols, if any
+- `expression_raw::Vector{Int8}`: The karva string: the connectors, then each gene's active part in prefix order
+- `fitness::Tuple`: Fitness, one entry per objective (`NaN` until scored)
+- `compiled::Bool`: Whether `expression_raw` has been resolved; editing `genes` does not reset it
+- `dimension_homogene::Bool`: Set once the expression is known to meet the target dimension
+- `optimised_constants`, `scaling_weights`: Fitted constants and gene coefficients, or `nothing`
+- `toolbox::Toolbox`: The configuration it was built with
+
+`chromosome.compiled_function`, where older code read the compiled expression, still works: it gives the model, which prints as `equation_string(chromosome)` and predicts like `chromosome(x)` when called as `m(x)` or `m(x, operators)` (`x` with one row per feature).
+
+### compile_expression!
+
+```julia
+compile_expression!(chromosome::Chromosome; force_compile::Bool=false)
+```
+
+Resolves the genes into `expression_raw`, which is what the evaluator runs, if the chromosome is not compiled yet or `force_compile` is set; this clears `optimised_constants` and `scaling_weights` and resets the fitness to unscored. After editing `genes` directly, call it with `force_compile=true`.
+
+### generate_gene / generate_chromosome / generate_population
+
+```julia
+generate_gene(headsyms, tailsyms, headlen, tail_weights, head_weights; rng=...)
+generate_chromosome(toolbox::Toolbox; rng=...)
+generate_population(number::Int, toolbox::Toolbox)
+```
+
+Random genes, compiled chromosomes and populations for a toolbox.
+
+### split_karva / split_predict / split_equations
+
+```julia
+split_karva(chromosome::Chromosome, coeffs::Int=2)
+split_positions(chromosome::Chromosome, coeffs::Int=2)
+split_predict(chromosome::Chromosome, ctx, coeffs::Int=2)
+split_equations(chromosome::Chromosome, coeffs::Int=2)
+```
+
+`split_karva` splits the chromosome into `coeffs` karva strings of consecutive genes, each with its own connectors (the first `coeffs - 1` connectors are dropped, and each part takes `gene_count ÷ coeffs` genes) -- the building block of template models with several factors, and of a chromosome that carries several expressions, e.g. the right-hand sides of a system of equations. `split_positions` gives the positions of the symbols of each part in `expression_raw`. `split_predict` evaluates the parts in a buffer context (`buffer_context`, one per thread from `thread_contexts`) and returns their outputs, copied out of the context's buffers; an entry that is not a vector marks a part that cannot be evaluated. `split_equations` writes each part as an equation string. Both apply the tuned constants of the chromosome (`optimised_constants`), the equations rounded to 6 significant digits.
+
+### EvoSelection.SelectedMembers
+
+The result of a selection: `indices::Vector{Int}` of the selected individuals, and `fronts` (the Pareto fronts by rank, after NSGA-II; empty after tournament selection).
 
 ## Loss Functions
 
 ### Built-in Loss Functions
 
-The package provides several built-in loss functions accessible via string names:
+`get_loss_function(name)` returns the function behind a name (an unknown name throws a `KeyError`); `fit!` accepts the names directly (`loss_fun="mse"`). Every one takes `(y_true, y_pred)`, two arrays of equal length and element type.
 
-#### "mse" - Mean Squared Error
-```julia
-mse(y_true, y_pred) = mean((y_true .- y_pred).^2)
-```
+- `"mse"`: Mean squared error
+- `"rmse"`: Root mean squared error
+- `"mae"`: Mean absolute error
+- `"nrmse"`: Root mean squared error divided by the standard deviation of `y_true`
+- `"srsme"`: Relative root mean squared error (residuals divided by the target's magnitude)
+- `"r2_score"`: Coefficient of determination -- a score, higher is better
+- `"r2_score_f"`: `r2_score` on data rescaled by a power of ten, for very large or small magnitudes
+- `"xi_core"`: A rank correlation modelled on Chatterjee's ξ -- a score
 
-#### "mae" - Mean Absolute Error
-```julia
-mae(y_true, y_pred) = mean(abs.(y_true .- y_pred))
-```
-
-#### "rmse" - Root Mean Squared Error
-```julia
-rmse(y_true, y_pred) = sqrt(mean((y_true .- y_pred).^2))
-```
+The search minimises its loss; use the scores for reporting.
 
 ### Custom Loss Functions
 
-For advanced applications, you can define custom loss functions:
-
 #### Single-Objective Custom Loss
 ```julia
+using Statistics
+
+# regressor, x_data (one row per sample), y_data, epochs and population_size as in the examples
+# mean absolute error, weighting the residuals of large targets less
 function custom_loss(y_true, y_pred)
-    # Your custom loss calculation
-    return loss_value::Float64
+    return mean(abs.(y_true .- y_pred) ./ (1 .+ abs.(y_true)))
 end
 
-# Use with fit!
 fit!(regressor, epochs, population_size, x_data', y_data; loss_fun=custom_loss)
 ```
 
 #### Multi-Objective Custom Loss
 ```julia
-@inline function multi_objective_loss(elem, validate::Bool)
+using Statistics
+
+# n_features, x_data (one row per sample), y_data, epochs and population_size as in the examples
+regressor = GepRegressor(n_features; number_of_objectives=2)
+ctxs = thread_contexts(regressor.toolbox_, x_data')
+
+function multi_objective_loss(elem, validate::Bool)
     if isnan(mean(elem.fitness)) || validate
-        model = elem.compiled_function
-        
-        try
-            y_pred = model(x_data')
-            
-            # Objective 1: Accuracy
-            mse = mean((y_true .- y_pred).^2)
-            
-            # Objective 2: Complexity
-            complexity = expression_complexity(model) # expression complexity needs to be defined by the user
-            
-            elem.fitness = (mse, complexity)
+        y_pred = try
+            elem(ctxs[Threads.threadid()])
         catch
-            elem.fitness = (typemax(Float64), typemax(Float64))
+            nothing
+        end
+        if y_pred isa AbstractVector && all(isfinite, y_pred)
+            mse = mean(abs2, y_data .- y_pred)                     # objective 1: accuracy
+            complexity = 0.01 * length(elem.expression_raw)      # objective 2: size, scaled
+            elem.fitness = (mse, complexity)
+        else
+            elem.fitness = (Inf, Inf)
         end
     end
 end
 
-# Use with multi-objective regressor
-regressor = GepRegressor(n_features; number_of_objectives=2)
 fit!(regressor, epochs, population_size, multi_objective_loss)
 ```
 
+`Inf` is a valid penalty: tournament selection leaves out individuals whose (first) objective is not finite, falling back to the whole population when none is finite, and NSGA-II ranks tuples with more non-finite entries behind.
+
 #### Tensor Custom Loss
 ```julia
-@inline function tensor_loss(elem, validate::Bool)
+using LinearAlgebra, Statistics
+
+# regressor: a GepTensorRegressor after allocate_buffers!; target_tensors: the target column
+function tensor_loss(elem, validate::Bool)
     if isnan(mean(elem.fitness)) || validate
-        model = elem.compiled_function
-        
-        try
-            predictions = model(input_data)
-            
-            # Calculate tensor-specific loss
-            total_error = 0.0
-            for i in 1:length(target_tensors)
-                error = norm(predictions[i] - target_tensors[i])^2
-                total_error += error
-            end
-            
-            elem.fitness = (total_error / length(target_tensors),)
+        predictions = try
+            predictT(regressor, elem.expression_raw)
         catch
-            elem.fitness = (typemax(Float64),)
+            nothing
+        end
+        if predictions isa AbstractVector && length(predictions) == length(target_tensors) &&
+           eltype(predictions) == eltype(target_tensors)
+            total_error = sum(norm(predictions[i] - target_tensors[i])^2
+                              for i in eachindex(target_tensors))
+            elem.fitness = (total_error / length(target_tensors),)
+        else
+            elem.fitness = (1e6,)    # e.g. a scalar where a vector belongs
         end
     end
 end
 ```
 
 #### Template loss
-Template loss enables multiexpression formulation or fixed defined template functions like $f(x_1,..x_n)=v(x_1,x_2) + g(x_3)$. 
+Template losses enable multi-expression formulations or fixed templates like $f(x_1,..x_n)=v(x_1,x_2) + g(x_3)$: `split_karva` splits a chromosome into groups of genes, and `calc_stack_batch_tensor` evaluates each group on the input columns (for a `GepRegressor`, `split_predict(elem, ctx, 2)` evaluates the groups in a buffer context, as `examples/Main_surrogate_multi_objective.jl` does). Here with a `GepTensorRegressor`, whose toolbox holds the evaluator's operator objects:
+
 ```julia
-@inline function loss_new(elem, validate::Bool)
-    try
-        if isnan(mean(elem.fitness)) || validate
+using LinearAlgebra, Statistics
 
-            g1 = elem.compiled_function[1](x_data', regressor.operators_)
-            g2 = elem.compiled_function[2](x_data', regressor.operators_)
-
-            a_pred = @. (g1' * t1) + (g2' * t2)
-            loss = abs(norm(a_true - a_pred))
-            elem.fitness = (loss,)
+# inputs: Dict{Int8,Any}, one column per terminal symbol -- regressor.input_values after
+# allocate_buffers!; t1, t2: your two basis columns; a_true: the target column
+function template_loss(elem, validate::Bool)
+    if isnan(mean(elem.fitness)) || validate
+        try
+            g1, g2 = split_karva(elem, 2)
+            p1 = calc_stack_batch_tensor(g1, regressor.toolbox_.callbacks, inputs, nothing)
+            p2 = calc_stack_batch_tensor(g2, regressor.toolbox_.callbacks, inputs, nothing)
+            a_pred = @. p1 * t1 + p2 * t2
+            elem.fitness = (norm(a_true - a_pred),)
+        catch
+            elem.fitness = (1e6,)
         end
-    catch e
-        @error "something wnt wrong" exception = (e, catch_backtrace())
-        elem.fitness = (typemax(Float64),)
     end
 end
 ```
@@ -809,100 +683,108 @@ end
 
 ### Tournament Selection
 
-Default selection method that chooses the best individual based on tournament selections.
-
-**Configuration:**
-```julia
-regressor = GepRegressor(n_features)
-```
+The selection for a single objective: each parent is the best of `tourni_size` individuals drawn with replacement from those with a finite fitness, identical fitness values counting once; if no fitness is finite, from the whole population. The best individual is always among the parents. `fit!` uses tournaments of 3 % of the population (0.3 % for tensor regression), at least 3.
 
 ### NSGA-II Selection
 
-Multi-objective selection using Non-dominated Sorting Genetic Algorithm II.
+The selection for several objectives (`GepRegressor(n; number_of_objectives=2)` with a custom loss): Pareto ranks by non-dominated sorting, and tournaments of 3 decided by rank, then by crowding distance.
 
-**Configuration:**
-```julia
-regressor = GepRegressor(n_features; 
-                        number_of_objectives=2)
-```
+`dominates_(a, b)` tells whether fitness tuple `a` dominates `b` (a tuple with fewer non-finite entries dominates one with more), which is how to pick the non-dominated models out of `best_models_`.
 
 ## Genetic Operators
 
-### Genetic Operators
+The probabilities and rates of the genetic operators are the entries of `RegressionWrapper.GENE_COMMON_PROBS`. Every toolbox holds this dictionary itself, not a copy, so a change applies to existing regressors too:
 
-The package implements several genetic operators. These can be adjusted in advance using the dictionary `GENE_COMMON_PROBS`, which is available after loading the `GeneExpressionProgramming.jl`
-
-- **Point Mutation**: Random symbol replacement
-- **Inversion**: Sequence reversal
-- **IS Transposition**: Insertion sequence transposition
-- **RIS Transposition**: Root insertion sequence transposition
-
-**Configuration:**
 ```julia
 using GeneExpressionProgramming
+probs = GeneExpressionProgramming.RegressionWrapper.GENE_COMMON_PROBS
 
-GeneExpressionProgramming.RegressionWrapper.GENE_COMMON_PROBS["mutation_prob"] = 1.0 # Probability for a chromosome of facing a mutation
-GeneExpressionProgramming.RegressionWrapper.GENE_COMMON_PROBS["mutation_rate"] = 0.1 # Proportion of the gene being changed
-
-GeneExpressionProgramming.RegressionWrapper.GENE_COMMON_PROBS["inversion_prob"] = 0.1 # Setting the prob. for the operation to take place 
-GeneExpressionProgramming.RegressionWrapper.GENE_COMMON_PROBS["insertion_prob"] = 0.1 # Setting IS 
-GeneExpressionProgramming.RegressionWrapper.GENE_COMMON_PROBS["root_insertion_prob"] = 0.1 # Setting RIS
-GeneExpressionProgramming.RegressionWrapper.GENE_COMMON_PROBS["gene_transposition"] = 0.0  # Setting Transposition
+probs["mutation_rate"] = 0.1
 ```
 
-### Crossover Operators
+`list_all_genetic_params()` returns a copy of the current values. Crossover and fusion probabilities are per pair of parents, the others per offspring. [Core Concepts](core-concepts.md#Genetic-Operators) describes each operator.
 
-Available crossover operators:
-
-- **One-Point Crossover**: Single crossover point
-- **Two-Point Crossover**: Two crossover points
-
-**Configuration:**
-```julia
-using GeneExpressionProgramming
-
-GeneExpressionProgramming.RegressionWrapper.GENE_COMMON_PROBS["one_point_cross_over_prob"] = 0.5 # Setting the one-point crossover
-GeneExpressionProgramming.RegressionWrapper.GENE_COMMON_PROBS["two_point_cross_over_prob"] = 0.3 # Setting the two-point crossover
-```
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `one_point_cross_over_prob` | 0.5 | one-point crossover |
+| `two_point_cross_over_prob` | 0.4 | two-point crossover |
+| `mutation_prob` | 1.0 | point mutation |
+| `mutation_rate` | 0.15 | a mutation redraws `round(0.15 × length)` positions, drawn with replacement |
+| `inversion_prob` | 0.1 | inversion of head symbols |
+| `insertion_prob` | 0.1 | a random terminal written into a head position |
+| `root_insertion_prob` | 0.1 | rotation of a gene's head, changing its root |
+| `reverse_insertion_tail` | 0.0 | rotation within a gene's tail |
+| `gene_transposition_prob` | 0.1 | exchange of two tail segments |
+| `gene_averaging_prob` | 1.0 | gene averaging towards the consensus of the elite |
+| `gene_averaging_rate` | 0.3 | probability per position of taking the consensus symbol |
+| `gene_averaging_elite_frac` | 0.3 | elite size, as a fraction of the mating size (at least 3) |
+| `dominant_fusion_prob`, `rezessiv_fusion_prob`, `fusion_prob` | 0.0 each | fusion operators |
+| `dominant_fusion_rate`, `rezessiv_fusion_rate`, `fusion_rate` | 0.1, 0.1, 0.0 | share of positions a fusion draws |
+| `mating_size` | 0.7 | offspring per epoch, as a fraction of the population size |
 
 ## Function Sets
 
-### Basic Arithmetic
+### Scalar Functions
+
+Every function in `FUNCTION_LIB_COMMON` can be entered by its symbol:
+
 ```julia
 basic_functions = [:+, :-, :*, :/]
+power_functions = [:sqr, :sqrt, :^]
+exp_log_functions = [:exp, :log, :log10, :log2]
+trig_functions = [:sin, :cos, :tan, :asin, :acos, :atan, :sinh, :cosh, :tanh, :asinh, :acosh, :atanh]
+other_functions = [:abs, :sign, :floor, :ceil, :round, :min, :max]
 ```
 
-### Extended Mathematical Functions
+Under physical dimensions, `min` and `max` take operands of one dimension, `abs` keeps its operand's, `sign` takes any and gives a dimensionless result, and `floor`, `ceil` and `round`, like `exp` or `sin`, take dimensionless operands only: rounding a quantity with units would give a result that depends on the units it is expressed in.
+
+`list_all_functions()` lists each with its arity and its unit rules; `list_all_arity()`, `list_all_forward_handlers()` and `list_all_backward_handlers()` return copies of the single tables. `set_function!(sym, func)`, `set_arity!(sym, arity::Int8)`, `set_forward_handler!(sym, handler)`, `set_backward_handler!(sym, handler)` and `update_function!(sym; func, arity, forward_handler, backward_handler)` change an existing entry, for regressors built afterwards; a symbol that is not in the library throws an `ArgumentError`. The batched evaluator runs only functions it has an operator node for (the functions behind `TENSOR_NODES`). A regressor with any other function cannot be used: the data method of `fit!` throws an `ArgumentError`, so does predicting with it, `buffer_context` and `thread_contexts` return `nothing`, and the custom-loss method of `fit!` fails while it samples the initial population.
+
 ```julia
-extended_functions = [:+, :-, :*, :/, :sin, :cos, :tan, :exp, :log, :sqrt, :abs]
+# abs of dimensionless operands only
+update_function!(:abs; forward_handler=zero_unit_forward, backward_handler=zero_unit_backward)
 ```
 
-### Power Functions
-```julia
-power_functions = [:^, :sqrt]
-```
+### Tensor Operations
 
-### Trigonometric Functions
+On top of the scalar functions, `GepTensorRegressor` accepts:
+
+- **Products**: `:*` (products with a scalar), `:dot` (single contraction), `:dcontract` (double contraction), `:otimes` (outer product), `:crossp` (cross product of 3D vectors), `:hadamard` (element-wise)
+- **Invariants and norms**: `:tr`, `:det`, `:norm`
+- **Parts and derived tensors**: `:symmetric`, `:skew`, `:dev`, `:vol`, `:inv`, `:tdot` and `:dott` (both A·Aᵀ), `:lap`
+
+With `considered_dimensions`, only the functions with tensor unit rules can be entered: `:+`, `:-`, `:*`, `:/`, `:inv`, `:dot`, `:crossp`, `:tr`, `:det`, `:dcontract`, `:lap`, `:hadamard`, `:sqrt`, `:norm`, `:log`, `:exp`, `:sin` and `:cos`.
+
+The tensors are Tensors.jl types:
+
 ```julia
-trig_functions = [:sin, :cos, :tan, :asin, :acos, :atan, :sinh, :cosh, :tanh]
+using Tensors
+
+vector_3d = rand(Tensor{1,3})
+matrix_3x3 = rand(Tensor{2,3})
 ```
 
 ## Physical Dimensionality
 
 ### Dimension Representation
 
-Physical dimensions are represented as 7-element vectors corresponding to SI base units:
+Physical dimensions are 7-element `Float16` vectors of SI exponents, in the order [kg, m, s, K, mol, A, cd]:
 
 ```julia
-# [Mass, Length, Time, Temperature, Current, Amount, Luminosity]
+# [Mass, Length, Time, Temperature, Amount of substance, Current, Luminous intensity]
 velocity_dim = Float16[0, 1, -1, 0, 0, 0, 0]    # [L T⁻¹]
 force_dim = Float16[1, 1, -2, 0, 0, 0, 0]       # [M L T⁻²]
 energy_dim = Float16[1, 2, -2, 0, 0, 0, 0]      # [M L² T⁻²]
+current_density_dim = Float16[0, -2, 0, 0, 0, 1, 0]   # [I L⁻²]
 ```
+
+On the tensor path the vector carries the tensor order in front of these.
 
 ### Dimensional Constraints
 
 ```julia
+# x_data: a mass, a length and a time per row (sample); y_data: a velocity per sample;
+# epochs and population_size as in the examples
 feature_dims = Dict{Symbol,Vector{Float16}}(
     :x1 => Float16[1, 0, 0, 0, 0, 0, 0],    # Mass
     :x2 => Float16[0, 1, 0, 0, 0, 0, 0],    # Length
@@ -911,167 +793,120 @@ feature_dims = Dict{Symbol,Vector{Float16}}(
 
 target_dim = Float16[0, 1, -1, 0, 0, 0, 0]  # Velocity
 
-regressor = GepRegressor(3; 
+regressor = GepRegressor(3;
                         considered_dimensions=feature_dims,
                         max_permutations_lib=10000)
 
-fit!(regressor, epochs, population_size, x_data', y_data; 
+fit!(regressor, epochs, population_size, x_data', y_data;
      target_dimension=target_dim)
 ```
 
-## Tensor Operations (under construction)
+A constant terminal takes a dimension under its symbol, e.g. `Symbol(9.807) => get_constant_dims("g")` with `entered_terminal_nums=[Symbol(9.807)]`.
 
-### Supported Tensor Types
-
-The tensor regression module supports various tensor types through Tensors.jl:
+### Checking and Repairing Expressions
 
 ```julia
-using Tensors
-
-# Vectors (rank-1 tensors)
-vector_3d = rand(Tensor{1,3})
-
-# Matrices (rank-2 tensors)  
-matrix_2x2 = rand(Tensor{2,2})
-
-# Higher-order tensors
-tensor_3x3x3 = rand(Tensor{3,3})
+is_dimensionally_homogeneous(expression::Vector{Int8}, target_dimension, token_dto)
+dimensional_homogeneity_distance(expression::Vector{Int8}, target_dimension, token_dto)
+is_gene_wise_homogeneous(expression::Vector{Int8}, target_dimension, token_dto, gene_count)
+gene_dimensions(expression::Vector{Int8}, gene_count, token_dto)
+correct_genes!(genes, start_indices, expression, target_dimension, token_dto;
+               cycles=5, gene_len=0, head_len=0, connectors=nothing, work_limit=800,
+               gene_wise=false)
+sample_lib_expression(target_dimension, token_dto; max_len, exact_only=false, head_len=0)
 ```
 
-### Tensor Operations
+- `is_dimensionally_homogeneous` / `dimensional_homogeneity_distance`: Forward check of a karva string against a target (the distance is `Inf16` for an expression with an inconsistency anywhere)
+- `is_gene_wise_homogeneous` / `gene_dimensions`: The same gene by gene, the check a model scored as the weighted sum of its genes (linear scaling) needs
+- `correct_genes!`: The repair `fit!` uses. It pushes the target down the expression and applies the cheapest fixes -- swapping terminals or operators, splitting a requirement between operands, replacing subexpressions with library expressions -- within the gene layout (`gene_len`, `head_len`, `connectors`). Returns `(distance, success)` and leaves `genes` untouched on failure; recompile the chromosome after a success. With `gene_wise=true` every gene is repaired to the target on its own, and the connectors become `+` or `-` if `connectors` offer one
+- `sample_lib_expression`: A random library-backed expression of (or near) a dimension, in prefix order
 
-Available tensor operations include:
+**Example** (`regressor` and `target_dim` as above):
+```julia
+tb, dto = regressor.toolbox_, regressor.token_dto_
+c = generate_chromosome(tb)
+_, ok = correct_genes!(c.genes, tb.gen_start_indices, c.expression_raw, target_dim, dto;
+                       gene_len=2 * tb.head_len + 1, head_len=tb.head_len,
+                       connectors=tb.gene_connections, cycles=10)
+ok && compile_expression!(c; force_compile=true)
+is_dimensionally_homogeneous(c.expression_raw, target_dim, dto)
+```
 
-- **Element-wise operations**: `+`, `-`, `*`, `/`
-- **Tensor products**: `⊗` (outer product)
-- **Contractions**: `⋅` (dot product), `⊡` (double contraction)
-- **Norms**: `norm()`, `tr()` (trace)
-- **Decompositions**: `eigen()`, `svd()`
+### Physical Constants
+
+```julia
+get_constant(name)          # (value, dimension)
+get_constant_value(name)
+get_constant_dims(name)
+physical_constants          # Dict of common constants, e.g. "c", "G", "h", "k_B", "e"
+physical_constants_all      # a larger set; the get_constant* functions look up physical_constants only
+```
+
+### Units from a Description File
+
+`get_feature_dims_json(case_data, feature_names, case_name)` and `get_target_dim_json(case_data, case_name)` read the dimensions of an equation from a parsed JSON description such as `assets/case_dsc.json`, as `paper/ConstraintViaSBP.jl` does. The feature dimensions come keyed by the names in `feature_names` as `String`s; convert the keys to `Symbol`s for `considered_dimensions`.
+
+## Utility Functions
+
+### train_test_split
+
+```julia
+train_test_split(X::AbstractMatrix{T}, y::AbstractVector{T}; train_ratio::T=0.9, consider::Int=1)
+```
+
+Shuffles the rows of `X` (one sample per row) and `y` with the global RNG, splits them at `train_ratio`, and keeps every `consider`-th row of each part.
+
+**Returns:** `(x_train, y_train, x_test, y_test)`
+
+**Example:**
+```julia
+x_train, y_train, x_test, y_test = train_test_split(X, y; train_ratio=0.8)
+```
+
+### Other Utilities
+
+- `minmax_scale(X; feature_range=(0, 1))`: A copy of `X` with each column mapped linearly onto `feature_range`
+- `isclose(a, b; rtol=1e-5, atol=1e-8)`: `abs(a - b) <= atol + rtol * abs(b)`
+- `save_state(filename, state)` / `load_state(filename)`: Serialize and restore, for example a population in `save_state_callback` / `load_state_callback`
+- `thread_slots()`: The number of per-thread slots buffers are sized by (`Threads.maxthreadid()`)
+- `allfinite(A)`: `all(isfinite, A)` for a float array, in one vectorised pass without early exit
+- `calc_stack_batch_tensor(rek_string, callbacks, inputs, buffers)`: The evaluator itself: runs a karva string on input columns
 
 ## Error Handling
 
-### Common Error
+### Common Errors
 
-#### ArgumentError: collection must be non-empty
-Thrown when the argument vector for the selection process is empty. This happens when all the loss returns `Inf` for all fit values.
+#### ArgumentError: an operator or terminal in this regressor has no batched counterpart
+A function in the regressor has no node in the batched evaluator (see [Function Sets](#Function-Sets)).
 
-## Performance Tuning
+#### ArgumentError: a target_dimension needs the features' dimensions
+`fit!` got a `target_dimension` for a regressor built without `considered_dimensions`.
 
-### Memory Management
+#### ArgumentError: linear_scaling writes the scaled model as a sum of weighted genes
+`linear_scaling=true` needs `:+` and `:*` among the functions.
 
-```julia
-# Monitor memory usage
-using Profile
+#### KeyError from get_loss_function
+The loss name is not one of the [built-in losses](#Built-in-Loss-Functions).
 
-@profile fit!(regressor, epochs, population_size, x_data', y_data)
-Profile.print()
+#### An error inside a custom loss
+An exception thrown inside a custom loss is not caught by the search: it stops `fit!`. Catch evaluation errors inside the loss and assign a penalty.
 
-# Force garbage collection
-GC.gc()
-```
+## Configuration Example
 
-## Configuration Examples
+A larger search with more functions and held-out data (`x_train`, `x_test`: 5 features, one row per sample; `y_train`, `y_test`: the targets):
 
-### Basic Configuration
-```julia
-regressor = GepRegressor(3)
-fit!(regressor, 1000, 1000, x_data', y_data)
-```
-
-### Advanced Configuration
 ```julia
 regressor = GepRegressor(
     5;                                    # 5 input features
-    population_size = 2000,               # Large population
     gene_count = 3,                       # 3 genes per chromosome
     head_len = 8,                         # Longer expressions
     entered_non_terminals = [:+, :-, :*, :/, :sin, :cos, :exp]
 )
 
-fit!(regressor, 1500, 2000, x_train', y_train;
-     x_test = x_test', 
+fit!(regressor, 1500, 2000, x_train', y_train;   # 1500 epochs, population of 2000
+     x_test = x_test',
      y_test = y_test,
      loss_fun = "rmse")
 ```
 
-### Multi-Objective Configuration
-```julia
-regressor = GepRegressor(
-    3;
-    number_of_objectives = 2,
-    population_size = 1500,
-    gene_count = 2,
-    head_len = 6
-)
-
-fit!(regressor, 1000, 1500, loss_function=multi_objective_loss)
-```
-
-### Physical Dimensionality Configuration
-```julia
-feature_dims = Dict{Symbol,Vector{Float16}}(
-    :x1 => Float16[1, 0, 0, 0, 0, 0, 0],  # Mass
-    :x2 => Float16[0, 1, 0, 0, 0, 0, 0],  # Length
-    :x3 => Float16[0, 0, 1, 0, 0, 0, 0],  # Time
-)
-
-regressor = GepRegressor(
-    3;
-    considered_dimensions = feature_dims,
-    max_permutations_lib = 15000,
-    rounds = 8
-)
-
-target_dim = Float16[1, 1, -2, 0, 0, 0, 0]  # Force
-
-fit!(regressor, 1200, 1200, x_data', y_data;
-     target_dimension = target_dim)
-```
-
-### Tensor Regression Configuration
-```julia
-regressor = GepTensorRegressor(
-    5,                                    # 5 features
-    gene_count = 2,                       # Number of genes
-    head_len = 5,                         # Head length for each gene
-    feature_names = ["scalar1", "scalar2", "vector1", "vector2", "matrix1"]
-)
-
-fit!(regressor, 150, 800, tensor_loss_function)
-```
-
-## Version Information
-
-```julia
-# Get package version
-using Pkg
-Pkg.status("GeneExpressionProgramming")
-
-# Check for updates
-Pkg.update("GeneExpressionProgramming")
-```
-
-## Debugging and Diagnostics
-
-### Fitness History
-```julia
-# Access fitness evolution
-if hasfield(typeof(regressor), :fitness_history_)
-    history = regressor.fitness_history_
-    train_loss = [elem[1] for elem in history.train_loss]
-    plot(train_loss)
-end
-```
-
-### Expression Analysis
-```julia
-# Analyze best expressions
-for (i, model) in enumerate(regressor.best_models_)
-    println("Model $i: $(model.compiled_function)")
-    println("Fitness: $(model.fitness)")
-end
-```
-
-This API reference provides comprehensive coverage of all public interfaces in GeneExpressionProgramming.jl. For additional examples and use cases, refer to the [Examples](./examples/).
-
----
+For additional examples and use cases, refer to the examples, starting with [Basic Regression](examples/basic-regression.md).

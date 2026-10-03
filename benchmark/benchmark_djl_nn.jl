@@ -1,3 +1,13 @@
+#=
+OBSOLETE: kept as the record behind benchmark/Benchmark.md; it no longer runs.
+
+Compared DynamicExpressions.jl with the former Flux-network path
+(`TensorRegUtils.compile_to_flux_network`) on one tensor-valued expression, single-threaded
+(JULIA_NUM_THREADS=1). Both have since been replaced by the batched evaluator
+(`calc_stack_batch_tensor`): DynamicExpressions is no longer a dependency and
+`compile_to_flux_network` no longer exists. The expression is adapted from the
+DynamicExpressions.jl README (https://github.com/SymbolicML/DynamicExpressions.jl).
+=#
 using DynamicExpressions
 using DynamicExpressions: @declare_expression_operator
 using BenchmarkTools
@@ -8,12 +18,6 @@ using .TensorRegUtils
 using Tensors
 using OrderedCollections
 using Flux
-
-
-"""
-Benchmark for comparing higher dim structures for tensor regression - run test with - export JULIA_NUM_THREADS=1
-example from: https://github.com/SymbolicML/DynamicExpressions.jl with changes according to utilize tensors
-"""
 
 
 T = Union{Float64,Vector{Float64},Tensor}
@@ -27,7 +31,7 @@ vec_square(x::Tensor) = @fastmath dot(x,x);
 
 operators = GenericOperatorEnum(; binary_operators=[vec_add], unary_operators=[vec_square]);
 
-# Construct the expression:
+# x1 + x1 + x1 . x1 on a 3x3 tensor of ones
 variable_names = ["x1"]
 c1 = Expression(Node{T}(; val=ones(Tensor{2,3})); operators, variable_names);  
 expression = vec_add(vec_add(vec_square(c1), c1), c1);
@@ -35,29 +39,25 @@ expression = vec_add(vec_add(vec_square(c1), c1), c1);
 X = ones(Tensor{2,3});
 
 
-# create the inputs for Flux
+# the same expression as a karva string (1 = +, 2 = *, 5 = x1) for the Flux network
 c1_ = ones(Tensor{2,3});
 inputs = (c1_,);
 
-# create the arity map
 arity_map = OrderedDict{Int8,Int}(
     1 => 2,  # Addition
     2 => 2  # Multiplication
 );
 
-#assign the callbacks
 callbacks = Dict{Int8,Any}(
     Int8(1) => AdditionNode,
     Int8(2) => MultiplicationNode
 );
 
-#define nodes
 nodes = OrderedDict{Int8,Any}(
     Int8(5) => InputSelector(1)
 );
 
-# Evaluate - expression 
-# Solution => [[5.0 5.0 5.0], [5.0 5.0 5.0], [5.0 5.0 5.0]]
+# every entry of the result is 5: (ones * ones) + ones + ones, with * the single contraction
 tests_n = 100000
 @show "Benchmark expression"
 expression(X)  
@@ -65,7 +65,7 @@ expression(X)
     expression(X)  
 end
 
-#83.021 ms (1798979 allocations: 187.67 MiB)
+# recorded: 83.021 ms (1798979 allocations: 187.67 MiB)
 
 rek_string = Int8[1, 1, 2, 5, 5, 5, 5];
 network = TensorRegUtils.compile_to_flux_network(rek_string, arity_map, callbacks, nodes, 0);
@@ -75,7 +75,5 @@ result = network(inputs)
     result = network(inputs)
 end
 
-#11.703 ms (998979 allocations: 59.49 MiB)
-
-
-#Conclusion ≈ 7 times faster than DynamicExpressions.jl for such structures
+# recorded: 11.703 ms (998979 allocations: 59.49 MiB), i.e. about 7x faster than
+# DynamicExpressions.jl on this expression

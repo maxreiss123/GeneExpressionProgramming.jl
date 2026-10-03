@@ -1,23 +1,19 @@
 # GeneExpressionProgramming.jl Documentation
 
-Welcome to the comprehensive documentation for GeneExpressionProgramming.jl, a powerful Julia package for symbolic regression using Gene Expression Programming (GEP). This documentation provides everything you need to get started with symbolic regression, from basic concepts to advanced applications.
+GeneExpressionProgramming.jl is a Julia package for symbolic regression by Gene Expression Programming (GEP): it evolves explicit equations that fit data.
 
-## What is GeneExpressionProgramming.jl?
+## Features
 
-GeneExpressionProgramming.jl is a state-of-the-art symbolic regression package that combines the power of evolutionary algorithms with unique features like physical dimensionality constraints and tensor regression capabilities. It's designed for researchers, engineers, and data scientists who need to discover mathematical relationships in their data while maintaining physical plausibility and interpretability.
-
-### Key Features
-
-- **Gene Expression Programming**: Advanced evolutionary algorithm for symbolic regression  
-- **Multi-Objective Optimization**: Balance accuracy, complexity, and other objectives using NSGA-II  
-- **Physical Dimensionality**: Ensure dimensional consistency in evolved expressions  
-- **Tensor Regression**: Work with vector and matrix data using Flux.jl backend  
-- **High Performance**: Optimized Julia implementation with parallel processing support  
-- **Scientific Applications**: Specialized features for physics, engineering, and scientific computing  
+- **Gene Expression Programming**: a model is a chromosome of `Int8` tokens -- genes, each a head and a tail, joined by connectors. Its karva string is scored by a batched evaluator that applies every operator to whole data columns, in buffers allocated once per thread.
+- **Multi-objective optimisation**: a custom loss can score several objectives (accuracy, size, ...); parents are then selected by NSGA-II.
+- **Physical dimensions**: given the SI dimensions of the features and of the target, semantic backpropagation (SBP) repairs candidates towards the target dimension, and only homogeneous candidates are scored.
+- **Tensor regression**: scalar, vector and tensor features (Tensors.jl) side by side, through the same batched evaluator.
+- **Constant optimisation and linear scaling** (`fit!` on data): Nelder-Mead tuning of the constants of the best model, or one least-squares coefficient per gene.
+- **Surrogate screening of expensive losses**: Gaussian processes over the behaviour of the candidates decide which few individuals per epoch the loss scores, and predict the loss of the others (`SurrogateScreening`), for one or several objectives and for chromosomes that carry several expressions.
+- **Constants against an expensive loss**: Nelder-Mead whose loss calls a Gaussian process over the constants places where it expects the minimum (`ScreenedNelderMead`), after a screened particle swarm in a box for a loss with several minima (`swarm_box`), for the constants of the best model inside a search (`constant_optimizer` of `fit!`) or on their own (`optimize_constants!`, `simplex_search`), e.g. with a CFD simulation as the cost function.
+- **Threads**: fitness evaluation, genetic operators and repair run on the threads Julia is started with (`julia --threads=auto`).
 
 ## Quick Start
-
-Get up and running in minutes:
 
 ```julia
 using Pkg
@@ -36,61 +32,31 @@ regressor = GepRegressor(2)
 fit!(regressor, 1000, 1000, x_data', y_data; loss_fun="mse")
 
 # View the discovered expression
-println(regressor.best_models_[1].compiled_function)
-# Output: x1 * x1 + x2
+println(regressor.best_models_[1])
+# e.g. ((x1 * x1) + x2) -- the exact form varies from run to run
 ```
 
 ## Documentation Structure
 
-###  Getting Started
-- **[Installation](installation.md)** - Install the package and dependencies
-- **[Getting Started](getting-started.md)** - Your first symbolic regression project
-- **[Core Concepts](core-concepts.md)** - Understand the theory behind GEP
-
-### User Guide
-- **[API Reference](api-reference.md)** - Complete function and type documentation
-
-### Examples and Tutorials
-- **[Basic Regression](examples/basic-regression.md)** - Fundamental symbolic regression workflow
-- **[Multi-Objective Optimization](examples/multi-objective.md)** - Balance multiple objectives
-- **[Physical Dimensionality](examples/physical-dimensions.md)** - Enforce dimensional consistency
-- **[Tensor Regression](examples/tensor-regression.md)** - Work with vector and matrix data
-
-
-
-## Why Choose GeneExpressionProgramming.jl?
-
-### Unique Advantages
-
-**Physical Dimensionality**: Unlike other symbolic regression packages, GeneExpressionProgramming.jl can enforce physical unit consistency, ensuring that evolved expressions respect fundamental physical laws. This is crucial for scientific and engineering applications.
-
-**Multi-Objective Optimization**: Built-in support for balancing multiple objectives like accuracy vs. complexity using the proven NSGA-II algorithm. This helps you find interpretable models that don't overfit.
-
-**Tensor Regression**: Native support for vector and matrix data through integration with Flux.jl, enabling discovery of relationships involving geometric and tensor quantities.
-
-**Scientific Rigor**: Developed with features specifically designed for scientific computing and discovery.
-
-### Performance Benefits
-
-- **Julia Performance**: Leverages Julia's speed for fast evolution and expression evaluation
-- **Parallel Processing**: Automatic parallelization across available CPU cores
-- **Memory Efficiency**: Optimized data structures and algorithms
-- **Scalability**: Handles large datasets and complex expressions
-
-### Ease of Use
-
-- **Simple API**: Intuitive interface that's easy to learn
-- **Comprehensive Documentation**: Examples and tutorials
-- **Active Development**: Regular updates
-- **Integration**: Works well with the Julia ML ecosystem
+- **[Installation](installation.md)**: install the package and start Julia with threads
+- **[Getting Started](getting-started.md)**: a first symbolic regression, step by step
+- **[Core Concepts](core-concepts.md)**: chromosomes, genetic operators, selection, dimensions and the evaluator
+- **[API Reference](api-reference.md)**: functions, types and keyword arguments
+- **Examples**:
+  - **[Basic Regression](examples/basic-regression.md)**: the complete workflow on a known function
+  - **[Multi-Objective Optimization](examples/multi-objective.md)**: accuracy against expression size
+  - **[Physical Dimensionality](examples/physical-dimensions.md)**: a search held to physical units
+  - **[Tensor Regression](examples/tensor-regression.md)**: a vector-valued target from scalar and vector features
+  - **[Surrogate Screening](examples/surrogate-screening.md)**: expensive losses (a solver in the loop), with one objective and with several expressions and objectives
+  - **[Coefficient Tuning](examples/coefficient-tuning.md)**: the constants of a model against an expensive loss, inside a search and on their own, and a closure model searched with a fictive CFD solver in the loop
 
 ## Research Foundation
 
-GeneExpressionProgramming.jl is based on research in symbolic regression and evolutionary computation. The package implements novel techniques for constraining genetic symbolic regression via semantic backpropagation, as described in:
+The package implements the constraint of genetic symbolic regression by semantic backpropagation described in:
 
 > Reissmann, M., Fang, Y., Ooi, A. S. H., & Sandberg, R. D. (2025). Constraining genetic symbolic regression via semantic backpropagation. *Genetic Programming and Evolvable Machines*, 26(1), 12.
 
-This research introduces innovative methods for ensuring that evolved expressions respect physical constraints and dimensional consistency, making the package particularly valuable for scientific applications. Moreover, the implementation builds on top of concepts explored and developed in:
+It builds on concepts explored and developed in:
 
 > Ferreira, C. (2001). Gene Expression Programming: a New Adaptive Algorithm for Solving Problems. Complex Systems, 13.
 
@@ -102,21 +68,7 @@ This research introduces innovative methods for ensuring that evolved expression
 
 ## Community and Support
 
-### Getting Help
-
-- **Documentation**: Start with this comprehensive documentation
-- **GitHub Issues**: Report bugs and request features
-- **Discussions**: Ask questions and share experiences
-
-
-### Contributing
-
-We welcome contributions from the community! Whether you're:
-- Fixing bugs or adding features
-- Improving documentation
-- Sharing examples and tutorials
-- Providing feedback and suggestions
-
+Report bugs, request features and ask questions on the [GitHub repository](https://github.com/maxreiss123/GeneExpressionProgramming.jl/issues). Contributions -- fixes, features, documentation and examples -- are welcome.
 
 ### Citation
 
@@ -138,9 +90,10 @@ If you use GeneExpressionProgramming.jl in your research, please cite:
 
 ## Version Information
 
-This documentation covers GeneExpressionProgramming.jl version 0.5.0 and later. The package is actively developed, with regular updates and improvements. Check the [GitHub repository](https://github.com/maxreiss123/GeneExpressionProgramming.jl) for the latest version and release notes.
+These pages describe the current code in the [GitHub repository](https://github.com/maxreiss123/GeneExpressionProgramming.jl), which may be ahead of the latest registered release.
 
 
 ## Acknowledgement
- - We employ the insane fast [DynamicExpressions.jl](https://github.com/SymbolicML/DynamicExpressions.jl) for evaluating our expressions
+ - Tensor-valued features and operations build on [Tensors.jl](https://github.com/Ferrite-FEM/Tensors.jl).
+ - Earlier versions evaluated expressions with [DynamicExpressions.jl](https://github.com/SymbolicML/DynamicExpressions.jl); the current evaluator is a batched stack machine written for this package.
 ---

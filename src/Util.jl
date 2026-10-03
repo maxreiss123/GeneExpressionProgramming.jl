@@ -1,131 +1,37 @@
 """
     GepUtils
 
-A utility module providing essential functions and types for Gene Expression Programming (GEP)
-operations, including optimization, history tracking, data manipulation, and state management.
+Utilities shared by the GEP modules:
 
-# Core Features
-## Optimization
-- Constant optimization with multiple algorithms
-- Node compilation and manipulation
-- Distance calculations and scaling
-
-## History Recording
-- Asynchronous history tracking
-- Training metrics recording
-- Optimization history management
-- Progress monitoring
-
-## Data Handling
-- Train-test splitting
-- Minmax scaling
-- Data type conversion
-- State serialization
-
-# Main Types
-## History Management
-- `OptimizationHistory`: Stores training metrics and statistics
-- `HistoryRecorder`: Asynchronous recorder for optimization metrics
-
-# Main Functions
-## Optimization
-- `optimize_constants!`: Optimize constant values in expressions
-- `compile_djl_datatype`: Compile recursive expressions
-- `retrieve_constants_from_node`: Extract constants from nodes
-
-## Scaling and Metrics
-- `minmax_scale`: Scale data to specific range
-- `float16_scale`: Scale to Float16 range
-- `isclose`: Approximate equality comparison
-
-## History Recording
-- `create_history_recorder`: Initialize recording
-- `record!`: Record optimization step
-- `close_recorder!`: Finalize recording
-- `get_history_arrays`: Extract history data
-
-## Data Management
-- `train_test_split`: Split dataset for training/testing
-- `save_state`, `load_state`: State persistence
-
-## Constants
-- `FUNCTION_LIB_COMMON`: Available mathematical functions
-
-# Function Library
-Includes extensive mathematical operations:
-- Basic arithmetic: +, -, *, /, ^
-- Comparisons: min, max
-- Rounding: floor, ceil, round
-- Exponential: exp, log, log10, log2
-- Trigonometric: sin, cos, tan, asin, acos, atan
-- Hyperbolic: sinh, cosh, tanh, asinh, acosh, atanh
-- Special: sqr, sqrt, sign, abs
-- Tensorfunctions: 
-
-# Usage Example
-```julia
-# History recording
-recorder = HistoryRecorder(100, Float64)  # 100 epochs
-record!(recorder, epoch, train_loss, val_loss, fitness_vector)
-close_recorder!(recorder)
-
-# Data scaling
-scaled_data = minmax_scale(data, feature_range=(0.0, 1.0))
-
-# Train-test split
-x_train, y_train, x_test, y_test = train_test_split(X, y, train_ratio=0.8)
-
-# Constant optimization
-optimized_node, final_loss = optimize_constants!(
-    node,
-    loss_function;
-    opt_method=:cg,
-    max_iterations=250
-)
-```
-
-# Implementation Details
-## Performance Optimizations
-- Thread-safe operations via channels
-- SIMD optimizations where applicable
-- Efficient memory management
-- Asynchronous history recording
-
-## Dependencies
-- `OrderedCollections`: Ordered data structures
-- `DynamicExpressions`: Expression handling
-- `LinearAlgebra`: Matrix operations
-- `Optim`: Optimization algorithms
-- `LineSearches`: Line search methods
-- `Zygote`: Automatic differentiation
-- `Serialization`: State persistence
-- `Statistics`: Statistical computations
-- `Flux`: ML-Package
-- `Tensors`: mathematical objects of higher order
-- `Random`: Random number generation
-- `CUDA`: Extension to run on CUDA-cores
+- the scalar function library `FUNCTION_LIB_COMMON`, with its arities
+  (`ARITY_LIB_COMMON`) and renderers (`FUNCTION_STRINGIFY`);
+- karva-string helpers: `compile_djl_datatype`, a fold used to render equations, and
+  `find_indices_with_sum`, which finds where a gene's expression ends;
+- history recording: `HistoryRecorder`, `OptimizationHistory`, `record!`,
+  `close_recorder!`, `get_history_arrays`;
+- data helpers: `train_test_split`, `minmax_scale`, `select_n_samples_lhs`,
+  `one_hot_mean`;
+- `save_state`/`load_state`, `split_rng`, `thread_slots` and `isclose`.
 """
 module GepUtils
 
-export find_indices_with_sum, compile_djl_datatype, optimize_constants!, minmax_scale, float16_scale, isclose
+export find_indices_with_sum, compile_djl_datatype, minmax_scale, isclose
 export save_state, load_state
-export create_history_recorder, record_history!, record!, close_recorder!
+export record_history!, record!, close_recorder!
 export HistoryRecorder, OptimizationHistory, get_history_arrays, one_hot_mean, FUNCTION_STRINGIFY
-export train_test_split, select_n_samples_lhs
+export ConsensusSampler, consensus_draw
+export train_test_split, select_n_samples_lhs, thread_slots, allfinite
 export FUNCTION_LIB_COMMON, ARITY_LIB_COMMON
-export TensorNode, compile_network, split_rng
+export split_rng
 
 using OrderedCollections
-using DynamicExpressions
 using LinearAlgebra
 using Optim
 using LineSearches
-using Zygote
 using Serialization
 using Statistics
 using Random
 using Tensors
-using Flux
 using StatsBase
 using NearestNeighbors
 using Random123
@@ -136,28 +42,25 @@ function sqr(x::Vector{T}) where {T<:AbstractFloat}
     return x .* x
 end
 
-function sqr(x::T) where {T<:Union{AbstractFloat,Node{<:AbstractFloat}}}
+function sqr(x::T) where {T<:Number}
     return x * x
 end
 
 """
     FUNCTION_LIB_COMMON::Dict{Symbol,Function}
 
-Dictionary mapping function symbols to their corresponding functions.
-Contains basic mathematical operations, trigonometric, and other common functions.
+The scalar functions a regressor can be built from, keyed by name:
 
-# Available Functions
-- Basic arithmetic: `+`, `-`, `*`, `/`, `^`
-- Comparison: `min`, `max`
-- Rounding: `floor`, `ceil`, `round`
-- Exponential & Logarithmic: `exp`, `log`, `log10`, `log2`
-- Trigonometric: `sin`, `cos`, `tan`, `asin`, `acos`, `atan`
-- Hyperbolic: `sinh`, `cosh`, `tanh`, `asinh`, `acosh`, `atanh`
-- Other: `abs`, `sqr`, `sqrt`, `sign`
-- Tensor Functions: 
+- arithmetic: `+`, `-`, `*`, `/`, `^`, `min`, `max`
+- rounding: `floor`, `ceil`, `round`
+- exponential and logarithmic: `exp`, `log`, `log10`, `log2`
+- trigonometric: `sin`, `cos`, `tan`, `asin`, `acos`, `atan`
+- hyperbolic: `sinh`, `cosh`, `tanh`, `asinh`, `acosh`, `atanh`
+- other: `abs`, `sqr` (the square), `sqrt`, `sign`
 
-To add a new function, ensure you also add corresponding entries in `ARITY_LIB_COMMON`,
-`FUNCTION_LIB_FORWARD_COMMON`, and `FUNCTION_LIB_BACKWARD_COMMON`.
+A new function also needs its arity in `ARITY_LIB_COMMON`, a renderer in
+`FUNCTION_STRINGIFY`, dimension handlers in `FUNCTION_LIB_FORWARD_COMMON` and
+`FUNCTION_LIB_BACKWARD_COMMON`, and a batched operator in `TENSOR_NODES`.
 """
 const FUNCTION_LIB_COMMON = Dict{Symbol,Function}(
     :+ => +,
@@ -187,12 +90,19 @@ const FUNCTION_LIB_COMMON = Dict{Symbol,Function}(
 )
 
 
+"""
+    FUNCTION_STRINGIFY::Dict{Symbol,Function}
+
+Renderers for the functions of `FUNCTION_LIB_COMMON`, under the same names; each builds
+a string from its arguments. Infix operators parenthesise their result, since flat text
+would lose the nesting that the prefix-order karva string carries.
+"""
 const FUNCTION_STRINGIFY = Dict{Symbol,Function}(
-    :+ => (args...) -> join(args, " + "),
-    :- => (args...) -> length(args) == 1 ? "-$(args[1])" : join(args, " - "),
-    :* => (args...) -> join(args, " * "),
-    :/ => (args...) -> join(args, " / "),
-    :^ => (args...) -> "$(args[1])^$(args[2])",
+    :+ => (args...) -> "(" * join(args, " + ") * ")",
+    :- => (args...) -> length(args) == 1 ? "(-$(args[1]))" : "(" * join(args, " - ") * ")",
+    :* => (args...) -> "(" * join(args, " * ") * ")",
+    :/ => (args...) -> "(" * join(args, " / ") * ")",
+    :^ => (args...) -> "($(args[1])^$(args[2]))",
     :min => (args...) -> "min($(join(args, ", ")))",
     :max => (args...) -> "max($(join(args, ", ")))",
     :abs => a -> "|$a|",
@@ -217,17 +127,16 @@ const FUNCTION_STRINGIFY = Dict{Symbol,Function}(
     
     :sqr => a -> "($a)²",
     :sqrt => a -> "√($a)",
-    :sign => a -> "sign($a)"
+    :sign => a -> "sign($a)",
+    :floor => a -> "floor($a)",
+    :ceil => a -> "ceil($a)"
 )
 
 """
     ARITY_LIB_COMMON::Dict{Symbol,Int8}
 
-Dictionary specifying the number of arguments (arity) for each function in the library.
-- Value of 1 indicates unary functions (e.g., `sin`, `cos`, `abs`)
-- Value of 2 indicates binary functions (e.g., `+`, `-`, `*`, `/`)
-
-When adding new functions to `FUNCTION_LIB_COMMON`, ensure to specify their arity here.
+Arity of each function in `FUNCTION_LIB_COMMON`: 2 for `+`, `-`, `*`, `/`, `^`, `min`
+and `max`, 1 for the rest.
 """
 const ARITY_LIB_COMMON = Dict{Symbol,Int8}(
     :+ => 2,
@@ -258,9 +167,18 @@ const ARITY_LIB_COMMON = Dict{Symbol,Int8}(
     :acosh => 1,
     :atanh => 1,
     :sqrt => 1,
+    :sign => 1,
     :sqr => 1
 )
 
+"""
+    OptimizationHistory(epochs::Int, T)
+
+Training and validation loss per epoch, preallocated for `epochs` epochs. `T` is the
+loss type: a float, or `Tuple` for fitness tuples. Indexing and iteration yield
+`(train_loss=..., val_loss=...)`. Epochs never recorded, e.g. after an early stop, stay
+uninitialised.
+"""
 struct OptimizationHistory{T<:Union{AbstractFloat,Tuple}}
     train_loss::Vector{T}
     val_loss::Vector{T}
@@ -307,6 +225,11 @@ function Base.show(io::IO, hist::OptimizationHistory)
 end
 
 
+"""
+    get_history_arrays(hist::OptimizationHistory)
+
+The recorded losses as `(train_loss=..., val_loss=...)`, one vector each (not copies).
+"""
 function get_history_arrays(hist::OptimizationHistory)
     return (
         train_loss=hist.train_loss,
@@ -316,74 +239,24 @@ end
 
 
 """
-    HistoryRecorder{T<:AbstractFloat}
+    HistoryRecorder(epochs::Int, T; buffer_size::Int=32)
 
-A thread-safe structure for asynchronous recording of optimization history during
-GEP evolution, using channels for communication between optimization and recording tasks.
+Records the training and validation loss of each epoch on a background task. `record!`
+puts `(epoch, train_loss, val_loss)` on `channel`, a `Channel{Tuple{Int,T,T}}` holding
+up to `buffer_size` entries; `task`, spawned by the constructor, writes them into
+`history::OptimizationHistory{T}`. `T` is the loss type: a float, or `Tuple` for
+fitness tuples, as `runGep` records them. Call `close_recorder!` before reading
+`history`.
 
-# Fields
-- `channel::Channel{Tuple{Int,T,T}}`: Communication channel for metrics
-  - Tuple format: (epoch, train_loss, validation_loss, fitness_vector)
-- `task::Task`: Asynchronous task handling the recording process
-- `history::OptimizationHistory{T}`: Storage for optimization metrics
-
-# Constructor
+# Example
 ```julia
-HistoryRecorder(
-    epochs::Int,
-    ::Type{T};
-    buffer_size::Int=32
-) where {T<:AbstractFloat}
-```
-
-# Arguments
-- `epochs::Int`: Number of epochs to record
-- `T`: Numeric type for metrics (e.g., Float64)
-- `buffer_size::Int=32`: Channel buffer size for async communication
-
-# Example Usage
-```julia
-# Create recorder for 100 epochs using Float64
 recorder = HistoryRecorder(100, Float64)
-
-# Record metrics for each epoch
 for epoch in 1:100
-    train_loss = compute_training_loss()
-    val_loss = compute_validation_loss()
-    fitness_vector = get_population_fitness()
-    
-    record!(recorder, epoch, train_loss, val_loss, fitness_vector)
+    record!(recorder, epoch, train_loss, val_loss)
 end
-
-# Close recorder and wait for completion
 close_recorder!(recorder)
-
-# Access recorded history
-final_history = recorder.history
+recorder.history.train_loss
 ```
-
-# Thread Safety
-- Uses channels for thread-safe communication
-- Spawns separate task for recording
-- Ensures non-blocking metric recording
-- Maintains data consistency
-
-# Performance Notes
-## Buffer Size
-- Default 32 provides balance between memory and performance
-- Increase for high-frequency recording
-- Decrease for memory-constrained environments
-
-## Memory Management
-- Preallocates history arrays
-- Reuses metric tuples
-- Minimizes allocation during recording
-
-# Notes
-- Automatically spawns recording task on creation
-- Must be closed with `close_recorder!` to ensure proper cleanup
-- Supports any AbstractFloat type
-- Channel depth can be adjusted for different recording patterns
 """
 struct HistoryRecorder{T<:Union{AbstractFloat,Tuple}}
     channel::Channel{Tuple{Int,T,T}}
@@ -414,6 +287,12 @@ end
     return tuple(i -> fun(vectors[i]), N)
 end
 
+"""
+    record_history!(channel, history::OptimizationHistory)
+
+Write each `(epoch, train_loss, val_loss)` taken from `channel` into `history` until the
+channel is closed and drained. The task of a `HistoryRecorder` runs this.
+"""
 @inline function record_history!(
     channel::Channel{Tuple{Int,T,T}},
     history::OptimizationHistory{T}
@@ -426,6 +305,11 @@ end
     end
 end
 
+"""
+    record!(recorder::HistoryRecorder{T}, epoch::Int, train_loss::T, val_loss::T)
+
+Queue the losses of `epoch` for recording. Blocks only while the channel is full.
+"""
 @inline function record!(
     recorder::HistoryRecorder{T},
     epoch::Int,
@@ -435,15 +319,56 @@ end
     put!(recorder.channel, (epoch, train_loss, val_loss))
 end
 
+"""
+    close_recorder!(recorder::HistoryRecorder)
+
+Close the recorder's channel and wait until every queued epoch is in `recorder.history`.
+"""
 @inline function close_recorder!(recorder::HistoryRecorder)
     close(recorder.channel)
     wait(recorder.task)
 end
 
 
+"""
+    allfinite(A::AbstractArray{<:AbstractFloat})
+
+`all(isfinite, A)` without a branch per element: `x - x` is `0` for a finite `x` and
+`NaN` for `Inf`, `-Inf` and `NaN`, so the sum of these terms is zero exactly when every
+element is finite, and it cannot overflow.
+"""
+@inline function allfinite(A::AbstractArray{T}) where {T<:AbstractFloat}
+    s = zero(T)
+    @inbounds @simd for i in eachindex(A)
+        s += A[i] - A[i]
+    end
+    return iszero(s)
+end
+
+"""
+    isclose(a, b; rtol=1e-5, atol=1e-8)
+
+`abs(a - b) <= atol + rtol * abs(b)`: the tolerance is relative to `b`, so the test is
+not symmetric. `a`, `b`, `rtol` and `atol` must share one type, so with the default
+tolerances `a` and `b` must be `Float64`.
+"""
 function isclose(a::T, b::T; rtol::T=1e-5, atol::T=1e-8) where {T<:Number}
     return abs(a - b) <= (atol + rtol * abs(b))
 end
+
+"""
+    thread_slots()
+
+The length a per-thread buffer vector needs to be indexed by `Threads.threadid()`:
+`Threads.maxthreadid()`, or `Threads.nthreads()` on Julia versions without it.
+
+`nthreads()` counts only the default thread pool, while `threadid()` numbers the threads
+of every pool. Julia 1.12 starts one interactive thread by default and gives it id 1, so
+on a plain launch the only worker thread has id 2 and a vector of `nthreads()` slots is
+one short.
+"""
+@inline thread_slots() = isdefined(Threads, :maxthreadid) ? Threads.maxthreadid() :
+                         Threads.nthreads()
 
 function fast_sqrt_32(x::Real)
     i = reinterpret(UInt32, x)
@@ -459,6 +384,15 @@ function float32_scale(arr::AbstractArray{T}) where {T<:AbstractFloat}
 end
 
 
+"""
+    find_indices_with_sum(arr::SubArray, target_sum::Int, num_indices::Int)
+
+The first `num_indices` positions at which the cumulative sum of `arr` equals
+`target_sum`, or `[length(arr)]` if there are fewer; `[1]` whenever `arr[1] == 0`.
+`_karva_raw` passes a gene's arities, less one from the second position on, with
+`target_sum = 0`: the cumulative sum counts the open argument slots, so its first zero
+is where the gene's expression ends.
+"""
 function find_indices_with_sum(arr::SubArray, target_sum::Int, num_indices::Int)
     if arr[1] == 0
         return [1]
@@ -473,91 +407,34 @@ function find_indices_with_sum(arr::SubArray, target_sum::Int, num_indices::Int)
 end
 
 """
-    compile_djl_datatype(
-        rek_string::Vector,
-        arity_map::OrderedDict,
-        callbacks::Dict,
-        nodes::OrderedDict
-    )
+    compile_djl_datatype(rek_string, arity_map, callbacks, nodes, pre_len)
 
-Compiles a reverse Polish notation (postfix) expression into an executable form using
-a stack-based algorithm with support for unary and binary operations.
+Fold the karva string `rek_string` (prefix order) from right to left on a stack. A token
+of arity 2 or 1 in `arity_map` pops its operands, the first operand from the top, and
+pushes `callbacks[token](operands...)`. Any other token is a leaf: an `Int8` is replaced
+by `nodes[token]`, anything else is pushed as it is. Input is not validated; a
+malformed string or a token without a callback throws.
 
-# Arguments
-- `rek_string::Vector`: Expression in reverse Polish notation
-- `arity_map::OrderedDict`: Maps symbols to their arities (number of operands)
-- `callbacks::Dict`: Maps symbols to their corresponding operations
-- `nodes::OrderedDict`: Maps terminal symbols to their node representations
+Folding starts at position `pre_len`. With `pre_len == 1` the top of the stack is
+returned: the whole expression, folded. Otherwise the stack itself is returned; with
+`pre_len = gene_count`, which skips a chromosome's `gene_count - 1` connectors, it holds
+one entry per gene, last gene first.
 
-# Returns
-The compiled expression as a DynamicExpressions.Node object
-
-# Algorithm
-1. Initializes empty stack
-2. Processes expression in reverse order:
-   - For binary operators (arity 2):
-     * Pops two operands
-     * Applies operation
-     * Pushes result
-   - For unary operators (arity 1):
-     * Pops one operand
-     * Applies operation
-     * Pushes result
-   - For terminals (arity 0):
-     * Pushes directly to stack
-3. Returns final stack element
+With the renderers of `FUNCTION_STRINGIFY` as callbacks the fold returns the equation
+as a string, which is how `print_karva_strings` uses it.
 
 # Example
 ```julia
-# Define components
-rek_string = [1, 2, :+, 3, :*]  # represents (1 + 2) * 3 -> Examplified - in our application, we use tokenized version of that
-arity_map = OrderedDict(
-    :+ => 2,
-    :* => 2
-)
-callbacks = Dict(
-    :+ => +,
-    :* => *
-)
-nodes = OrderedDict(
-    1 => Node(1.0),
-    2 => Node(2.0),
-    3 => Node(3.0)
-)
-
-# Compile expression
-result = compile_djl_datatype(rek_string, arity_map, callbacks, nodes)
-# Returns Node representing (1 + 2) * 3
+using OrderedCollections
+arity = OrderedDict{Int8,Int8}(1 => 2, 2 => 2, 3 => 0, 4 => 0)
+callbacks = Dict{Int8,Function}(1 => FUNCTION_STRINGIFY[:*], 2 => FUNCTION_STRINGIFY[:+])
+nodes = OrderedDict{Int8,Any}(3 => "x1", 4 => 2.0)
+compile_djl_datatype(Int8[1, 2, 3, 4, 3], arity, callbacks, nodes, 1)
+# "((x1 + 2.0) * x1)"
 ```
-
-# Error Handling
-- Allows expression to fail if invalid
-- Invalid expressions may occur from:
-  * Stack underflow
-  * Unknown operators
-  * Mismatched arities
-  * Invalid node references
-
-# Implementation Notes
-## Stack Operations
-- Uses pop! for operand retrieval
-- Uses push! for result storage
-- Handles Int8 to Node conversion
-
-## Type Handling
-- Supports Int8 terminal symbols
-- Converts terminals via nodes dictionary
-- Preserves operation types from callbacks
-
-## Performance Considerations
-- Single pass through expression
-- Minimal memory allocation
-- Direct operation application
-- Early failure for invalid expressions
-
-See also: [`DynamicExpressions.Node`](@ref)
 """
-function compile_djl_datatype(rek_string::Vector, arity_map::OrderedDict, callbacks::Dict, nodes::OrderedDict, pre_len::Int)
+function compile_djl_datatype(rek_string::Vector, arity_map::AbstractDict, callbacks::AbstractDict,
+    nodes::AbstractDict, pre_len::Int)
     stack = []
     for elem in reverse(rek_string[pre_len:end])
         if get(arity_map, elem, 0) == 2
@@ -576,161 +453,6 @@ function compile_djl_datatype(rek_string::Vector, arity_map::OrderedDict, callba
     return pre_len == 1 ? last(stack) : stack
 end
 
-@inline function retrieve_constants_from_node(node::Node)
-    constants = AbstractFloat[]
-    for op in node
-        if op isa AbstractNode && op.degree == 0 && op.constant
-            push!(constants, convert(AbstractFloat, op.val))
-        end
-    end
-    constants
-end
-
-
-"""
-    optimize_constants!(
-        node::Node,
-        loss::Function;
-        opt_method::Symbol=:cg,
-        max_iterations::Int=250,
-        n_restarts::Int=3
-    )
-
-Optimizes constant values in a symbolic expression tree to minimize a given loss function.
-
-# Arguments
-- `node::Node`: Expression tree containing constants to optimize
-- `loss::Function`: Loss function to minimize
-- `opt_method::Symbol=:cg`: Optimization method (:newton, :cg, or other for NelderMead)
-- `max_iterations::Int=250`: Maximum iterations per optimization attempt
-- `n_restarts::Int=3`: Number of random restarts to avoid local minima
-
-# Returns
-Tuple containing:
-- `best_node::Node`: Expression tree with optimized constants
-- `best_loss::Float64`: Final loss value achieved
-
-# Optimization Methods
-## Available Algorithms
-- `:newton`: Newton's method with backtracking line search
-- `:cg`: Conjugate Gradient with backtracking line search
-- `other`: Nelder-Mead simplex method (default fallback)
-
-## Random Restart Strategy
-1. First attempt uses original constants
-2. Subsequent restarts randomly perturb constants:
-   - Multiplication by (1 + 0.5 * randn())
-   - Targets only degree-0 constant nodes
-   - Preserves variable nodes
-
-# Example
-```julia
-# Create expression with constants
-expr = Node(*, [
-    Node(1.5),  # constant to optimize
-    Node(x, degree=1)  # variable
-])
-
-# Define loss function
-loss(node) = sum((node(x_data) .- y_data).^2)
-
-# Optimize constants
-optimized_expr, final_loss = optimize_constants!(
-    expr,
-    loss;
-    opt_method=:cg,
-    max_iterations=500,
-    n_restarts=5
-)
-```
-
-# Implementation Notes
-## Performance
-- `@inline` directive for function inlining
-- Early return for expressions without constants
-- Efficient constant counting and modification
-- Minimal memory allocation during optimization
-
-## Algorithm Selection
-- Newton's method: Second-order optimization
-- Conjugate Gradient: First-order optimization
-- Nelder-Mead: Derivative-free optimization
-
-## Optimization Process
-1. Count constants in expression
-2. Establish baseline loss
-3. For each restart:
-   - Create new expression copy (except first attempt)
-   - Randomly perturb constants (except first attempt)
-   - Optimize using selected algorithm
-   - Update best result if improved
-4. Return best found solution
-
-# Notes
-- Modifies input node during optimization
-- Uses Optim.jl for optimization algorithms
-- Supports automatic differentiation through Zygote
-- Multiple restarts help avoid local minima
-
-See also: [`DynamicExpressions.Node`](@ref), [`Optim.optimize`](@ref), [`LineSearches.BackTracking`](@ref)
-"""
-@inline function optimize_constants!(
-    node::Node,
-    loss::Function;
-    opt_method::Symbol=:cg,
-    max_iterations::Int=250,
-    n_restarts::Int=3
-)
-
-    nconst = count_constant_nodes(node)
-    baseline = loss(node)
-
-    if nconst == 0
-        return node, baseline
-    end
-
-    
-    best_node = deepcopy(node)
-    best_loss = baseline
-
-    algorithm = if opt_method == :newton
-        Optim.Newton(; linesearch=LineSearches.BackTracking())
-    elseif opt_method == :cg
-        Optim.ConjugateGradient(; linesearch=LineSearches.BackTracking())
-    else
-        Optim.NelderMead()
-    end
-
-    optimizer_options = Optim.Options(; iterations=max_iterations, show_trace=false)
-
-    for i in 0:n_restarts
-        current_node = i == 0 ? node : deepcopy(node)
-
-        if i > 0
-            foreach(current_node) do n
-                if n.degree == 0 && n.constant
-                    n.val = n.val * (1 + 0.5 * randn())
-                end
-            end
-        end
-        #needs to be revised!
-        x0, refs = get_scalar_constants(current_node)
-
-
-        function opt_step(x::AbstractVector)
-            set_scalar_constants!(current_node,x, refs)
-            loss(current_node)
-        end
-        result = Optim.optimize(opt_step, x0, algorithm, optimizer_options)
-
-        if result.minimum < best_loss
-            best_node = current_node
-            best_loss = result.minimum
-        end
-    end
-
-    return best_node, best_loss
-end
 
 function _minmax_scale!(X::AbstractArray{T}; feature_range=(zero(T), one(T))) where {T<:AbstractFloat}
     min_vals = minimum(X, dims=1)
@@ -740,11 +462,11 @@ function _minmax_scale!(X::AbstractArray{T}; feature_range=(zero(T), one(T))) wh
     a, b = feature_range
     scale = (b - a) ./ range_width
 
-    @inbounds @simd for j in axes(X, 2)
+    @inbounds for j in axes(X, 2)
         if range_width[j] ≈ zero(T)
             X[:, j] .= (a + b) / 2
         else
-            @simd for i in axes(X, 1)
+            for i in axes(X, 1)
                 X[i, j] = (X[i, j] - min_vals[j]) * scale[j] + a
             end
         end
@@ -753,10 +475,22 @@ function _minmax_scale!(X::AbstractArray{T}; feature_range=(zero(T), one(T))) wh
     return X
 end
 
+"""
+    minmax_scale(X; feature_range=(zero(T), one(T)))
+
+A copy of `X` with each column mapped linearly onto `feature_range`; a constant column
+becomes the midpoint of the range.
+"""
 function minmax_scale(X::AbstractArray{T}; feature_range=(zero(T), one(T))) where {T<:AbstractFloat}
     return _minmax_scale!(copy(X); feature_range=feature_range)
 end
 
+"""
+    save_state(filename::String, state)
+
+Serialize `state` to `filename`. The data goes to `filename * ".tmp"` first and is then
+moved into place, so an interrupted write leaves an existing file intact. Returns `true`.
+"""
 function save_state(filename::String, state::Any)
     temp_filename = filename * ".tmp"
     open(temp_filename, "w") do io
@@ -767,6 +501,11 @@ function save_state(filename::String, state::Any)
     return true
 end
 
+"""
+    load_state(filename::String)
+
+Deserialize and return the object that `save_state` wrote to `filename`.
+"""
 function load_state(filename::String)
     open(filename, "r") do io
         return deserialize(io)
@@ -774,6 +513,16 @@ function load_state(filename::String)
 end
 
 
+"""
+    train_test_split(X, y; train_ratio=0.9, consider=1)
+
+Shuffle the rows of `X` (samples × features) together with `y` and split them: the first
+`floor(Int, n * train_ratio)` of the `n` rows train, the rest test. `consider` keeps
+every `consider`-th row of each part. Returns `(x_train, y_train, x_test, y_test)`.
+
+`X`, `y` and `train_ratio` share the element type `T`, so for data other than `Float64`
+pass `train_ratio` as a `T`. The shuffle uses the global RNG.
+"""
 function train_test_split(
     X::AbstractMatrix{T},
     y::AbstractVector{T};
@@ -803,47 +552,80 @@ function train_test_split(
     return x_train, y_train, x_test, y_test
 end
 
-function one_hot_mean(vectors::Vector{Vector{T}}, k::Int) where T <: Integer
-    if isempty(vectors)
-        return T[]
-    end
-    
+"""
+    ConsensusSampler(vectors, k)
+
+The per-position distributions `one_hot_mean` draws from, computed once for a set of
+integer vectors: at each position, the (at most) `k` most frequent values there, most
+frequent first (the smallest value on a tie), and their frequencies normalised to sum 1.
+[`consensus_draw`](@ref) makes the draws. Values must be positive, since they index the
+count table.
+"""
+struct ConsensusSampler{T<:Integer}
+    k::Int
+    top::Vector{Vector{Int}}
+    probs::Vector{Vector{Float64}}
+end
+
+function ConsensusSampler(vectors::AbstractVector{<:AbstractVector{T}}, k::Int) where T<:Integer
+    isempty(vectors) && return ConsensusSampler{T}(k, Vector{Int}[], Vector{Float64}[])
     max_value = maximum(maximum(v) for v in vectors if !isempty(v))
-    
     max_length = maximum(length(v) for v in vectors)
-    
     frequency_matrix = zeros(Float64, max_length, max_value)
-    
     position_counts = zeros(Int, max_length)
-    
     for vec in vectors
         for (i, val) in enumerate(vec)
             frequency_matrix[i, convert(Int, val)] += 1
             position_counts[i] += 1
         end
     end
-    
     for i in 1:max_length
         if position_counts[i] > 0
             frequency_matrix[i, :] ./= position_counts[i]
         end
     end
-    
-    result = Vector{T}(undef, max_length)
-    
+    top = Vector{Vector{Int}}(undef, max_length)
+    probs = Vector{Vector{Float64}}(undef, max_length)
     for i in 1:max_length
         sorted_indices = sortperm(frequency_matrix[i, :], rev=true)
-        if k == 1
-            result[i] = convert(T, sorted_indices[1])
-        else
-            top_k_indices = sorted_indices[1:min(k, length(sorted_indices))]
-            top_k_probs = frequency_matrix[i, top_k_indices]
-            top_k_probs = top_k_probs ./ sum(top_k_probs)
-            result[i] = convert(T, sample(top_k_indices, Weights(top_k_probs)))
-        end
+        top[i] = sorted_indices[1:min(k, length(sorted_indices))]
+        top_k_probs = frequency_matrix[i, top[i]]
+        probs[i] = top_k_probs ./ sum(top_k_probs)
     end
-    
+    return ConsensusSampler{T}(k, top, probs)
+end
+
+Base.isempty(s::ConsensusSampler) = isempty(s.top)
+
+"""
+    consensus_draw(sampler::ConsensusSampler; rng=Random.default_rng())
+
+One consensus vector: at each position the most frequent value when `k == 1`, otherwise
+one of the `k` most frequent, drawn with probability proportional to its count (one draw
+from `rng` per position).
+"""
+function consensus_draw(s::ConsensusSampler{T}; rng::AbstractRNG=Random.default_rng()) where T
+    result = Vector{T}(undef, length(s.top))
+    for i in eachindex(s.top)
+        result[i] = s.k == 1 ? convert(T, s.top[i][1]) :
+                    convert(T, sample(rng, s.top[i], Weights(s.probs[i])))
+    end
     return result
+end
+
+"""
+    one_hot_mean(vectors::Vector{Vector{T}}, k::Int; rng=Random.default_rng())
+
+Positionwise consensus of integer vectors, as long as the longest one. At each position
+the values found there are counted; with `k == 1` the most frequent is taken (the
+smallest on a tie), otherwise one of the `k` most frequent is drawn with probability
+proportional to its count. Values must be positive, since they index the count table.
+For many draws from the same vectors, build a [`ConsensusSampler`](@ref) once.
+"""
+function one_hot_mean(vectors::Vector{Vector{T}}, k::Int;
+    rng::AbstractRNG=Random.default_rng()) where T <: Integer
+    isempty(vectors) && return T[]
+    return consensus_draw(ConsensusSampler(vectors, k); rng=rng)
 end
 
 
@@ -851,11 +633,10 @@ function select_closest_points(lhs_points, normalized_features, n_samples)
     selected_indices = zeros(Int, n_samples)
     remaining_indices = Set(1:size(normalized_features, 2))
     
-    # Build KD-tree once with all points
+    # one tree over all columns; the search skips the ones already selected
     kdtree = KDTree(normalized_features)
     
     for i in 1:n_samples
-        # Find nearest neighbors among remaining points
         idxs, dists = knn(kdtree, lhs_points[:, i], 1, true, j -> j ∉ remaining_indices)
         best_idx = idxs[1]
         
@@ -867,17 +648,15 @@ function select_closest_points(lhs_points, normalized_features, n_samples)
 end
 
 """
-    select_n_samples_lhs(equastacked_features, n_samples; seed=nothing)
+    select_n_samples_lhs(stacked_features::AbstractArray, n_samples::Int)
 
-Select a subset of equations using Latin Hypercube Sampling based on their characteristics.
-
-Parameters:
-- `stacked_features`: Array of equation information -> (n_features × n_probes)
-- `n_samples`: Number of equations to select
-- `seed`: Optional random seed for reproducibility
-
-Returns:
-- Indices of selected equations
+Choose `n_samples` columns of `stacked_features` (features × candidates, e.g. one column
+per equation) spread over the feature space, and return their indices. Columns with a
+`NaN` or `Inf` are dropped, each feature is min-max normalised to [0, 1] (to 0.5 where
+it is constant), and each of `n_samples` random target points takes the nearest column
+not yet chosen. The target points are meant as a Latin hypercube design, but the bin
+shuffle mixes bin bounds across strata, so they are not stratified. `n_samples` must not
+exceed the number of valid columns. Randomness comes from the global RNG.
 """
 function select_n_samples_lhs(stacked_features::AbstractArray, n_samples::Int)
     _,test_len = size(stacked_features)
@@ -927,18 +706,12 @@ function normalize_features(features)
 end
 
 """
-    split_rng(equastacked_features, n_samples; seed=nothing)
+    split_rng(master_rng::Threefry4x, n::Int)
 
-Select splits the rng masterkey from the toolbox into subkeys -> depending on the task number
-
-Parameters:
-- `master_rng`: top_level rng key
-- `n::Int`: number of indepentend subtask
-
-Returns:
-- set of subkeys derived from a master key
+`n` new `Threefry4x` generators, one per parallel task, each keyed with four 32-bit
+values drawn from `master_rng`, which advances. Drawing the keys serially keeps a seeded
+run reproducible however the tasks are scheduled.
 """
-
 function split_rng(master_rng::Threefry4x, n::Int)
     typeof(master_rng)
     subkeys = Vector{Threefry4x}(undef, n)

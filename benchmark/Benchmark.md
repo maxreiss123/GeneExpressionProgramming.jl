@@ -1,15 +1,16 @@
-# Tensor Operation Benchmarks
+# Tensor evaluation: DynamicExpressions.jl vs a Flux network (obsolete)
 
-Comparing tensor computations using DynamicExpressions.jl vs custom Flux network.
+> **Historical record.** This compared two ways of evaluating a tensor-valued expression
+> that the package no longer has: DynamicExpressions.jl, and a Flux network compiled from a
+> karva string (`TensorRegUtils.compile_to_flux_network`). Both were replaced by the batched
+> evaluator (`calc_stack_batch_tensor`); DynamicExpressions is no longer a dependency and
+> `compile_to_flux_network` no longer exists, so `benchmark_djl_nn.jl` does not run. The
+> numbers below are kept as recorded, single-threaded (`JULIA_NUM_THREADS=1`).
 
-## Usage
+## DynamicExpressions.jl
 
-```bash
-export JULIA_NUM_THREADS=1
-```
-
-# Evaluating Performance of DynamicExpressions
-- example from: https://github.com/SymbolicML/DynamicExpressions.jl (adapted for utilizing Tensors as Dtype)
+Expression adapted from the DynamicExpressions.jl README
+(https://github.com/SymbolicML/DynamicExpressions.jl) to use `Tensors` as the data type.
 
 ```julia
 using DynamicExpressions
@@ -34,7 +35,7 @@ c1 = Expression(Node{T}(; val=ones(Tensor{2,3})); operators, variable_names);
 expression = vec_add(vec_add(vec_square(c1), c1), c1);
 X = ones(Tensor{2,3});
 
-#Evalutate the expression:
+# Evaluate the expression:
 
 tests_n = 100000
 @show "Benchmark expression"
@@ -46,7 +47,7 @@ end
 # 83.021 ms (1798979 allocations: 187.67 MiB)
 ```
 
-# Evaluating performance when generated with Flux
+## Flux network compiled from the karva string
 
 ```julia 
 # create the inputs for Flux
@@ -82,9 +83,8 @@ end
 
 ```
 
-## Conclusion
-- Flux in handling higher dimension around 7.5 times faster
-- Flux uses around 3.8 times less memory resources
+## Conclusion (as recorded)
 
-
-
+- The Flux network was about 7x faster (11.7 ms against 83.0 ms for 100 000 evaluations).
+- It allocated about 3.2x less memory (59.49 MiB against 187.67 MiB) in 1.8x fewer
+  allocations.

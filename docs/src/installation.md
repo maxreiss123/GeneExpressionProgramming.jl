@@ -1,238 +1,93 @@
 # Installation Guide
 
-This guide provides comprehensive instructions for installing GeneExpressionProgramming.jl and its dependencies across different platforms and environments.
+## Julia Requirements
 
-## Prerequisites
-
-Before installing GeneExpressionProgramming.jl, ensure you have the following prerequisites:
-
-### Julia Requirements
-
-- **Julia 1.6 or later**: The package requires Julia version 1.6 or higher. You can download Julia from the [official website](https://julialang.org/downloads/).
-- **Package Manager**: Julia's built-in package manager (Pkg) is required for installation.
-
-### System Requirements
-
-The package has been tested on the following platforms:
-- Linux (Ubuntu 18.04+, CentOS 7+)
-- macOS (10.14+)
-- Windows 10/11
-
-### Memory and Performance Considerations
-
-For optimal performance, we recommend:
-- **Minimum RAM**: 4 GB (8 GB recommended for large datasets)
-- **CPU**: Multi-core processor recommended for parallel operations
-- **Storage**: At least 1 GB free space for package dependencies
+`Project.toml` accepts any Julia 1.x release, but the code uses features of Julia 1.7 and later; the repository's `Manifest.toml` was generated with Julia 1.12.1, and the tests pass on Julia 1.12. Julia is available from the [official website](https://julialang.org/downloads/).
 
 ## Installation Methods
 
-### Method 1: Direct Installation from GitHub (Recommended)
+The latest registered release:
 
-The most straightforward way to install GeneExpressionProgramming.jl is directly from the GitHub repository:
+```julia
+using Pkg
+Pkg.add("GeneExpressionProgramming")
+```
+
+These pages follow the current code in the repository, which may be ahead of that release. To install it:
 
 ```julia
 using Pkg
 Pkg.add(url="https://github.com/maxreiss123/GeneExpressionProgramming.jl.git")
 ```
 
-This method ensures you get the latest version with all recent updates and bug fixes.
-
-### Method 2: Development Installation
-
-If you plan to contribute to the package or need to modify the source code, you can install it in development mode:
+To modify the source, install it in development mode, which clones the repository into your Julia development directory:
 
 ```julia
 using Pkg
 Pkg.develop(url="https://github.com/maxreiss123/GeneExpressionProgramming.jl.git")
 ```
 
-This creates a local copy of the repository in your Julia development directory, allowing you to make changes and test them immediately.
-
-### Method 3: Local Installation
-
-If you have downloaded the source code locally:
+or add a local copy:
 
 ```julia
 using Pkg
 Pkg.add(path="/path/to/GeneExpressionProgramming.jl")
 ```
 
-Replace `/path/to/GeneExpressionProgramming.jl` with the actual path to your local copy.
+From a clone, the scripts in `examples/` include the sources directly and run with `julia --project=. --threads=4 examples/<script>.jl`. The `tutorial` folder holds a notebook that runs on Google Colab: a first search, then the constants of a model tuned against a loss of your own.
 
-## Dependency Installation
+## Dependencies
 
-GeneExpressionProgramming.jl automatically installs its dependencies during the installation process. The main dependencies include:
+Pkg installs the dependencies with the package. Expressions are evaluated by the package's own batched evaluator, so there is no separate expression engine. The dependencies doing the heavy lifting are:
 
-### Core Dependencies
+- **Tensors.jl**: vector and tensor types and operations for `GepTensorRegressor`
+- **Optim.jl**: Nelder-Mead optimisation of the numeric constants of the best model
+- **NearestNeighbors.jl**: the kd-tree behind the unit repair's dimension lookups
+- **ThreadsX.jl**: parallel unit repair
+- **Random123.jl**: independent, reproducible random streams per parallel task
+- **LRUCache.jl**: the fitness cache that detects duplicate expressions
+- **StatsBase.jl**: weighted sampling of symbols when genes are generated
+- **Distributions.jl**: the random constants of `GepTensorRegressor`
+- **CSV.jl / DataFrames.jl / JSON.jl**: reading data files and unit descriptions in the examples and paper scripts
 
-- **DynamicExpressions.jl**: For fast symbolic expression evaluation
-- **Flux.jl**: For tensor operations and neural network backends
-- **Random**: For random number generation and seeding
-- **Statistics**: For statistical operations
-- **LinearAlgebra**: For matrix operations
+Tensors.jl, CSV.jl and DataFrames.jl are dependencies of the package; add them to your own environment to call them directly (for example `using Tensors` to build tensor data).
 
-### Optional Dependencies
-
-For enhanced functionality, you may want to install additional packages:
+Plots.jl is not a dependency. Install it to draw results:
 
 ```julia
 using Pkg
-Pkg.add(["Plots", "CSV", "DataFrames", "Tensors"])
+Pkg.add("Plots")
 ```
 
-- **Plots.jl**: For visualization and plotting results
-- **CSV.jl**: For reading CSV data files
-- **DataFrames.jl**: For data manipulation and analysis
-- **Tensors.jl**: For advanced tensor operations
+The scripts in `examples/` print their results; `Main_min_example.jl` and `Main_min_with_csv.jl` also plot them when Plots.jl is installed.
+
+## Threads
+
+The fitness evaluation, the genetic operators and the unit repair run in parallel on the threads Julia is started with:
+
+```bash
+julia --threads=auto your_script.jl
+# or
+JULIA_NUM_THREADS=8 julia your_script.jl
+```
+
+Evaluation buffers are allocated once per thread id (`thread_slots()`, which covers the interactive thread that Julia 1.12 starts next to the worker threads), so a custom loss can evaluate in `ctxs[Threads.threadid()]` of `thread_contexts(...)` without sizing anything itself.
+
+The fitness loop runs one worker per thread, and each takes the next unscored individual as soon as it is free: a loss whose cost varies between individuals (a solver that converges quickly for some models and slowly for others) keeps every thread busy until the last one is scored. A call of the loss stays on one thread from start to finish and no other call shares its thread id meanwhile, so `ctxs[Threads.threadid()]` is safe even when the loss waits, e.g. on an external process.
 
 ## Verification
-
-After installation, verify that the package works correctly:
 
 ```julia
 using GeneExpressionProgramming
 
-# Test basic functionality
-println("GeneExpressionProgramming.jl installed successfully!")
-
-# Create a simple regressor to test
 regressor = GepRegressor(2)
 println("Basic regressor created: ", typeof(regressor))
 ```
 
-If the installation was successful, you should see output confirming the package is working.
-
-## Troubleshooting
-
-### Common Installation Issues
-
-#### Issue 1: Package Not Found
-```
-ERROR: The following package names could not be resolved:
- * GeneExpressionProgramming (not found in project, manifest or registry)
-```
-
-**Solution**: Ensure you're using the correct URL and that you have internet connectivity:
-```julia
-Pkg.add(url="https://github.com/maxreiss123/GeneExpressionProgramming.jl.git")
-```
-
-#### Issue 2: Dependency Conflicts
-```
-ERROR: Unsatisfiable requirements detected for package...
-```
-
-**Solution**: Update your Julia packages and try again:
-```julia
-using Pkg
-Pkg.update()
-Pkg.add(url="https://github.com/maxreiss123/GeneExpressionProgramming.jl.git")
-```
-
-#### Issue 3: Compilation Errors
-If you encounter compilation errors during installation:
-
-1. **Update Julia**: Ensure you're using Julia 1.6 or later
-2. **Clear package cache**: 
-   ```julia
-   using Pkg
-   Pkg.gc()
-   ```
-3. **Reinstall dependencies**:
-   ```julia
-   Pkg.instantiate()
-   ```
-
-#### Issue 4: Permission Errors (Linux/macOS)
-If you encounter permission errors:
-
-1. **Check Julia installation**: Ensure Julia is properly installed with appropriate permissions
-2. **Use local package directory**: Consider installing packages in a local directory
-3. **Avoid sudo**: Never use `sudo` with Julia package operations
-
-
-## Performance Optimization
-
-### Julia Startup Optimization
-
-To improve Julia startup time with GeneExpressionProgramming.jl:
-
-1. **Precompile packages**:
-   ```julia
-   using Pkg
-   Pkg.precompile()
-   ```
-
-2. **Use PackageCompiler.jl** for creating system images:
-   ```julia
-   using Pkg
-   Pkg.add("PackageCompiler")
-   using PackageCompiler
-   create_sysimage(["GeneExpressionProgramming"]; sysimage_path="gep_sysimage.so")
-   ```
-
-### Memory Management
-
-For large-scale problems:
-
-1. **Increase Julia heap size**:
-   ```bash
-   julia --heap-size-hint=8G
-   ```
-
-2. **Monitor memory usage**:
-   ```julia
-   using Profile
-   @profile your_gep_code()
-   Profile.print()
-   ```
-
-## Environment Setup
-
-### Jupyter Notebook Integration
-
-To use GeneExpressionProgramming.jl in Jupyter notebooks:
-
-```julia
-using Pkg
-Pkg.add("IJulia")
-using IJulia
-notebook()
-```
-
-### VS Code Integration
-
-For development with VS Code:
-
-1. Install the Julia extension for VS Code
-2. Configure the Julia executable path
-3. Use the integrated REPL for interactive development
-
-### Docker Environment
-
-For containerized environments, use the official Julia Docker image:
-
-```dockerfile
-FROM julia:1.8
-
-RUN julia -e 'using Pkg; Pkg.add(url="https://github.com/maxreiss123/GeneExpressionProgramming.jl.git")'
-
-WORKDIR /app
-COPY . .
-
-CMD ["julia", "your_script.jl"]
-```
-
 ## Next Steps
 
-After successful installation, proceed to:
+1. [Getting Started](getting-started.md): a first symbolic regression
+2. [Core Concepts](core-concepts.md): how the search works
+3. [Examples](examples/basic-regression.md): complete workflows
 
-1. [Getting Started Guide](getting-started.md) - Learn basic usage patterns
-2. [Core Concepts](core-concepts.md) - Understand the theoretical foundations
-3. [Examples](../examples/) - Explore practical applications
-
-For additional help, consult [GitHub repository](https://github.com/maxreiss123/GeneExpressionProgramming.jl/issues).
-
----
-
+For help, open an issue on the [GitHub repository](https://github.com/maxreiss123/GeneExpressionProgramming.jl/issues).

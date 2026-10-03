@@ -1,6 +1,30 @@
-include("../src/GeneExpressionProgramming.jl")
+#=
+The Feynman experiments of "Constraining genetic symbolic regression via semantic
+backpropagation" (Reissmann et al., GPEM 2025), run against the current src/.
+
+    julia --project=. --threads=4 paper/ConstraintViaSBP.jl [seeds] [epochs] [population]
+
+Defaults are the paper's budget: 100 seeds, 1000 epochs, population 1000. A quick check
+of the whole pipeline:
+
+    julia --project=. --threads=4 paper/ConstraintViaSBP.jl 1 50 200
+
+Every file in `paper/srsd` whose equation has an entry in `assets/case_dsc.json` (feature
+and target dimensions) is fitted once per seed by a `GepRegressor` with three genes of
+head length 6 and the target dimension set: the search repairs individuals by semantic
+backpropagation (SBP) and scores only homogeneous ones. The fitness is the square root of
+the training RMSE; there is no constant optimisation (the loss-callback form of `fit!`
+has no target to tune against). `train_test_split(...; consider=10)` keeps every tenth
+row of a shuffled 90/10 split. Files are read in reverse name order, so an equation's
+noise-free file comes first, and its test rows are reused for the noisy variants.
+
+One row per fit is appended to `paper/results/test_gep_on_srsd_p_full_scale.csv`; the log
+goes to `paper/results/error.log`. `paper/srsd` ships two equations (III.19.51 and
+III.21.20) at noise levels 0, 0.001, 0.01 and 0.1; further SRSD-Feynman files go there,
+named `feynman-<equation>$<noise>.txt`.
+=#
+include(joinpath(@__DIR__, "..", "src", "GeneExpressionProgramming.jl"))
 using .GeneExpressionProgramming
-using DynamicExpressions
 using OrderedCollections
 using CSV
 using DataFrames
@@ -16,9 +40,13 @@ function break_condition(population, epoch)
     return isclose(mean(population[1].fitness[1]), 0.0)
 end
 
-function loss_new(eqn::Node, operators::OperatorEnum, x_data::AbstractArray, y_data::AbstractArray)
+# R^2 of a fitted model on (x_data, y_data), 0 when it cannot be evaluated. Calling the
+# chromosome on data builds an evaluation context per call, which is fine outside the
+# search loop.
+function loss_new(elem, x_data::AbstractArray, y_data::AbstractArray)
     try
-        y_pred = eqn(x_data, operators)
+        y_pred = elem(x_data)
+        y_pred isa AbstractVector || return zero(Float64)
         return get_loss_function("r2_score")(y_data, y_pred)
     catch e
         return zero(Float64)
@@ -68,16 +96,17 @@ function get_or_create_test_data(test_data_dict, equation_name, x_data_test, y_d
     return test_data_dict[equation_name]
 end
 
-function main()
-    framesDict_ = read_all_csvs("./paper/srsd")
-    case_data = JSON.parsefile("./assets/case_dsc.json")
-    log_path = "error.log"
-    setup_logger(log_path)
+function main(; seeds::Int=100, epochs::Int=1000, population_size::Int=1000)
+    root = joinpath(@__DIR__, "..")
+    framesDict_ = read_all_csvs(joinpath(root, "paper", "srsd"))
+    case_data = JSON.parsefile(joinpath(root, "assets", "case_dsc.json"))
+    results_dir = joinpath(root, "paper", "results")
+    setup_logger(joinpath(results_dir, "error.log"))
 
-    file_name_save = "test_gep_on_srsd_p_full_scale.csv"
+    file_name_save = joinpath(results_dir, "test_gep_on_srsd_p_full_scale.csv")
 
 
-    for seed in 1:100
+    for seed in 1:seeds
         test_data_dict = Dict{String,Tuple{Matrix{Float64},Vector{Float64}}}()
         for (name, data) in framesDict_
             case_identifier_name = uppercase(split(name, "-")[2])
@@ -87,10 +116,6 @@ function main()
 
             if case_name in keys(case_data)
                 @show ("Current case: ", case_name)
-                #gep_params
-                epochs = 1000
-                population_size = 1000
-
                 results = DataFrame(Seed=[],
                     Name=String[], NoiseLeve=String[], Fitness=Float64[], Equation=String[], R2_test=Float64[],
                     R2_train=Float64[], Runtime=Float64[], Dimensional_Homogeneity=Bool[], Target=Any[])
@@ -124,13 +149,25 @@ function main()
                     entered_non_terminals=[:+, :-, :*, :/, :sqrt, :sin, :cos, :exp, :log],
                     max_permutations_lib=20000, rounds=5, number_of_objectives=1)
 
+                # one evaluation context per thread slot, allocated once: the loss runs
+                # inside the threaded fitness loop, and per-call context creation
+                # would allocate the whole buffer pool for every candidate
+                eval_ctxs = thread_contexts(regressor.toolbox_, x_train')
 
                 @inline function loss_new_(elem, validate::Bool)
                     try
+                        # with a target dimension the search only hands homogeneous
+                        # individuals to the loss; the flag test here is kept as the
+                        # paper's formulation of the contract
                         if isnan(mean(elem.fitness)) && elem.dimension_homogene || validate
-                            y_pred = elem.compiled_function(x_train', regressor.operators_)
-                            fit = sqrt(get_loss_function("rmse")(y_train, y_pred))
-                            elem.fitness =  (fit,)
+                            y_pred = elem(eval_ctxs[Threads.threadid()])
+                            if y_pred isa AbstractVector
+                                # sqrt of the RMSE, i.e. MSE^(1/4): ranks as the MSE does
+                                fit = sqrt(get_loss_function("rmse")(y_train, y_pred))
+                                elem.fitness = (fit,)
+                            else
+                                elem.fitness = (typemax(Float64),)
+                            end
                         end
                     catch e
                         elem.fitness = (typemax(Float64),)
@@ -138,18 +175,21 @@ function main()
                 end
 
 
-                #perform the regression by entering epochs, population_size, the feature cols, the target col and the loss function
+                # loss-callback form of fit!: the loss closes over the training data; SBP
+                # may repair up to half the population per generation, up to 30 attempts
+                # per individual
 		fit!(regressor, epochs, population_size, loss_new_; target_dimension=target_dim,
                 break_condition=break_condition, correction_amount=0.5, cycles=30)
 
                 end_time = (time_ns() - start_time) / 1e9
                 elem = regressor.best_models_[1]
-                fitness_r2_train = loss_new(elem.compiled_function, regressor.operators_, x_train', y_train)
-                fitness_r2_test = loss_new(elem.compiled_function, regressor.operators_, x_test', y_test)
+                fitness_r2_train = loss_new(elem, x_train', y_train)
+                fitness_r2_test = loss_new(elem, x_test', y_test)
 
-                #log_results
-                push!(results, (seed, case_name, noise_level, mean(elem.fitness), string(elem.compiled_function),
-                    fitness_r2_train, fitness_r2_test, end_time, elem.dimension_homogene, target_dim))
+                # one row in the column order above: R2_test before R2_train (earlier
+                # versions of this script wrote the two swapped)
+                push!(results, (seed, case_name, noise_level, mean(elem.fitness), equation_string(elem),
+                    fitness_r2_test, fitness_r2_train, end_time, elem.dimension_homogene, target_dim))
 
                 @show fitness_r2_test
                 save_results_to_csv(file_name_save, results)
@@ -159,4 +199,6 @@ function main()
     close(global_logger().stream)
 end
 
-main()
+let args = parse.(Int, ARGS)
+    main(; (k => v for (k, v) in zip((:seeds, :epochs, :population_size), args))...)
+end

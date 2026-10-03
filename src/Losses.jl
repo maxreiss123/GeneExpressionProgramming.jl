@@ -1,72 +1,9 @@
 """
     LossFunction
 
-A module providing various loss functions for evaluating model predictions in machine learning tasks.
-
-# Loss Functions
-The module includes the following loss functions, accessible via `get_loss_function(name)`:
-
-- `"r2_score"`: Standard R² score (coefficient of determination)
-  - Range: (-∞, 1], where 1 indicates perfect prediction
-  - Handles scale-dependent data
-
-- `"r2_score_f"`: R² score with floor scaling
-  - Similar to standard R², but with automatic scaling to handle numerical stability
-  - Better for comparing vastly different scales
-
-- `"mse"`: Mean Squared Error
-  - Standard L2 loss function
-  - More sensitive to outliers
-  - Scale-dependent
-
-- `"rmse"`: Root Mean Squared Error
-  - Square root of MSE
-  - Same units as target variable
-  - Scale-dependent
-
-- `"nrmse"`: Normalized Root Mean Squared Error
-  - Norm. of the rmse
-
-- `"mae"`: Mean Absolute Error
-  - L1 loss function
-  - More robust to outliers than MSE
-  - Scale-dependent
-
-- `"srmse"`: Scaled Root Mean Squared Error
-  - RMSE with automatic scaling
-  - Better for comparing errors across different scales
-  - More numerically stable
-
-- `"xi_core"`: XiCor correlation
-  - Non-parametric correlation measure
-  - More robust to outliers than Pearson correlation
-  - Handles ties in data
-
-# Usage
-```julia
-using LossFunction
-
-# Get a specific loss function
-loss_fn = get_loss_function("mse")
-
-# Use the loss function
-error = loss_fn(y_true, y_pred)
-
-# Alternative direct usage
-error = mean_squared_error(y_true, y_pred)
-```
-
-# Performance Notes
-- All functions are optimized for performance using `@fastmath`, `@inbounds`, and `@simd`
-- Thread-safe implementations where applicable
-- Automatic type stability through parametric types
-- Efficient memory usage with in-place operations
-
-# Implementation Details
-- All functions accept AbstractArray{T} where T<:AbstractFloat
-- Input arrays must be of equal length
-- NaN and Inf values are handled appropriately
-- Numerical stability is ensured through appropriate scaling and epsilon values
+Losses and scores that compare a prediction `y_pred` with a target `y_true`, looked up by
+name with `get_loss_function`. Losses are minimised by the search; scores (higher is
+better) are for reporting.
 """
 module LossFunction
 
@@ -160,7 +97,6 @@ function r2_score_floor(y_true::AbstractArray{T}, y_pred::AbstractArray{T}) wher
     
     scale_factor = T(10^floor(log10(max_abs_value)))
     
-    # Scale both y_true and y_pred
     y_true_scaled = y_true ./ scale_factor
     y_pred_scaled = y_pred ./ scale_factor
     
@@ -294,6 +230,32 @@ loss_functions = Dict{String, Function}(
     "nrmse" => normalized_root_mean_squared_error
     )
 
+"""
+    get_loss_function(name::String)
+
+The function registered under `name`, called as `f(y_true, y_pred)` with two arrays of
+equal length and element type. An unknown name throws a `KeyError`.
+
+Losses (lower is better; usable as `loss_fun` in `fit!`):
+- `"mse"`: mean squared error.
+- `"rmse"`: root mean squared error.
+- `"nrmse"`: RMSE divided by the sample standard deviation of `y_true`; if that is below
+  `eps(T)`, 0 when the RMSE is too and `Inf` otherwise.
+- `"mae"`: mean absolute error.
+- `"srsme"`: root mean squared relative error, each element's error divided by
+  `abs(y_true) + eps(T)`, after both arrays are divided by the largest power of ten not
+  above their largest magnitude; 0 if both are all zero.
+
+Scores (higher is better; for reporting, since `fit!` minimises `loss_fun`):
+- `"r2_score"`: coefficient of determination, `1 - SS_res / SS_tot`, at most 1.
+- `"r2_score_f"`: the same R², computed after dividing both arrays by the largest power
+  of ten not above their largest magnitude, which keeps the sums of squares in range;
+  1 if both are all zero.
+- `"xi_core"`: a rank correlation modelled on Chatterjee's ξ; ties are broken at random
+  with the global RNG.
+
+The losses use `@fastmath`, so non-finite inputs give unspecified results.
+"""
 function get_loss_function(name::String)
     return loss_functions[name]
 end
