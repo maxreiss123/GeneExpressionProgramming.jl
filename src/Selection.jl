@@ -1,9 +1,23 @@
+"""
+    EvoSelection
+
+Parent selection for the GEP loop: tournament selection for one objective, NSGA-II
+(non-dominated sorting with crowding distance) for several. A fitness is a tuple of
+losses, all minimised. Both selections return a `SelectedMembers`.
+"""
 module EvoSelection
 using LinearAlgebra
 using Random
 
 export tournament_selection, nsga_selection, dominates_, fast_non_dominated_sort, calculate_fronts, determine_ranks, assign_crowding_distance
 
+"""
+    SelectedMembers
+
+Result of a selection: `indices`, the selected population indices in selection order,
+and `fronts`, the Pareto fronts by rank (`k => indices of rank k`), empty after
+tournament selection.
+"""
 struct SelectedMembers
     indices::Vector{Int}
     fronts::Dict{Int,Vector{Int}}
@@ -11,10 +25,21 @@ end
 
 const STD_RNG = MersenneTwister()
 
+"""
+    tournament_selection(population, number_of_winners, tournament_size; rng=STD_RNG)
+
+Select `number_of_winners` indices of `population`, a vector of fitness tuples. Each
+tournament draws `tournament_size` eligible contenders (fewer if fewer are eligible)
+with replacement, and the smallest fitness wins. Eligible are the individuals with a
+finite first objective, and of several with the same fitness only the first; if none
+qualifies, all are eligible. The last slot always holds index 1, the best individual
+when `population` is sorted, as `runGep` sorts it. Returns a `SelectedMembers` with empty
+`fronts`.
+"""
 @inline function tournament_selection(population::AbstractArray{Tuple}, number_of_winners::Int, tournament_size::Int; rng::AbstractRNG=STD_RNG)
     selected_indices = Vector{Int}(undef, number_of_winners)
     valid_indices_ = findall(x -> isfinite(x[1]), population)
-    valid_indices = []
+    valid_indices = Int[]
     doubles = Set()
     for elem in valid_indices_
         if !(population[elem] in doubles)
@@ -22,6 +47,11 @@ const STD_RNG = MersenneTwister()
             push!(valid_indices, elem)
         end
     end
+
+    # A generation without a finite fitness is normal, e.g. on a hard problem, with an
+    # Inf penalty, or among the mostly invalid chromosomes of a first generation. Drawing
+    # from the whole population keeps the search going; drawing from an empty set throws.
+    isempty(valid_indices) && (valid_indices = collect(eachindex(population)))
 
     for index in 1:number_of_winners
         if index == number_of_winners
@@ -39,6 +69,13 @@ function count_infinites(t::Tuple)
     return count(isinf, t) + count(isnan, t)
 end
 
+"""
+    dominates_(a::Tuple, b::Tuple)
+
+Whether fitness `a` dominates `b`, all objectives minimised. A tuple with fewer
+non-finite entries (`Inf`, `NaN`) dominates one with more; with equally many, `a`
+dominates if it is nowhere worse and somewhere better.
+"""
 function dominates_(a::Tuple, b::Tuple)
     a_inf_count = count_infinites(a)
     b_inf_count = count_infinites(b)
@@ -63,6 +100,12 @@ function dominates_(a::Tuple, b::Tuple)
     return better_in_at_least_one && not_worse_in_any
 end
 
+"""
+    determine_ranks(pop::Vector{<:Tuple})
+
+The Pareto rank of each fitness under `dominates_`: 1 for the non-dominated, `k` for
+those non-dominated once ranks `1:k-1` are removed.
+"""
 @inline function determine_ranks(pop::Vector{T}) where {T<:Tuple}
     n = length(pop)
     dom_list = [Int[] for _ in 1:n]
@@ -104,6 +147,11 @@ end
     return rank
 end
 
+"""
+    fast_non_dominated_sort(population::Vector{<:Tuple})
+
+The population indices ordered by Pareto rank, rank 1 first.
+"""
 @inline function fast_non_dominated_sort(population::Vector{T}) where {T<:Tuple}
     ranks = determine_ranks(population)
     pop_indices = [(index, rank) for (index, rank) in enumerate(ranks)]
@@ -111,6 +159,11 @@ end
     return [elem[1] for elem in pop_indices]
 end
 
+"""
+    calculate_fronts(population::Vector{<:Tuple})
+
+The Pareto fronts, best first: entry `k` lists the indices of rank `k`.
+"""
 @inline function calculate_fronts(population::Vector{T}) where {T<:Tuple}
     ranks = determine_ranks(population)
     min_rank = minimum(ranks)
@@ -126,6 +179,15 @@ end
     return fronts
 end
 
+"""
+    assign_crowding_distance(front::Vector{Int}, population::Vector{<:Tuple})
+
+The crowding distance of each member of `front`, as a `Dict` from population index to
+distance. Per objective the members are sorted, the two extremes get `Inf`, and each
+interior member adds the gap between its neighbours divided by the objective's range on
+the front. If an objective is constant on a front of more than two members, all of them
+get `Inf` and the remaining objectives are skipped.
+"""
 @inline function assign_crowding_distance(front::Vector{Int}, population::Vector{T}) where {T<:Tuple}
     n = length(front)
     objectives_count = length(first(population))
@@ -167,6 +229,15 @@ end
     return distances
 end
 
+"""
+    tournament_selection_nsga(pop_indices, ranks, crowding_distances, number_of_winners,
+        tournament_size; rng=STD_RNG)
+
+Crowded-comparison tournaments: each of `number_of_winners` draws `tournament_size`
+contenders from `pop_indices` with replacement; the lower rank wins, on equal rank the
+larger crowding distance, otherwise the first drawn. Finite distances are rescaled to
+[0, 0.99] and `Inf` counts as 0.99. Returns the winners' indices.
+"""
 function tournament_selection_nsga(pop_indices::Vector{Int}, ranks::Vector{Int},
     crowding_distances::Dict{Int,Float64}, number_of_winners::Int, tournament_size::Int; rng::AbstractRNG=STD_RNG)
     selected_indices = Vector{Int}(undef, number_of_winners)
@@ -204,6 +275,14 @@ function tournament_selection_nsga(pop_indices::Vector{Int}, ranks::Vector{Int},
     return selected_indices
 end
 
+"""
+    nsga_selection(population::Vector{<:Tuple}; tournament_size=3, rng=STD_RNG)
+
+NSGA-II selection on fitness tuples: sort `population` into Pareto fronts, compute the
+crowding distances within each, and run `length(population)` crowded-comparison
+tournaments of `tournament_size`. Returns a `SelectedMembers` holding the winners and
+the fronts.
+"""
 function nsga_selection(population::Vector{T}; tournament_size::Int=3, rng::AbstractRNG=STD_RNG) where {T<:Tuple}
     pop_size = length(population)
 

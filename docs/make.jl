@@ -42,6 +42,8 @@ makedocs(;
             "Multi-Objective Optimization" => "examples/multi-objective.md",
             "Physical Dimensionality" => "examples/physical-dimensions.md",
             "Tensor Regression" => "examples/tensor-regression.md",
+            "Surrogate Screening" => "examples/surrogate-screening.md",
+            "Coefficient Tuning" => "examples/coefficient-tuning.md",
         ],
         "Reference" => [
             "API Reference" => "api-reference.md"

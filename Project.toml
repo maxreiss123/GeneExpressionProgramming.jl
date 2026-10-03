@@ -1,6 +1,6 @@
 name = "GeneExpressionProgramming"
 uuid = "2f0a5bb0-5f4f-4f7f-b515-93a1e67611af"
-version = "0.5.2"
+version = "0.6.0"
 authors = ["Max Reissmann <reissmannm@student.unimelb.edu.au>"]
 
 [deps]
@@ -10,7 +10,6 @@ ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
-DynamicExpressions = "a40a106e-89c9-4ca8-8020-a735e8728b6b"
 FileIO = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
 Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
@@ -47,7 +46,6 @@ ChainRulesCore = "1"
 DataFrames = "1"
 Dates = "1"
 Distributions = "0.25 - 0.28"
-DynamicExpressions = "1"
 FileIO = "1"
 Flux = "0.4.1 - 0.19"
 ForwardDiff = "0.10 - 0.13"

@@ -4,6 +4,11 @@
 # Ignore all .log files in subfolders
 **/*.log
 
+# Ignore all .dat files in subfolders
+**/*.dat
+
+paper/**/*.json
+
 # Ignore all hidden dotfiles in subfolders (e.g., .env, .config)
 **/.*
 

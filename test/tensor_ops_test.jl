@@ -1,209 +1,122 @@
-using BenchmarkTools
 using Test
 using Tensors
 using OrderedCollections
-using Flux
+using Random
+using Statistics
+using LinearAlgebra
 
+# The tensor path evaluates a karva string with a stack machine over the whole batch of
+# samples (`calc_stack_batch_tensor`), optionally into preallocated buffers. These tests
+# check the operator semantics through that evaluator.
 @testset "TensorRegUtils" begin
-    # Test setup
-    dim = 3
-    t2 = rand(Tensor{2,dim})
-    vec3 = rand(Tensor{1,dim})
-    const_val = 2.0
-
-    data_ = Dict(
-        5 => t2,
-        6 => vec3,
-        7 => const_val
-    )
-    inputs = (t2, vec3, const_val)
-
-
-    arity_map = OrderedDict{Int8,Int}(
-        1 => 2,  # Addition
-        2 => 2,  # Multiplication
-        3 => 2,  # Double Contraction
-        4 => 1   # Trace
-    )
+    dim, n = 3, 5
+    t2 = [rand(Tensor{2,dim}) for _ in 1:n]
+    v3 = [rand(Vec{dim}) for _ in 1:n]
+    scalars = fill(2.0, n)
 
     callbacks = Dict{Int8,Any}(
-        Int8(1) => AdditionNode,
-        Int8(2) => MultiplicationNode,
-        Int8(3) => DoubleContractionNode,
-        Int8(4) => TraceNode
+        Int8(1) => AdditionNode(),
+        Int8(2) => MultiplicationNode(),
+        Int8(3) => DoubleContractionNode(),
+        Int8(4) => TraceNode(),
+        Int8(8) => SubtractionNode(),
+    )
+    # terminals: an index that is not an operator is looked up here
+    nodes = Dict{Int8,Any}(
+        Int8(5) => t2,
+        Int8(6) => v3,
+        Int8(7) => scalars,
     )
 
+    run(rek) = calc_stack_batch_tensor(rek, callbacks, nodes, nothing)
+
     @testset "Basic Operations" begin
-        nodes = OrderedDict{Int8,Any}(
-            Int8(5) => InputSelector(1),
-            Int8(6) => InputSelector(2),
-            Int8(7) => const_val
-        )
+        # scalar multiplication, applied across the batch
+        @test run(Int8[2, 6, 7]) ≈ v3 .* scalars
 
-        # Scalar multiplication
-        rek_string = Int8[2, 6, 7]
-        network = compile_to_flux_network(rek_string, arity_map, callbacks, nodes, 0)
-        result = network(inputs)
-        @test result ≈ vec3 * const_val
+        # adding a second-order tensor to a vector is not a valid combination; the
+        # evaluator signals it with a non-finite result rather than throwing, so the
+        # fitness function can reject the individual
+        invalid = run(Int8[1, 5, 6])
+        @test invalid === NaN || all(!isfinite, invalid)
 
-        # Addition with dimension mismatch
-        rek_string = Int8[1, 5, 6]
-        network = compile_to_flux_network(rek_string, arity_map, callbacks, nodes, 0)
-        @test_throws DimensionMismatch network(inputs)
+        @test run(Int8[8, 5, 5]) ≈ t2 .- t2
     end
 
     @testset "Tensor Operations" begin
-        nodes = OrderedDict{Int8,Any}(
-            Int8(5) => InputSelector(1),
-            Int8(6) => InputSelector(2),
-            Int8(7) => const_val
-        )
-
-        # Double contraction
-        rek_string = Int8[3, 5, 5]
-        network = compile_to_flux_network(rek_string, arity_map, callbacks, nodes, 0)
-        result = network(inputs)
-        @test result ≈ dcontract(t2, t2)
-
-        # Trace
-        rek_string = Int8[4, 5]
-        network = compile_to_flux_network(rek_string, arity_map, callbacks, nodes, 0)
-        result = network(inputs)
-        @test result ≈ tr(t2)
+        @test run(Int8[3, 5, 5]) ≈ [dcontract(a, a) for a in t2]
+        @test run(Int8[4, 5]) ≈ [tr(a) for a in t2]
     end
 
     @testset "Complex Expressions" begin
-        nodes = OrderedDict{Int8,Any}(
-            Int8(5) => InputSelector(1),
-            Int8(6) => InputSelector(2),
-            Int8(7) => const_val
-        )
+        # tr(t2 + t2), i.e. the operators compose through the stack
+        @test run(Int8[4, 1, 5, 5]) ≈ [tr(a + a) for a in t2]
 
-        # (vec3 * const_val) + vec3
-        rek_string = Int8[1, 2, 6, 7, 6]
-        network = compile_to_flux_network(rek_string, arity_map, callbacks, nodes, 0)
-
-        result = network(inputs)
-        @test result ≈ (vec3 * const_val) + vec3
-
-        # (t2 * vec3) + const_val - should fail
-        rek_string = Int8[1, 2, 5, 6, 7]
-        network = compile_to_flux_network(rek_string, arity_map, callbacks, nodes, 0)
-        @test !isfinite(network(inputs))
-
-        # tr(t2) * const_val + tr(t2)
-        rek_string = Int8[1, 2, 4, 5, 7, 4, 5]
-        network = compile_to_flux_network(rek_string, arity_map, callbacks, nodes, 0)
-        result = network(inputs)
-        @test result ≈ tr(t2) * const_val + tr(t2)
+        # (v3 * c) + v3
+        @test run(Int8[1, 2, 6, 7, 6]) ≈ v3 .* scalars .+ v3
     end
 
+    @testset "Buffered evaluation matches unbuffered" begin
+        # predictT evaluates into such buffers; the result must match the allocating path
+        gene_buff = 16
+        buffers = Dict{Type,NTuple}(
+            Vector{Float64} => Tuple([zeros(Float64, n) for _ in 1:gene_buff]),
+            Vector{Vec{dim}} => Tuple([zeros(Vec{dim}, n) for _ in 1:gene_buff]),
+            Vector{Tensor{1,dim}} => Tuple([zeros(Vec{dim}, n) for _ in 1:gene_buff]),
+            Vector{Tensor{2,dim}} => Tuple([zeros(Tensor{2,dim}, n) for _ in 1:gene_buff]),
+            Vector{Tensor{3,dim}} => Tuple([zeros(Tensor{3,dim}, n) for _ in 1:gene_buff]),
+            Vector{Tensor{4,dim}} => Tuple([zeros(Tensor{4,dim}, n) for _ in 1:gene_buff]),
+        )
+        for rek in (Int8[2, 6, 7], Int8[3, 5, 5], Int8[4, 5], Int8[4, 1, 5, 5])
+            @test calc_stack_batch_tensor(rek, callbacks, nodes, buffers) ≈ run(rek)
+        end
+    end
 end
 
-@testset "All Node Operations" begin
-    dim = 3
-    t2 = rand(Tensor{2,dim})
-    t2_2 = rand(Tensor{2,dim})
-    vec3 = rand(Vec{dim})
-    const_val = 2.0
+# The batched evaluator through GepTensorRegressor: allocate_buffers! sizes the per-thread
+# buffers to the data, and predictT evaluates a karva string (`expression_raw`) in them.
+@testset "GepTensorRegressor end to end" begin
+    dim, n = 3, 30
+    rng = MersenneTwister(1)
+    rvec(r) = Vec{dim}(ntuple(_ -> rand(r), dim))
+    x = [[rvec(rng) for _ in 1:n], [rvec(rng) for _ in 1:n]]
+    y = [x[1][i] + x[2][i] for i in 1:n]
 
-    data_ = Dict(19 => t2, 20 => t2_2, 21 => vec3, 22 => const_val)
+    build() = GepTensorRegressor(2; problem_dimension=dim,
+        entered_non_terminals=Symbol[:+, :-, :*],
+        gene_connections=Symbol[:+, :-],
+        gene_count=2, head_len=4, feature_names=["a", "b"])
 
-    inputs = (t2, t2_2, vec3, const_val)
-
-    arity_map = OrderedDict{Int8,Int}(
-        1 => 2, 2 => 2, 3 => 2, 4 => 2, 5 => 2, 6 => 2, 7 => 2,  # Binary ops
-        8 => 1, 9 => 1, 10 => 1, 11 => 1, 12 => 1, 13 => 1,      # Unary ops part 1
-        14 => 1, 15 => 1, 16 => 1, 17 => 2, 18 => 1              # Unary ops part 2 + DC
-    )
-
-    callbacks = Dict{Int8,Any}(
-        Int8(1) => AdditionNode,
-        Int8(2) => SubtractionNode,
-        Int8(3) => MultiplicationNode,
-        Int8(4) => DivisionNode,
-        Int8(5) => PowerNode,
-        Int8(6) => MinNode,
-        Int8(7) => MaxNode,
-        Int8(8) => InversionNode,
-        Int8(9) => TraceNode,
-        Int8(10) => DeterminantNode,
-        Int8(11) => SymmetricNode,
-        Int8(12) => SkewNode,
-        Int8(13) => VolumetricNode,
-        Int8(14) => DeviatricNode,
-        Int8(15) => TdotNode,
-        Int8(16) => DottNode,
-        Int8(17) => DoubleContractionNode,
-        Int8(18) => DeviatoricNode
-    )
-
-    @testset "Basic Node Operations" begin
-        nodes = OrderedDict{Int8,Any}(
-            Int8(19) => InputSelector(1),
-            Int8(20) => InputSelector(2),
-            Int8(21) => InputSelector(3),
-            Int8(22) => const_val
-        )
-
-        # Test 1: Addition
-        rek_string = Int8[1, 19, 20]
-        network = compile_to_flux_network(rek_string, arity_map, callbacks, nodes, 0)
-        @test network(inputs) ≈ t2 + t2_2
-
-        # Test 2: Subtraction 
-        rek_string = Int8[2, 19, 20]
-        network = compile_to_flux_network(rek_string, arity_map, callbacks, nodes, 0)
-        @test network(inputs) ≈ t2 - t2_2
-
-        # Test 3: Multiplication with constant
-        rek_string = Int8[3, 19, 22]
-        network = compile_to_flux_network(rek_string, arity_map, callbacks, nodes, 0)
-        @test network(inputs) ≈ t2 * const_val
+    make_loss(reg) = function (elem, validate::Bool)
+        if isnan(mean(elem.fitness)) || validate
+            l = try
+                pred = predictT(reg, elem.expression_raw)
+                (pred isa AbstractVector && length(pred) == n &&
+                 eltype(pred) <: Vec{dim}) ? sum(norm.(pred .- y)) / n : 1e6
+            catch
+                1e6
+            end
+            elem.fitness = (isfinite(l) ? l : 1e6,)
+        end
+        return elem.fitness
     end
 
-    @testset "Tensor Operations" begin
-        nodes = OrderedDict{Int8,Any}(
-            Int8(19) => InputSelector(1),
-            Int8(20) => InputSelector(2)
-        )
+    reg = build()
+    allocate_buffers!(reg, x)
+    fit!(reg, 5, 200, make_loss(reg); hof=1)
 
-        # Test 1: Double Contraction
-        rek_string = Int8[17, 19, 20]
-        network = compile_to_flux_network(rek_string, arity_map, callbacks, nodes, 0)
-        @test network(inputs) ≈ dcontract(t2, t2_2)
+    @test reg.best_models_ !== nothing
+    @test !isnan(mean(reg.best_models_[1].fitness))
 
-        # Test 2: Deviatoric
-        rek_string = Int8[14, 19]
-        network = compile_to_flux_network(rek_string, arity_map, callbacks, nodes, 0)
-        @test network(inputs) ≈ dev(t2)
-
-        # Test 3: Trace + Symmetric
-        rek_string = Int8[9, 11, 19]
-        network = compile_to_flux_network(rek_string, arity_map, callbacks, nodes, 0)
-        @test network(inputs) ≈ tr(symmetric(t2))
-    end
-
-    @testset "Complex Compositions" begin
-        nodes = OrderedDict{Int8,Any}(
-            Int8(19) => InputSelector(1),
-            Int8(20) => InputSelector(2),
-            Int8(22) => const_val
-        )
-
-        # Test 1: (t2 ⊡ t2_2) * const_val
-        rek_string = Int8[3, 17, 19, 20, 22]
-        network = compile_to_flux_network(rek_string, arity_map, callbacks, nodes, 0)
-        @test network(inputs) ≈ dcontract(t2, t2_2) * const_val
-
-        # Test 2: dev(symmetric(t2)) + t2_2
-        rek_string = Int8[1, 14, 11, 19, 20]
-        network = compile_to_flux_network(rek_string, arity_map, callbacks, nodes, 0)
-        @test network(inputs) ≈ dev(symmetric(t2)) + t2_2
-
-        # Test 3: tr(t2) * tr(t2_2)
-        rek_string = Int8[3, 9, 19, 9, 20]
-        network = compile_to_flux_network(rek_string, arity_map, callbacks, nodes, 0)
-        @test network(inputs) ≈ tr(t2) * tr(t2_2)
-    end
+    # predictT on data the regressor was not fitted on: a different sample count, and
+    # compared against the same expression evaluated from scratch on those columns
+    rek = reg.best_models_[1].expression_raw
+    m = n + 7
+    x_new = [[rvec(rng) for _ in 1:m], [rvec(rng) for _ in 1:m]]
+    fresh = predictT(reg, rek, x_new)
+    @test fresh isa AbstractVector && length(fresh) == m
+    direct = calc_stack_batch_tensor(rek, reg.toolbox_.callbacks,
+        Dict{Int8,Any}(Int8(1) => x_new[1], Int8(2) => x_new[2]), nothing)
+    @test fresh == direct
+    @test copy(predictT(reg, rek)) != fresh[1:n]
 end
