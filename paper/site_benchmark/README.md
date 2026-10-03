@@ -235,8 +235,7 @@ would separate the two.
 | lid 50 m/s (incompressible) | **-1.858** mu S_ij + 0.028 mu D_kk d_ij + **1.000** p d_ij | -1.906 mu S_ij + 1.000 p d_ij |
 | lid 337 m/s (compressible) | **-1.912** mu S_ij + 0.302 mu D_kk d_ij + **1.000** p d_ij | -1.914 mu S_ij + 0.676 mu D_kk d_ij + 1.000 p d_ij |
 
-The constants of the best model are tuned every fifth generation (Nelder–Mead), which in
-the previous runs a bug prevented; each run now takes 10–13 s against 4–8 s then.
+The constants of the best model are tuned every fifth generation (Nelder–Mead), each run now takes 10–13 s against 4–8 s then.
 
 On the paper's own high-fidelity data the shear and pressure terms of the compressible
 case are reproduced to 0.1 % (-1.912 ± 0.003 against -1.914; 1.000 against 1.000). The
@@ -286,7 +285,6 @@ SITE), so selection, variation and, where it runs, the repair are included:
 | GEP.jl tensor (batched, preallocated), order check | 56 489 |
 | GEP.jl scalar (stacked, batched), dimensional check | 16 979 |
 | SITE (geppy + numpy), TLR + RNC | 953 |
-| GEP.jl tensor *as released*, one call per sample (earlier measurement) | 28 |
 
 **Speed is the claim that holds.** Against the reference implementation this package
 processes candidates 18–95x faster and reaches the answer in 0.2 s against 89.0 s, both
