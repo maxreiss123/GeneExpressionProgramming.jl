@@ -600,7 +600,10 @@ The population holds `population_size + m` chromosomes, with the mating size `m`
 - Step 3 keeps, with several objectives, every scored individual that holds the best value
   of an objective among the survivors: a prediction can beat it by its mean fitness
   without dominating it (`GepSurrogate.keep_best_scored!`).
-- Step 4 re-scores the best only if it carries a prediction, and records the loss.
+- Step 4 re-scores the best only if it carries a prediction. The population is not sorted
+  again, so a best whose loss turns out worse than its prediction (a run that diverged,
+  say) still leads it, and the epoch records the scored individual with the lowest mean
+  fitness instead (`GepSurrogate.best_scored_index`).
 - Step 5 breeds `GepSurrogate.brood_size` children, from as many parents, and the
   surrogate picks the `m` that enter ([`perform_brood_step!`](@ref)).
 - An oversampled initial population is picked over the latent vectors of the surrogate
@@ -791,23 +794,29 @@ The population holds `population_size + m` chromosomes, with the mating size `m`
                 compute_fitness(population[1], evalStrategy; validate=true)
             elseif !is_validated(surrogate, population[1])
                 # a best that only carries a prediction is scored by the loss, and that
-                # loss is what the epoch records and selects with
+                # loss is what the epoch selects with
                 compute_fitness(population[1], evalStrategy; validate=true)
                 record_validation!(surrogate, population[1])
                 fits_representation[1] = population[1].fitness
                 isnan(mean(population[1].fitness)) ||
                     (fit_cache[copy(population[1].expression_raw)] = population[1].fitness)
             end
-            val_loss = isnothing(evalStrategy.validation_loss_function) ? population[1].fitness : compute_fitness_validation(population[1], evalStrategy; validate=true)
-        else
-            val_loss = population[1].fitness
         end
-        record!(recorder, epoch, fits_representation[1], val_loss)
+        # the epoch records its best scored individual: a best scored above whose loss turned
+        # out worse than its prediction (a run that diverged, say) still leads the population
+        lead = isnothing(surrogate) ? 1 : best_scored_index(surrogate, population, population_size)
+        val_loss = if isnothing(evalStrategy.validation_loss_function) ||
+                      !(isnothing(correction_callback) || population[lead].dimension_homogene)
+            population[lead].fitness
+        else
+            compute_fitness_validation(population[lead], evalStrategy; validate=true)
+        end
+        record!(recorder, epoch, fits_representation[lead], val_loss)
 
         ProgressMeter.update!(progBar, epoch, showvalues=[
             (:epoch_, @sprintf("%.0f", epoch)),
             (:duplicates_per_epoch, @sprintf("%.0f", same[])),
-            (:train_loss, @sprintf("%.6e", mean(fits_representation[1]))),
+            (:train_loss, @sprintf("%.6e", mean(fits_representation[lead]))),
             (:validation_loss, @sprintf("%.6e", mean(val_loss)))
         ])
 
