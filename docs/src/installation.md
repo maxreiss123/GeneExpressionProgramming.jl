@@ -2,7 +2,7 @@
 
 ## Julia Requirements
 
-`Project.toml` accepts any Julia 1.x release, but the code uses features of Julia 1.7 and later; the repository's `Manifest.toml` was generated with Julia 1.12.1, and the tests pass on Julia 1.12. Julia is available from the [official website](https://julialang.org/downloads/).
+Julia 1.10, the long-term support release, or newer: `Project.toml` requires it (`julia = "1.10"`). The continuous integration installs, loads and tests the package on the lowest Julia that entry allows and on the latest release, with the dependencies resolved for each as `Pkg.add` resolves them. The repository's `Manifest.toml` was generated with Julia 1.12.1; to try the repository on an older Julia, resolve without it (delete it, then `Pkg.instantiate()`). Julia is available from the [official website](https://julialang.org/downloads/), and [juliaup](https://github.com/JuliaLang/juliaup) keeps several versions side by side (`juliaup add 1.10`, then `julia +1.10`).
 
 ## Installation Methods
 
