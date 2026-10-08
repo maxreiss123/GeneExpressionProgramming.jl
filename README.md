@@ -348,3 +348,8 @@ Feel free to utilize it for your research, it would be nice __citing us__! Our [
 }
 
 ```
+
+---
+# TODO
+[ ] Test against others 
+[ ] NN compression 
