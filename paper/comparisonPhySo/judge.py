@@ -26,6 +26,9 @@ verdict would depend on how a model happens to be written: 0.368 exp(u + 1) woul
 to 0.37 exp(u + 1) = 1.006 exp(u) and fail, where the same model as 1.0007 exp(u) passes.
 PhySO's rounding of the floats is applied with exact node replacement (`_round_floats`),
 and its pi-fraction step only for formulas with a trigonometric function (`check`).
+A model that is zero everywhere, or holds an undefined or infinite number, is not a
+recovery (`_degenerate`): PhySO's check takes the ratio of the formula to such a model,
+nan, for a constant, as sympy's `is_constant` calls nan constant.
 audit_symbolic.py checks the readings and the verdicts against the models' numbers.
 """
 import argparse
@@ -46,8 +49,9 @@ import physo.benchmark.utils.symbolic_utils as su
 TIMEOUT = 60
 
 
-class _Timeout(Exception):
-    pass
+class _Timeout(BaseException):
+    """Not an Exception: PhySO's compare_expression catches Exception around each of its
+    steps, which would swallow the alarm and let the check run on without one."""
 
 
 def _alarm(signum, frame):
@@ -203,6 +207,11 @@ def has_trig(pb):
     return pb.formula_sympy_eval.has(sympy.sin, sympy.cos, sympy.tan)
 
 
+def _degenerate(e):
+    """Zero everywhere, or with an undefined or infinite number in it."""
+    return e == 0 or e.has(sympy.nan, sympy.zoo, sympy.oo, sympy.S.NegativeInfinity)
+
+
 def check(pb, expr, to_sympy, handle_trigo=None):
     """(recovered, timed_out). PhySO's check also tries the expression with every float
     replaced by a fraction p/q of pi (q <= 10) less than 0.01 pi from it, for constants
@@ -216,8 +225,13 @@ def check(pb, expr, to_sympy, handle_trigo=None):
     signal.signal(signal.SIGALRM, _alarm)
     signal.alarm(TIMEOUT)
     try:
-        ok, _ = pb.compare_expression(canonical(to_sympy(expr, pb)),
-                                      handle_trigo=handle_trigo)
+        trial = canonical(to_sympy(expr, pb))
+        ok, _ = pb.compare_expression(trial, handle_trigo=handle_trigo)
+        # PhySO's check takes the ratio of the formula to the model as it cleans it
+        # (rounded, simplified); for a model that cleans to 0 that is nan, which sympy's
+        # is_constant calls constant
+        if ok and _degenerate(su.clean_sympy_expr(trial)):
+            ok = False
         return bool(ok), False
     except _Timeout:
         return False, True

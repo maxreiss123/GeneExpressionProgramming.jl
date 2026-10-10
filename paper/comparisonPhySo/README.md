@@ -69,7 +69,7 @@ every size. Recovered seeds out of 40 (four equations × 10), σ = 0.05 / 0.1:
 
 | GEP-SBP, noise-floor stop | whole budget: final model | parsimony pick | any model on the front | PhySO | PhySO, any on its Pareto front |
 |---:|---:|---:|---:|---:|---:|
-| 25 / 16 | 20 / 13 | 27 / 13 | **31 / 23** | 7 / 5 | 8 / 8 |
+| 25 / 16 | 20 / 13 | 27 / 13 | **31 / 23** | 7 / 5 | 7 / 5 |
 
 ![Front experiment](results/figures/fig4_front.png)
 
@@ -84,7 +84,7 @@ faster one, against 1 000–3 500 s for PhySO on these equations.
 
 ## Symbolic check
 
-`judge.py` uses PhySO's `compare_expression`, with four corrections that apply to both
+`judge.py` uses PhySO's `compare_expression`, with five corrections that apply to both
 methods:
 
 * **One coefficient per term.** The model's numbers are merged before rounding, so
@@ -96,6 +96,14 @@ methods:
 * **No π fractions.** PhySO's π-fraction step, meant for trigonometric formulas, would
   zero any coefficient below 0.031. None of the 15 formulas has a trigonometric
   function, so it is left out.
+* **No zero models.** PhySO's check divides the formula by the model after rounding and
+  simplifying it; for a model that becomes 0 the ratio is nan, which sympy calls
+  constant, so the check accepted it. Such a model is not a recovery. This took 9 PhySO
+  runs off "any model on its Pareto front" (the final models were not affected).
+
+A check that runs over 60 s counts as a failure and is flagged (`timeout`). PhySO's
+`compare_expression` used to catch the alarm, so a slow check ran on; now it cannot. No
+verdict changed; one PhySO model at σ = 0.1 (III.14.14, seed 3) is flagged.
 
 `audit_symbolic.py` checks every final model against numbers:
 
