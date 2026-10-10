@@ -510,6 +510,30 @@ end
         @test all(m -> is_validated(s, m), prob.reg.best_models_)
     end
 
+    @testset "an epoch records its best scored individual" begin
+        prob = surrogate_problem(; seed=4, objectives=2)
+        # a model "diverges" by its hash, which no process can predict: a leader the
+        # processes rated best often turns out the worst once the loss has scored it
+        function diverging(elem, validate::Bool)
+            prob.loss(elem, validate)
+            hash(elem.expression_raw) % 3 == 0 && (elem.fitness = (9999.0, 9999.0))
+        end
+        s = SurrogateScreening(prob.reg, prob.x[:, 1:20]; individuals_per_epoch=8,
+            warmup_runs=30, seed=5)
+        best = Float64[]
+        overtaken = Ref(0)
+        function check(population, epoch, _)
+            scored = [mean(c.fitness) for c in population if is_validated(s, c)]
+            push!(best, minimum(scored))
+            mean(population[1].fitness) > minimum(scored) && (overtaken[] += 1)
+        end
+        fit!(prob.reg, 15, 100, diverging; surrogate=s, file_logger_callback=check)
+        # the leader stays in front once its loss is known, worse or not, and the epoch
+        # records the best scored individual
+        @test overtaken[] > 0
+        @test [mean(t) for t in prob.reg.fitness_history_.train_loss] == best
+    end
+
     @testset "fit! with a surrogate" begin
         plain = surrogate_problem(; seed=11)
         fit!(plain.reg, 12, 120, plain.loss)

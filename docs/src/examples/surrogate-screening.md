@@ -277,12 +277,17 @@ With the threshold, `:qehvi` was the best and the steadiest on the closure (5.65
 
 - **A prediction is never cached.** A copy of a predicted individual is screened again, while a copy of a scored one takes its loss times `penalty`, even once the fitness cache has dropped it.
 - **No prediction claims a best loss.** A prediction is at least one float step worse than the best loss scored so far on every objective, so it cannot beat, tie or dominate the individual holding one.
-- **The best individual of an epoch is scored** before its loss is recorded, selected with or shown to `break_condition`, and the returned hall of fame is scored at the end (`validate_hof = true`). Every member of `best_models_` carries a loss value: `is_validated(surrogate, m)` is `true`.
+- **The best individual of an epoch is scored** before it is selected with or shown to `break_condition`, and the returned hall of fame is scored at the end (`validate_hof = true`). Every member of `best_models_` carries a loss value: `is_validated(surrogate, m)` is `true`. The population is not sorted again after that loss: a best whose loss turns out worse than its prediction (a run that diverged, say) still leads it, and the epoch records the best scored individual instead (`fitness_history_`, the progress bar).
 - **With several objectives, a prediction is provisional.** The individuals that carry one are screened again every epoch, next to the new ones, so that a later process can pick them for a loss call or give them a fresh prediction (`rescreen`). Without, the population fills up with stale predictions: in a search for an ODE system, 197 of 200 survivors carried one after 50 epochs, while the best scored losses had not moved since epoch 10. With one objective re-screening was a wash on the benchmark below, and it is off unless `rescreen = true`.
 - **With several objectives, the scored holders of the best values survive.** The population survives by the mean of its objectives, which a prediction can beat without dominating anyone. The scored individuals that hold the best value of an objective are therefore kept right behind the leader, and the best scored value of every objective among the survivors never gets worse.
 - **Only a screened search is affected.** `fit!` without `surrogate` scores every new individual, as it always does.
 
-In your own callbacks (a `break_condition`, a `file_logger_callback`), `is_validated(surrogate, c)` tells a loss value from a prediction.
+In your own callbacks (a `break_condition`, a `file_logger_callback`), `is_validated(surrogate, c)` tells a loss value from a prediction. The first individual of the population is not always the best scored one, for the reason above; take that one among the scored individuals:
+
+```julia
+scored = [c for c in population if is_validated(surrogate, c)]
+best = isempty(scored) ? nothing : argmin(c -> sum(c.fitness), scored)
+```
 
 ## Settings Worth Knowing
 

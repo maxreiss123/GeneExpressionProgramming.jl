@@ -51,7 +51,7 @@ export archive_size, is_validated, brood_multiplier, brood_size
 export screen_epoch!, commit_epoch!, evaluated_indices, cached_indices
 export record_validation!, rescore_known, preselect, characterize
 export carries_prediction, mark_prediction!, known_expression, rescreen_predictions!
-export keep_best_scored!, expression_blocks
+export keep_best_scored!, best_scored_index, expression_blocks
 
 # ----------------------------------------------------------------------------------------
 #  Transforms and counts
@@ -1840,6 +1840,23 @@ function keep_best_scored!(s::SurrogateScreening, population::AbstractVector, n:
         insert!(population, 1 + offset, c)
     end
     return population
+end
+
+"""
+    best_scored_index(s, population, n) -> Int
+
+The index of the scored individual with the lowest mean fitness among the first `n` of
+`population`, the first of them on a tie, or 1 if no scored individual has a finite one. In
+a sorted population that is the leader, unless the leader carried a prediction and its loss
+turned out worse once scored (a run that diverged, say).
+"""
+function best_scored_index(s::SurrogateScreening, population::AbstractVector, n::Int)
+    lead, best = 1, Inf
+    for i in 1:min(n, length(population))
+        m = mean(population[i].fitness)
+        m < best && is_validated(s, population[i]) && ((lead, best) = (i, m))
+    end
+    return lead
 end
 
 """
